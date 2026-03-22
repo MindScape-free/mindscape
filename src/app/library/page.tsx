@@ -565,7 +565,7 @@ export default function DashboardPage() {
         publicCategories: categories,
         originalMapId: map.id,
         originalAuthorId: user.uid,
-        authorName: user.displayName || 'Explorer',
+        authorName: user.displayName || 'ADMIN',
         authorAvatar: user.photoURL || '',
         updatedAt: serverTimestamp(),
         views: 0,
@@ -681,7 +681,7 @@ export default function DashboardPage() {
         isPublic: false,
         sharedAt: serverTimestamp(),
         originalAuthorId: user.uid,
-        authorName: user.displayName || 'Explorer',
+        authorName: user.displayName || 'ADMIN',
       };
       await setDoc(doc(firestore, 'sharedMindmaps', shareId), sharedData);
 

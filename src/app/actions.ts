@@ -74,7 +74,7 @@ import {
 } from '@/ai/compare/flow';
 import { GenerateComparisonMapInput } from '@/ai/compare/schema';
 import { MindMapData, SingleMindMapData, CompareMindMapData, SubTopic, Category, SubCategory } from '@/types/mind-map';
-import { addDoc, collection } from 'firebase/firestore';
+
 import { generateSearchContext } from './actions/generateSearchContext';
 
 export interface AIActionOptions {

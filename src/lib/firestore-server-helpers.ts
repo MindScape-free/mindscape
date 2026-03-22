@@ -22,6 +22,7 @@ export async function getUserImageSettingsAdmin(userId: string): Promise<UserIma
         }
 
         const { firestore } = initializeFirebaseServer();
+        if (!firestore) return null;
 
         // Try new location first: /users/{userId}/settings/imageGeneration
         const settingsDoc = await firestore
@@ -72,6 +73,7 @@ export async function getMindMapAdmin(mapId: string): Promise<any | null> {
         }
 
         const { firestore } = initializeFirebaseServer();
+        if (!firestore) return null;
         const mapDoc = await firestore.collection('mindMaps').doc(mapId).get();
 
         if (mapDoc.exists) {

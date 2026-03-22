@@ -51,8 +51,15 @@ export function initializeFirebaseServer() {
         }
     }
 
+    if (admin.apps.length > 0) {
+        return {
+            app: admin.app(),
+            firestore: admin.firestore(),
+        };
+    }
+
     return {
-        app: admin.app(),
-        firestore: admin.firestore(),
+        app: null as any,
+        firestore: null as any,
     };
 }

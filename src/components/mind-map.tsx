@@ -1191,7 +1191,7 @@ export const MindMap = ({
         publicCategories: categories,
         originalMapId: data.id,
         originalAuthorId: user.uid,
-        authorName: user.displayName || 'Explorer',
+        authorName: user.displayName || 'ADMIN',
         authorAvatar: user.photoURL || '',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),

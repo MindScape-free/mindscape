@@ -124,7 +124,7 @@ export default function ProfilePage() {
                     if (docSnap.exists()) {
                         const data = docSnap.data();
                         const profileData: UserProfile = {
-                            displayName: data.displayName || user.displayName || 'User',
+                            displayName: data.displayName || user.displayName || 'ADMIN',
                             email: data.email || user.email || '',
                             photoURL: data.photoURL || user.photoURL,
                             activeBadgeId: data.activeBadgeId,
@@ -165,7 +165,7 @@ export default function ProfilePage() {
                         // For now, let's keep the one-time fetch but make it more robust.
                     } else {
                         const defaultData: UserProfile = {
-                            displayName: user.displayName || 'User',
+                            displayName: user.displayName || 'ADMIN',
                             email: user.email || '',
                             photoURL: user.photoURL || undefined,
                             preferences: {
@@ -452,7 +452,7 @@ export default function ProfilePage() {
     };
 
     const getActiveBadgeLabel = () => {
-        return "Explorer";
+        return profile?.displayName || "Explorer";
     };
 
     // Helper for duration formatting

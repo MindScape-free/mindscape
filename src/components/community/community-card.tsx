@@ -202,7 +202,7 @@ export const CommunityCard = ({ map, onClick }: CommunityCardProps) => {
                             <AvatarFallback className="bg-purple-900/50 text-[10px]"><User className="h-3 w-3" /></AvatarFallback>
                         </Avatar>
                         <span className="text-xs font-medium text-gray-300 truncate max-w-[80px]">
-                            {map.authorName || 'Explorer'}
+                            {map.authorName || 'MindScaper'}
                         </span>
                     </div>
 

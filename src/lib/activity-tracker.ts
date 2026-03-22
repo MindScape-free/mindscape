@@ -107,7 +107,7 @@ export async function trackLogin(firestore: Firestore, userId: string, firebaseU
                 await initializeUserProfile(
                     firestore,
                     userId,
-                    firebaseUser.displayName || 'Explorer',
+                    firebaseUser.displayName || 'ADMIN',
                     firebaseUser.email || '',
                     firebaseUser.photoURL || undefined
                 );
