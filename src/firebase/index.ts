@@ -22,9 +22,6 @@ export function initializeFirebase() {
       // BUILD SAFE GUARD: Skip initialization during server-side prerendering 
       // if configuration is missing to prevent build crashes.
       if (typeof window === 'undefined' && !firebaseConfig.apiKey) {
-        if (process.env.NODE_ENV === "production") {
-          console.warn('⚠️ Firebase initialization skipped during build/SSR (missing config).');
-        }
         return {
           firebaseApp: null as any,
           auth: null as any,
@@ -39,7 +36,9 @@ export function initializeFirebase() {
         firebaseApp = initializeApp(firebaseConfig);
       } else {
         // Fallback for cases where we are somehow on client but missing keys
-        console.error('❌ Firebase Error: No configuration provided (missing environment variables).');
+        if (typeof window !== 'undefined') {
+            console.error('❌ Firebase Error: No configuration provided (missing environment variables).');
+        }
         return {
           firebaseApp: null as any,
           auth: null as any,

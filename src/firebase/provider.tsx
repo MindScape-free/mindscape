@@ -136,7 +136,24 @@ export const useFirebase = (): FirebaseServicesAndUser => {
     throw new Error('useFirebase must be used within a FirebaseProvider.');
   }
 
+  // During SSR, services might be null. We shouldn't throw to avoid 500 errors.
+  // The components should handle null services if they use them in render (unlikely).
+  const isServer = typeof window === 'undefined';
+  
   if (!context.areServicesAvailable || !context.firebaseApp || !context.firestore || !context.auth) {
+    if (isServer) {
+        // Return nulls instead of throwing on server
+        return {
+            firebaseApp: context.firebaseApp as any,
+            firestore: context.firestore as any,
+            auth: context.auth as any,
+            functions: context.functions,
+            user: context.user,
+            isAdmin: context.isAdmin,
+            isUserLoading: context.isUserLoading,
+            userError: context.userError,
+        };
+    }
     throw new Error('Firebase core services not available. Check FirebaseProvider props.');
   }
 
