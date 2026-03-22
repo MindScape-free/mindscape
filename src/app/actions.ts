@@ -210,6 +210,12 @@ export async function resolveApiKey(options: AIActionOptions): Promise<string | 
     }
   }
 
+  // Final fallback to server-side environment variable
+  if (!effectiveApiKey) {
+    effectiveApiKey = process.env.POLLINATIONS_API_KEY;
+    if (effectiveApiKey) source = 'env-var';
+  }
+
   const masked = effectiveApiKey ? `${effectiveApiKey.slice(0, 6)}...${effectiveApiKey.slice(-4)}` : 'none';
   console.log(`🔑 resolveApiKey -> key ${effectiveApiKey ? 'found' : 'missing'} (source: ${source}, masked: ${masked})`);
 
