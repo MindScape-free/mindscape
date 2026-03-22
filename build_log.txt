@@ -1,0 +1,25 @@
+
+> mindscape@0.1.0 build
+> next build
+
+   Γû▓ Next.js 15.3.6
+   - Environments: .env.local, .env
+
+   Creating an optimized production build ...
+ Γ£ô Compiled successfully in 29.0s
+   Skipping validation of types
+   Skipping linting
+   Collecting page data ...
+   Generating static pages (0/17) ...
+   Generating static pages (4/17) 
+   Generating static pages (8/17) 
+   Generating static pages (12/17) 
+ Γ£ô Generating static pages (17/17)
+
+> Build error occurred
+[Error: ENOENT: no such file or directory, open 'C:\Users\Suraj\OneDrive\Desktop\MindScape\.next\server\pages-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Suraj\\OneDrive\\Desktop\\MindScape\\.next\\server\\pages-manifest.json'
+}
