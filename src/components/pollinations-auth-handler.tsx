@@ -4,14 +4,14 @@ import { useEffect, useRef } from 'react';
 import { useAIConfig } from '@/contexts/ai-config-context';
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore } from '@/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { saveUserApiKey } from '@/lib/firestore-helpers';
 
 /**
  * PollinationsAuthHandler component
  * Listen for Pollinations BYOP redirect with api_key in the hash
  */
 export function PollinationsAuthHandler() {
-    const { updateConfig } = useAIConfig();
+    const { updateConfig, config } = useAIConfig();
     const { toast } = useToast();
     const { user } = useUser();
     const firestore = useFirestore();
@@ -45,16 +45,10 @@ export function PollinationsAuthHandler() {
                     // This prevents handleHash from re-triggering if the effect re-runs
                     window.history.replaceState(null, '', window.location.pathname + window.location.search);
 
-                    // Also persist to Firestore profile
-                    const userRef = doc(firestore, 'users', user.uid);
-                    await setDoc(userRef, {
-                        apiSettings: {
-                            pollinationsApiKey: apiKey,
-                            provider: 'pollinations'
-                        }
-                    }, { merge: true });
+                    // Use the centralized helper to persist to Firestore (both locations)
+                    await saveUserApiKey(firestore, user.uid, apiKey, config.pollinationsModel || 'flux');
 
-                    console.log('✅ Pollinations API key saved to Firestore');
+                    console.log('✅ Pollinations API key saved to Firestore via helper');
 
                     // Show success toast
                     toast({

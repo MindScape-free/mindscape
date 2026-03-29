@@ -27,8 +27,8 @@ const GenerateMindMapFromImageInputSchema = z.object({
     .optional()
     .describe('The AI persona / style to use (e.g., "Teacher", "Concise", "Creative").'),
   depth: z
-    .enum(['low', 'medium', 'deep'])
-    .default('low')
+    .enum(['low', 'medium', 'deep', 'auto'])
+    .default('auto')
     .describe('The level of detail/depth for the mind map structure.'),
   apiKey: z.string().optional().describe('Optional custom API key to use for this request.'),
   sessionId: z.string().optional().describe('The session ID for the current mind map.'),
@@ -63,33 +63,41 @@ export async function generateMindMapFromImage(
     : `The entire mind map MUST be in English.`;
 
   let personaInstruction = '';
-  if (input.persona === 'Teacher') {
+  const selectedPersona = input.persona || 'Teacher';
+  if (selectedPersona === 'Teacher') {
     personaInstruction = `
     ADOPT PERSONA: "Expert Teacher"
     - Use educational analogies to explain concepts found in the image.
     - Focus on tutorial-style descriptions.
     - Structure the map like a syllabus.
     - Descriptions should be encouraging and clear.`;
-  } else if (input.persona === 'Concise') {
+  } else if (selectedPersona === 'Concise') {
     personaInstruction = `
     ADOPT PERSONA: "Efficiency Expert"
     - Keep all analyzed content extremely brief.
     - Use high-impact keywords for topics and categories.
     - Descriptions should be very short pointers (max 15 words).`;
-  } else if (input.persona === 'Creative') {
+  } else if (selectedPersona === 'Creative') {
     personaInstruction = `
     ADOPT PERSONA: "Creative Visionary"
     - Find imaginative interpretations of the visual data.
     - Use vivid, descriptive language.
     - Imagine future or alternate versions of the concepts in the image.
     - Make the result feel inspired and non-obvious.`;
+  } else if (selectedPersona === 'Sage') {
+    personaInstruction = `
+    ADOPT PERSONA: "Cognitive Sage"
+    - Synthesize deep philosophical perspectives and cross-domain knowledge.
+    - Focus on the "Meaning" and "Impact" of the visual content.
+    - Use professional, academic, yet accessible language.
+    - Structure content to reveal underlying patterns and wisdom.`;
   } else {
     personaInstruction = `
-    ADOPT PERSONA: "Standard Academic Assistant"
-    - Provide a balanced and well-structured analysis of the image.
-    - Use clear, professional, yet accessible language.
-    - Ensure comprehensive coverage of all visible details.
-    - Keep descriptions highly focused and exactly one sentence.`;
+    ADOPT PERSONA: "Expert Teacher"
+    - Use educational analogies to explain concepts found in the image.
+    - Focus on tutorial-style descriptions.
+    - Structure the map like a curriculum or learning path.
+    - Descriptions should be encouraging and clear.`;
   }
 
   const systemPrompt = `You are an expert in analyzing images and PDF documents and creating structured, comprehensive mind maps from them.
@@ -104,6 +112,7 @@ export async function generateMindMapFromImage(
   2. YOU MUST USE THE ACTUAL DATA. Combine fields and values: "Megha's Identity" -> "Name: Megha" -> "DOB: 01/01/1990".
   3. Never output a field name (like "Address" or "ID Number") without its corresponding value if it's visible. 
   4. Fill the structure with the **actual, literal data, numbers, dates, and entity names** extracted by OCR from the visual content.
+  5. **ANTI-REDACTION POLICY**: DO NOT use placeholders like "[REDACTED]", "[PRIVACY]", or "XXXX". Always provide the actual text found in the image.
   
   ${densityInstruction}
   

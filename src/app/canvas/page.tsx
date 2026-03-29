@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { MindMap } from '@/components/mind-map';
 import { MindMapData, NestedExpansionItem, MindMapWithId } from '@/types/mind-map';
 import { NeuralLoader } from '@/components/loading/neural-loader';
+import { safeGetItem, safeRemoveItem } from '@/lib/storage';
 import dynamic from 'next/dynamic';
 
 const ChatPanel = dynamic(() => import('@/components/chat-panel').then(mod => mod.ChatPanel), {
@@ -39,6 +40,70 @@ import {
   TooltipProvider,
 } from '@/components/ui/tooltip';
 import type { GenerateMindMapOutput } from '@/ai/flows/generate-mind-map';
+
+// --- Blob PDF Viewer Component ---
+function BlobPdfViewer({ dataUri, className }: { dataUri: string, className?: string }) {
+  const [blobUrl, setBlobUrl] = useState<string>('');
+
+  useEffect(() => {
+    if (!dataUri) return;
+    if (dataUri.startsWith('data:')) {
+      try {
+        const arr = dataUri.split(',');
+        const mime = arr[0].match(/:(.*?);/)?.[1] || 'application/pdf';
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        const url = URL.createObjectURL(blob);
+        setBlobUrl(url + '#toolbar=0');
+        return () => URL.revokeObjectURL(url);
+      } catch (e) {
+        console.error('Failed to convert base64 to blob', e);
+        setBlobUrl(dataUri);
+      }
+    } else if (dataUri.startsWith('http')) {
+      let isMounted = true;
+      let objectUrl = '';
+      fetch(dataUri)
+        .then(res => {
+          if (!res.ok) throw new Error('Failed to fetch PDF');
+          return res.blob();
+        })
+        .then(blob => {
+          if (isMounted) {
+            objectUrl = URL.createObjectURL(blob);
+            setBlobUrl(objectUrl + '#toolbar=0');
+          }
+        })
+        .catch(e => {
+          console.error('Failed to fetch PDF blob to bypass X-Frame-Options', e);
+          if (isMounted) setBlobUrl(dataUri);
+        });
+
+      return () => {
+        isMounted = false;
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      };
+    } else {
+      setBlobUrl(dataUri);
+    }
+  }, [dataUri]);
+
+  if (!blobUrl) return <div className="flex-1 flex items-center justify-center text-zinc-500 font-bold uppercase tracking-widest text-xs animate-pulse">Processing Document...</div>;
+
+  return (
+    <iframe
+      src={blobUrl}
+      className={className || "w-full h-full border-none"}
+      title="PDF Document Viewer"
+    />
+  );
+}
+// ---------------------------------
 import {
   useUser,
   useFirestore,
@@ -65,7 +130,7 @@ import { useMindMapPersistence } from '@/hooks/use-mind-map-persistence';
 import { useAIHealth } from '@/hooks/use-ai-health';
 import { useActivity } from '@/contexts/activity-context';
 
-const EMPTY_ARRAY: any[] = [];
+const EMPTY_ARRAY: never[] = [];
 
 /**
  * The core content component for the mind map page.
@@ -111,7 +176,7 @@ function MindMapPageContent() {
   const { toast } = useToast();
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
-  const { config } = useAIConfig();
+  const { config, refreshBalance } = useAIConfig();
 
   const [mode, setMode] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -120,7 +185,7 @@ function MindMapPageContent() {
   const [chatTopic, setChatTopic] = useState<string | undefined>(undefined);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isRegenDialogOpen, setIsRegenDialogOpen] = useState(false);
-  const [tempPersona, setTempPersona] = useState<string>('Standard');
+  const [tempPersona, setTempPersona] = useState<string>('Teacher');
   const [tempDepth, setTempDepth] = useState<'low' | 'medium' | 'deep'>('low');
   const [showReferences, setShowReferences] = useState(false);
   const [useFileAwareContext, setUseFileAwareContext] = useState(false);
@@ -162,13 +227,13 @@ function MindMapPageContent() {
         topic,
         parentTopic,
         targetLang: params.lang,
-        persona: aiPersona,
+        persona: params.persona || aiPersona,
         depth: params.depth,
         useSearch: params.useSearch === 'true',
       }, aiOptions);
       return result;
     }
-  }), [aiPersona, params.lang, config.provider, config.apiKey, config.pollinationsModel]);
+  }), [params.persona, aiPersona, params.lang, config.provider, config.apiKey, config.pollinationsModel]);
   // Keep a ref of the current source context for the persistence adapter closure
   const sourceContextRefs = useRef({ content: null as string | null, type: null as string | null, originalPdf: null as string | null });
 
@@ -340,7 +405,7 @@ function MindMapPageContent() {
               topic: topicToRegen!,
               parentTopic: params.parent || undefined,
               targetLang: params.lang,
-              persona: aiPersona,
+              persona: params.persona || aiPersona,
               depth: params.depth,
               useSearch: params.useSearch === 'true',
             }, aiOptions);
@@ -353,16 +418,38 @@ function MindMapPageContent() {
 
             // Priority 1: Explicit shared or public params
             if (params.sharedMapId) {
-              const sharedDocRef = doc(firestore, 'sharedMindmaps', params.sharedMapId);
-              const sharedSnap = await getDoc(sharedDocRef);
-              if (sharedSnap.exists()) {
-                result.data = { ...sharedSnap.data(), id: sharedSnap.id } as any;
+              const tryIds = [params.sharedMapId];
+              if (!params.sharedMapId.startsWith('share_')) tryIds.push(`share_${params.sharedMapId}`);
+              
+              for (const id of tryIds) {
+                const sharedDocRef = doc(firestore, 'sharedMindmaps', id);
+                const sharedSnap = await getDoc(sharedDocRef);
+                if (sharedSnap.exists()) {
+                  result.data = { ...sharedSnap.data(), id: sharedSnap.id } as any;
+                  break;
+                }
               }
             } else if (params.publicMapId) {
-              const publicDocRef = doc(firestore, 'publicMindmaps', params.publicMapId);
-              const publicSnap = await getDoc(publicDocRef);
-              if (publicSnap.exists()) {
-                result.data = { ...publicSnap.data(), id: publicSnap.id } as any;
+              const tryIds = [params.publicMapId];
+              if (!params.publicMapId.startsWith('public_')) tryIds.push(`public_${params.publicMapId}`);
+
+              for (const id of tryIds) {
+                const publicDocRef = doc(firestore, 'publicMindmaps', id);
+                const publicSnap = await getDoc(publicDocRef);
+                if (publicSnap.exists()) {
+                  const publicData = publicSnap.data();
+                  result.data = { ...publicData, id: publicSnap.id } as any;
+                  const ownerId = publicData?.ownerId || publicData?.userId;
+                  if (ownerId) {
+                    const userMapRef = doc(firestore, 'users', ownerId, 'mindmaps', id);
+                    const userMapSnap = await getDoc(userMapRef);
+                    if (userMapSnap.exists()) {
+                      await updateDoc(userMapRef, { publicViews: increment(1) });
+                    }
+                  }
+                  await updateDoc(publicDocRef, { publicViews: increment(1) });
+                  break;
+                }
               }
             }
             // Priority 2: mapId with share_ or public_ prefix (common for shared links)
@@ -376,7 +463,17 @@ function MindMapPageContent() {
               const publicDocRef = doc(firestore, 'publicMindmaps', params.mapId);
               const publicSnap = await getDoc(publicDocRef);
               if (publicSnap.exists()) {
-                result.data = { ...publicSnap.data(), id: publicSnap.id } as any;
+                const publicData = publicSnap.data();
+                result.data = { ...publicData, id: publicSnap.id } as any;
+                const ownerId = publicData?.ownerId || publicData?.userId;
+                if (ownerId) {
+                  const userMapRef = doc(firestore, 'users', ownerId, 'mindmaps', params.mapId);
+                  const userMapSnap = await getDoc(userMapRef);
+                  if (userMapSnap.exists()) {
+                    await updateDoc(userMapRef, { publicViews: increment(1) });
+                  }
+                }
+                await updateDoc(publicDocRef, { publicViews: increment(1) });
               }
             }
             // Priority 3: Private mind map (requires user or explicit ownerId for admins)
@@ -401,6 +498,23 @@ function MindMapPageContent() {
                 }
               }
             }
+            
+            // Priority 4: Final fallback for public/shared maps if mapId was provided but not found in user's private collection
+            if (!result.data && params.mapId) {
+              // Try publicMindmaps first
+              const publicDocRef = doc(firestore, 'publicMindmaps', params.mapId);
+              const publicSnap = await getDoc(publicDocRef);
+              if (publicSnap.exists()) {
+                result.data = { ...publicSnap.data(), id: publicSnap.id } as any;
+              } else {
+                // Try sharedMindmaps
+                const sharedDocRef = doc(firestore, 'sharedMindmaps', params.mapId);
+                const sharedSnap = await getDoc(sharedDocRef);
+                if (sharedSnap.exists()) {
+                  result.data = { ...sharedSnap.data(), id: sharedSnap.id } as any;
+                }
+              }
+            }
 
             if (!result.data && !result.error) {
               result.error = "Mind map not found or you don't have permission to view it.";
@@ -411,7 +525,7 @@ function MindMapPageContent() {
               topic1: params.topic1!,
               topic2: params.topic2!,
               targetLang: params.lang,
-              persona: aiPersona,
+              persona: params.persona || aiPersona,
               depth: params.depth,
               useSearch: params.useSearch === 'true',
             }, {
@@ -426,7 +540,7 @@ function MindMapPageContent() {
               topic: params.topic!,
               parentTopic: params.parent || undefined,
               targetLang: params.lang,
-              persona: aiPersona,
+              persona: params.persona || aiPersona,
               depth: params.depth,
               useSearch: params.useSearch === 'true',
             }, {
@@ -436,17 +550,16 @@ function MindMapPageContent() {
               userId: user?.uid,
             });
           } else if (params.sessionId) {
-            const sessionType = sessionStorage.getItem(`session-type-${params.sessionId}`);
-            const sessionContent = sessionStorage.getItem(`session-content-${params.sessionId}`);
+            const sessionType = safeGetItem<string>(`session-type-${params.sessionId}`);
+            const sessionContent = safeGetItem<{file?: string; text?: string; originalFile?: string}>(`session-content-${params.sessionId}`);
             if (sessionContent) {
               let fileContent, additionalText, originalPdf;
               try {
-                const parsed = JSON.parse(sessionContent);
-                fileContent = parsed.file;
-                additionalText = parsed.text;
-                originalPdf = parsed.originalFile;
+                fileContent = sessionContent.file;
+                additionalText = sessionContent.text;
+                originalPdf = sessionContent.originalFile;
               } catch {
-                fileContent = sessionContent;
+                fileContent = '';
                 additionalText = '';
               }
 
@@ -468,7 +581,7 @@ function MindMapPageContent() {
                 result = await generateMindMapFromImageAction({
                   imageDataUri: fileContent!,
                   targetLang: params.lang,
-                  persona: aiPersona,
+                  persona: params.persona || aiPersona,
                   depth: params.depth,
                   sessionId: params.sessionId || undefined,
                 }, {
@@ -482,7 +595,7 @@ function MindMapPageContent() {
                 result = await generateYouTubeMindMapAction({
                   url: fileContent!,
                   targetLang: params.lang,
-                  persona: aiPersona,
+                  persona: params.persona || aiPersona,
                   depth: params.depth,
                   sessionId: params.sessionId || undefined,
                 }, {
@@ -497,7 +610,7 @@ function MindMapPageContent() {
                   text: fileContent!,
                   context: additionalText, // Include custom topic if provided
                   targetLang: params.lang,
-                  persona: aiPersona,
+                  persona: params.persona || aiPersona,
                   depth: params.depth,
                   sessionId: params.sessionId || undefined,
                 }, {
@@ -512,7 +625,7 @@ function MindMapPageContent() {
                   text: fileContent!,
                   context: additionalText,
                   targetLang: params.lang,
-                  persona: aiPersona,
+                  persona: params.persona || aiPersona,
                   depth: params.depth,
                   sessionId: params.sessionId || undefined,
                 }, {
@@ -526,7 +639,7 @@ function MindMapPageContent() {
                 result = await generateMindMapFromWebsiteAction({
                   url: fileContent!,
                   targetLang: params.lang,
-                  persona: aiPersona,
+                  persona: params.persona || aiPersona,
                   depth: params.depth,
                   sessionId: params.sessionId || undefined,
                 }, {
@@ -541,7 +654,7 @@ function MindMapPageContent() {
                   text: additionalText || params.topic || 'Multi-Source Synthesis',
                   context: fileContent!, 
                   targetLang: params.lang,
-                  persona: aiPersona,
+                  persona: params.persona || aiPersona,
                   depth: params.depth,
                   sessionId: params.sessionId || undefined,
                 }, {
@@ -581,6 +694,8 @@ function MindMapPageContent() {
         if (result.error) throw new Error(result.error);
 
         if (result.data) {
+          // Refresh balance after any successful AI generation
+          refreshBalance();
           setMindMaps((prevMaps: any[]) => {
             if (params.isSelfReference) {
               const idIndex = prevMaps.findIndex(m => m.id === 'mindscape');
@@ -844,7 +959,7 @@ function MindMapPageContent() {
 
   const handleRegenerateClick = useCallback(() => {
     // Ensure we match the Title Case values in our SelectItems
-    const currentPersona = aiPersona || 'Standard';
+    const currentPersona = aiPersona || 'Teacher';
     const normalizedPersona = currentPersona.charAt(0).toUpperCase() + currentPersona.slice(1).toLowerCase();
     setTempPersona(normalizedPersona);
     setTempDepth(params.depth || 'low');
@@ -888,6 +1003,7 @@ function MindMapPageContent() {
       }
 
       await expandNode(subTopic, nodeId || `sub-${Date.now()}`, { mode, parentDepth: parentAbsoluteDepth });
+      refreshBalance();
       if (mode === 'foreground') {
         toast({ title: "Sub-Map Generated", description: `Created detailed map for "${subTopic}".` });
       }
@@ -1163,12 +1279,6 @@ function MindMapPageContent() {
                   <SelectValue placeholder="Select Persona" />
                 </SelectTrigger>
                 <SelectContent className="glassmorphism border-white/10 z-[1000] !pointer-events-auto">
-                  <SelectItem value="Standard" className="text-[11px] font-bold uppercase font-orbitron py-3 focus:bg-white/10 cursor-pointer">
-                    <div className="flex items-center gap-2">
-                      <Bot className="w-4 h-4 text-zinc-400" />
-                      <span>Standard (Balanced)</span>
-                    </div>
-                  </SelectItem>
                   <SelectItem value="Teacher" className="text-[11px] font-bold uppercase font-orbitron py-3 focus:bg-white/10 cursor-pointer">
                     <div className="flex items-center gap-2">
                       <UserRound className="w-4 h-4 text-blue-400" />
@@ -1318,12 +1428,9 @@ function MindMapPageContent() {
                 </div>
               ) : sourceFileType === 'pdf' && originalPdfFileContent ? (
                 <div className="flex-1 w-full rounded-xl overflow-hidden border border-white/10 shadow-inner bg-white/5">
-                  <iframe
-                    src={originalPdfFileContent}
-                    width="100%"
-                    height="100%"
+                  <BlobPdfViewer
+                    dataUri={originalPdfFileContent}
                     className="border-none w-full h-full block bg-white"
-                    title="Original PDF Document"
                   />
                 </div>
               ) : sourceFileType === 'youtube' && sourceFileContent ? (

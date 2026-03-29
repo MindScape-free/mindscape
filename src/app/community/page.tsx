@@ -80,7 +80,7 @@ export default function CommunityPage() {
     }, [publicMaps, selectedCategories, searchQuery]);
 
     const handleMapClick = (id: string) => {
-        router.push(`/canvas?mapId=${id}`);
+        router.push(`/canvas?publicMapId=${id}`);
     };
 
     return (

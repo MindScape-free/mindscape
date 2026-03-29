@@ -1,4 +1,4 @@
-import { doc, setDoc, getDoc, getDocs, updateDoc, increment, deleteField, FieldPath, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, updateDoc, increment, deleteField, FieldPath, collection, serverTimestamp, addDoc } from 'firebase/firestore';
 import { Firestore } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { format } from 'date-fns';
@@ -96,6 +96,7 @@ export async function updateUserStatistics(
  */
 export async function trackLogin(firestore: Firestore, userId: string, firebaseUser?: User | null) {
     const today = format(new Date(), 'yyyy-MM-dd');
+    const now = new Date();
     const userRef = doc(firestore, 'users', userId);
 
     try {
@@ -104,13 +105,22 @@ export async function trackLogin(firestore: Firestore, userId: string, firebaseU
         // If user doesn't exist in Firestore, initialize them
         if (!userDoc.exists()) {
             if (firebaseUser) {
+                const name = firebaseUser.displayName || firebaseUser.email?.split('@')[0] || '';
                 await initializeUserProfile(
                     firestore,
                     userId,
-                    firebaseUser.displayName || 'ADMIN',
+                    name,
                     firebaseUser.email || '',
                     firebaseUser.photoURL || undefined
                 );
+                await addDoc(collection(firestore, 'adminActivityLog'), {
+                    timestamp: new Date().toISOString(),
+                    type: 'USER_CREATED',
+                    targetId: userId,
+                    targetType: 'user',
+                    details: `New user registered: ${firebaseUser.email || name}`,
+                    performedBy: 'system'
+                });
             }
             return;
         }
@@ -121,7 +131,7 @@ export async function trackLogin(firestore: Firestore, userId: string, firebaseU
         if (lastActiveDate !== today) {
             await updateStreak(firestore, userId, today, lastActiveDate);
             await updateDoc(userRef, {
-                'statistics.lastActiveDate': today
+                'statistics.lastActiveDate': now.toISOString()
             });
         }
 
@@ -440,7 +450,7 @@ export async function initializeUserProfile(
         displayName,
         email,
         photoURL: photoURL || null,
-        createdAt: serverTimestamp(),
+        createdAt: new Date(),
         preferences: {
             defaultExplanationMode: 'Intermediate',
             preferredLanguage: 'en',

@@ -101,13 +101,13 @@ export interface Attachment {
   content: string; // Text content for txt/pdf, base64 for image
 }
 
-type Persona = 'Standard' | 'Teacher' | 'Concise' | 'Creative';
+type Persona = 'Teacher' | 'Concise' | 'Creative' | 'Sage';
 
 const personas: { id: Persona; label: string; icon: any; color: string; description: string }[] = [
-  { id: 'Standard', label: 'Standard', icon: Sparkles, color: 'text-blue-400', description: 'Balanced and helpful AI assistant for general queries.' },
   { id: 'Teacher', label: 'Teacher', icon: GraduationCap, color: 'text-yellow-400', description: 'Explains concepts with detailed examples and educational step-by-step guidance.' },
   { id: 'Concise', label: 'Concise', icon: Zap, color: 'text-orange-400', description: 'Provides direct, short, and to-the-point answers without fluff.' },
   { id: 'Creative', label: 'Creative', icon: Palette, color: 'text-pink-400', description: 'Uses imaginative and out-of-the-box thinking for brainstorming.' },
+  { id: 'Sage', label: 'Cognitive Sage', icon: Sparkles, color: 'text-purple-400', description: 'Deep, philosophical, and analytical thinker for complex problems.' },
 ];
 
 /**
@@ -194,7 +194,7 @@ export function ChatPanel({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [view, setView] = useState<'chat' | 'history'>('chat');
-  const [persona, setPersona] = useState<Persona>('Standard');
+  const [persona, setPersona] = useState<Persona>('Teacher');
   const [displayedPrompts, setDisplayedPrompts] = useState<any[]>([]);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
@@ -583,7 +583,7 @@ export function ChatPanel({
           const data = docSnap.data();
           const prefs = data.preferences;
           const savedPersona = prefs?.defaultAIPersona as Persona;
-          if (savedPersona && ['Standard', 'Teacher', 'Concise', 'Creative'].includes(savedPersona)) {
+          if (savedPersona && ['Teacher', 'Concise', 'Creative', 'Sage'].includes(savedPersona)) {
             setPersona(savedPersona);
           }
         }
@@ -1839,22 +1839,11 @@ export function ChatPanel({
                       className="h-8 px-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-primary transition-colors flex items-center gap-1.5"
                     >
                       <Bot className="w-3.5 h-3.5 mr-1" />
-                      {providerOptionsConfig.pollinationsModel?.split('/').pop() || 'Auto'}
+                      {providerOptionsConfig.pollinationsModel?.split('/').pop() || 'Select Engine'}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-[220px] p-2 glassmorphism border-white/10 z-[200]">
                     <div className="px-2 py-1.5 text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1">Select AI Engine</div>
-                    <DropdownMenuItem
-                      onClick={() => updateConfig({ pollinationsModel: undefined })}
-                      className={cn(
-                        "flex flex-col items-start gap-1 p-2 focus:bg-primary/10 rounded-xl cursor-pointer",
-                        !providerOptionsConfig.pollinationsModel && "bg-primary/5"
-                      )}
-                    >
-                      <span className="font-bold text-xs">Auto Select</span>
-                      <span className="text-[9px] text-zinc-500 leading-tight">AI chooses best model per task</span>
-                    </DropdownMenuItem>
-                    <div className="h-px bg-white/5 my-1 mx-2" />
                     {[
                       { id: 'pollinations/kimi', label: 'Kimi K2.5', desc: 'Coding & reasoning specialist', icon: Zap },
                       { id: 'pollinations/gemini-search', label: 'Gemini Search', desc: 'Real-time web knowledge', icon: Wand2 },

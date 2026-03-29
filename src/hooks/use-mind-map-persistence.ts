@@ -25,7 +25,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
     const router = useRouter();
     const isSavingRef = useRef(false);
 
-    const [aiPersona, setAiPersona] = useState<string>('Standard');
+    const [aiPersona, setAiPersona] = useState<string>('Teacher');
 
     // Achievement toast helper
     const showAchievementToasts = useCallback((achievements: Achievement[]) => {
@@ -46,15 +46,20 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
 
     // 1. Load User Preferences
     useEffect(() => {
+        let isCancelled = false;
+        
         if (user && firestore) {
             const userRef = doc(firestore, 'users', user.uid);
             getDoc(userRef).then(snap => {
+                if (isCancelled) return;
                 if (snap.exists()) {
                     const pref = snap.data().preferences?.defaultAIPersona;
                     setAiPersona(pref || 'Concise');
                 }
             });
         }
+        
+        return () => { isCancelled = true; };
     }, [user, firestore]);
 
     // 2. Persona Change Handler
@@ -298,7 +303,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
                 nodeCount: calculatedNodeCount,
                 categoriesCount: calculatedCategoriesCount,
                 sourcesCount: calculatedSourcesCount,
-                aiPersona: aiPersona || 'Standard',
+                aiPersona: aiPersona || 'Teacher',
             };
 
             // Only include parentMapId if it exists (Firestore doesn't allow undefined)
@@ -367,6 +372,21 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
                 const mindMapsCollection = collection(firestore, 'users', user.uid, 'mindmaps');
                 const docRef = await addDoc(mindMapsCollection, { ...metadataFinal, createdAt: serverTimestamp() });
                 finalId = docRef.id;
+
+                // Log map creation for admin activity
+                try {
+                    const { addDoc: adminAddDoc, collection: adminCollection } = await import('firebase/firestore');
+                    await adminAddDoc(adminCollection(firestore, 'adminActivityLog'), {
+                        timestamp: new Date().toISOString(),
+                        type: 'MAP_CREATED',
+                        targetId: finalId,
+                        targetType: 'mindmap',
+                        details: `New mindmap created: ${metadataFinal.topic || metadataFinal.title || 'Untitled'}`,
+                        performedBy: user.uid
+                    });
+                } catch (e) {
+                    console.error('Failed to log map creation:', e);
+                }
 
                 const contentRef = doc(firestore, 'users', user.uid, 'mindmaps', finalId, 'content', 'tree');
                 await setDoc(contentRef, contentFinal);

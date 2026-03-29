@@ -61,7 +61,8 @@ export async function generateMindMap(
     - EACH category MUST have EXACTLY 3-4 subCategories
     - Total items: ~45-55 items
     - QUALITY CHECK: Every node must have a full name and description.
-    - CRITICAL: Ensure ALL JSON is properly closed with matching braces and brackets`;
+    - CRITICAL: Ensure ALL JSON is properly closed with matching braces and brackets. 
+    - PRIORITY: If approaching output limits, stop adding nodes and focus on closing the JSON structure correctly.`;
   } else if (depth === 'deep') {
     // Deep mode: ~75-90 items (Safe limit for JSON stability)
     densityInstruction = `STRUCTURE DENSITY (STRICT REQUIREMENTS):
@@ -71,7 +72,7 @@ export async function generateMindMap(
     - Target: ~75-90 highly detailed items
     - QUALITY CHECK: Every node must have a full name, description, and thought process.
     - DO NOT generate empty or placeholder objects.
-    - CRITICAL: Ensure ALL JSON is properly closed with matching braces and brackets
+    - CRITICAL: Ensure ALL JSON is properly closed with matching braces and brackets.
     - NEVER use "..." or placeholders to skip content. Every initiated object MUST be complete.
     - If approaching output limit, prioritize closing JSON structures over adding more nodes.`;
   } else {
@@ -86,9 +87,9 @@ export async function generateMindMap(
 
   let personaInstruction = '';
   // Normalized persona selection (handle both casing styles)
-  const selectedPersona = persona?.toLowerCase() || 'teacher';
+  const selectedPersona = (persona || 'Teacher').toLowerCase().trim();
 
-  if (selectedPersona === 'teacher') {
+  if (selectedPersona === 'teacher' || selectedPersona === 'standard') {
     personaInstruction = `
     ADOPT PERSONA: "Expert Teacher"
     - Explanations should be educational, clear, and encouraging.
@@ -98,23 +99,27 @@ export async function generateMindMap(
     personaInstruction = `
     ADOPT PERSONA: "Efficiency Expert"
     - Text must be extremely brief and to the point.
-    - Use powerful keywords and short fragments instead of full sentences.
-    - Eliminate all filler words.`;
+    - Use fragments or high-impact keywords instead of long sentences.
+    - Focus only on the most critical information.`;
   } else if (selectedPersona === 'creative') {
     personaInstruction = `
     ADOPT PERSONA: "Creative Visionary"
-    - Explore non-obvious, imaginative, and out-of-the-box connections.
-    - Use vivid, evocative, and metaphorical language.
-    - Focus on innovation, future trends, and artistic angles.`;
-  } else if (selectedPersona === 'sage') {
+    - Find imaginative interpretations of the topic.
+    - Use vivid, descriptive, and non-obvious language.
+    - Explore future or alternative version of the concepts.`;
+  } else if (selectedPersona === 'sage' || selectedPersona === 'cognitive sage') {
     personaInstruction = `
     ADOPT PERSONA: "Cognitive Sage"
-    - Provide a profound, intellectually deep, and highly structured overview.
-    - Use sophisticated, precise, and insightful language.
-    - Every major node MUST include a high-level 'insight' property capturing deep wisdom.`;
+    - Synthesize deep philosophical perspectives and cross-domain knowledge.
+    - Focus on the "Meaning" and "Impact" of the content.
+    - Use professional, academic, yet accessible language.
+    - Structure content to reveal underlying patterns and wisdom.`;
   } else {
-    // Default safe persona
-    personaInstruction = `ADOPT PERSONA: "Balanced Assistant" - Provide clear, factual, and well-structured information.`;
+    personaInstruction = `
+    ADOPT PERSONA: "Expert Teacher"
+    - Explanations should be educational, clear, and encouraging.
+    - Use analogies to explain complex concepts.
+    - Structure content like a curriculum, moving from basics to advanced.`;
   }
 
   // Search grounding instruction

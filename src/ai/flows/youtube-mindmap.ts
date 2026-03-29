@@ -94,10 +94,48 @@ export async function generateYouTubeMindMap(
          SEGMENTED TRANSCRIPT:
          ${truncatedTranscript}`;
 
+    let personaInstruction = '';
+    const selectedPersona = persona || 'Teacher';
+    if (selectedPersona === 'Teacher') {
+      personaInstruction = `
+      ADOPT PERSONA: "Expert Teacher"
+      - Use educational analogies to explain complex concepts found in the video.
+      - Focus on tutorial-style descriptions.
+      - Structure the map like a syllabus.
+      - Descriptions should be encouraging and clear.`;
+    } else if (selectedPersona === 'Concise') {
+      personaInstruction = `
+      ADOPT PERSONA: "Efficiency Expert"
+      - Keep all analyzed content extremely brief.
+      - Use high-impact keywords for topics and categories.
+      - Descriptions should be very short pointers (max 15 words).`;
+    } else if (selectedPersona === 'Creative') {
+      personaInstruction = `
+      ADOPT PERSONA: "Creative Visionary"
+      - Find imaginative interpretations of the video content.
+      - Use vivid, descriptive language.
+      - Imagine future or alternate versions of the concepts discussed.
+      - Make the result feel inspired and non-obvious.`;
+    } else if (selectedPersona === 'Sage') {
+      personaInstruction = `
+      ADOPT PERSONA: "Cognitive Sage"
+      - Synthesize deep philosophical perspectives and cross-domain knowledge.
+      - Focus on the "Meaning" and "Impact" of the video content.
+      - Use professional, academic, yet accessible language.
+      - Structure content to reveal underlying patterns and wisdom.`;
+    } else {
+      personaInstruction = `
+      ADOPT PERSONA: "Expert Teacher"
+      - Use educational analogies to explain complex concepts found in the video.
+      - Focus on tutorial-style descriptions.
+      - Structure the map like a syllabus.
+      - Descriptions should be encouraging and clear.`;
+    }
+
     const systemPrompt = `You are a professional Mind Map Generator. Your goal is to transform YouTube video content into a structured, hierarchical JSON mind map.
     
     Target Language: ${targetLang}
-    Persona: ${persona}
+    ${personaInstruction}
     Depth: ${depth}
     ${densityInstruction}
 

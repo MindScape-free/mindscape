@@ -50,6 +50,7 @@ export async function saveUserApiKey(
 ): Promise<void> {
     try {
         const settingsRef = doc(firestore, 'users', userId, 'settings', 'imageGeneration');
+        const userRef = doc(firestore, 'users', userId);
 
         const settings: UserImageSettings = {
             pollinationsApiKey: apiKey,
@@ -58,7 +59,18 @@ export async function saveUserApiKey(
             apiKeyLastUsed: Date.now()
         };
 
+        // Save to new location
         await setDoc(settingsRef, settings, { merge: true });
+
+        // Also sync to top-level doc for immediate profile state update
+        await setDoc(userRef, {
+            apiSettings: {
+                pollinationsApiKey: apiKey,
+                pollinationsModel: preferredModel || 'flux',
+                provider: 'pollinations'
+            }
+        }, { merge: true });
+
     } catch (error) {
         console.error('Error saving user API key:', error);
         throw error;

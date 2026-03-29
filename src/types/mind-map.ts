@@ -130,6 +130,7 @@ export interface BaseMindMapData {
   isShared?: boolean;
   publicCategories?: string[];
   views?: number;
+  publicViews?: number;
   originalAuthorId?: string;
   authorName?: string;
   authorAvatar?: string;
@@ -148,6 +149,8 @@ export interface BaseMindMapData {
   categoriesCount?: number;
   aiPersona?: string;
   sourcesCount?: number;
+  mode?: 'single' | 'compare' | 'multi';
+  compareData?: CompareData;
 }
 
 export interface PdfContextData {

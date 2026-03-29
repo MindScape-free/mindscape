@@ -39,14 +39,12 @@ import { jsPDF } from 'jspdf';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DepthBadge } from '@/components/mind-map/depth-badge';
 import { SourceBadge } from '@/components/mind-map/source-badge';
+import { ModeBadge } from '@/components/mind-map/mode-badge';
 import { ImageGenerationDialog, ImageSettings } from '@/components/mind-map/image-generation-dialog';
-// ChangelogDialog removed from here, now in root layout
-
-
-
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMindMapPersistence } from '@/hooks/use-mind-map-persistence';
 import { sanitizeFirestoreData } from '@/lib/sanitize-firestore';
+
 
 function DashboardLoadingSkeleton() {
   return (
@@ -110,6 +108,8 @@ export default function DashboardPage() {
   const [selectedMapForPreview, setSelectedMapForPreview] = useState<SavedMindMap | null>(null);
   const [suggestedTopics, setSuggestedTopics] = useState<string[]>([]);
   const [isSuggestingTopics, setIsSuggestingTopics] = useState(false);
+  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
+  const [isSuggestingQuestions, setIsSuggestingQuestions] = useState(false);
   const [isPublishingMapId, setIsPublishingMapId] = useState<string | null>(null);
   const [isUnpublishingMapId, setIsUnpublishingMapId] = useState<string | null>(null);
   const [previewMapPublishStatus, setPreviewMapPublishStatus] = useState<boolean | null>(null);
@@ -155,6 +155,25 @@ export default function DashboardPage() {
         if (isMounted) setIsSuggestingTopics(false);
       });
 
+      // Fetch dynamic questions
+      setSuggestedQuestions([]);
+      setIsSuggestingQuestions(true);
+      import('@/app/actions').then(({ generateRelatedQuestionsAction }) => {
+        generateRelatedQuestionsAction({
+          topic: selectedMapForPreview.topic,
+          pdfContext: selectedMapForPreview.summary // Use summary as context for questions
+        }, {
+          provider: config.provider,
+          apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
+          userId: user?.uid
+        }).then(res => {
+          if (isMounted && res.data?.questions) setSuggestedQuestions(res.data.questions.slice(0, 3));
+          if (isMounted) setIsSuggestingQuestions(false);
+        }).catch(() => {
+          if (isMounted) setIsSuggestingQuestions(false);
+        });
+      });
+
       // Fetch full content for Data Pack
       if (user && firestore) {
         const contentRef = doc(firestore, 'users', user.uid, 'mindmaps', selectedMapForPreview.id, 'content', 'tree');
@@ -195,7 +214,12 @@ export default function DashboardPage() {
       return count;
     };
 
-    if (selectedMapFullData.mode === 'single') {
+    const isMultiMode = selectedMapFullData.mode === 'multi' || 
+                       (selectedMapFullData as any).sourceFileType === 'multi' ||
+                       (selectedMapFullData as any).sourceType === 'multi' ||
+                       (selectedMapFullData as any).sourceFileContent?.includes('--- SOURCE:');
+
+    if (isMultiMode || selectedMapFullData.mode === 'single') {
       const subTopics = selectedMapFullData.subTopics || [];
       concepts = subTopics.length;
       totalNodes += countNodesRecursive(subTopics);
@@ -368,8 +392,8 @@ export default function DashboardPage() {
     }
   };
 
-  const handleRecommendationAction = async (isNewMap: boolean) => {
-    if (!selectedIdeaForAction || !selectedMapForPreview) return;
+  const handleRecommendationAction = async (mode: 'background' | 'immediate') => {
+    if (!selectedMapForPreview || !selectedIdeaForAction) return;
 
     const topic = selectedIdeaForAction.includes(selectedMapForPreview.topic)
       ? selectedIdeaForAction
@@ -377,8 +401,8 @@ export default function DashboardPage() {
 
     setShowChoiceDialog(false);
 
-    if (isNewMap) {
-      // NEW MAP - Background Generation
+    if (mode === 'background') {
+      // BACKGROUND - Notification-based generation
       const notifId = addNotification({
         message: `Generating: ${topic}`,
         type: 'loading',
@@ -440,13 +464,11 @@ export default function DashboardPage() {
         });
       }
     } else {
-      // INSERT INTO CURRENT - Implementation depends on how you want to 'insert'
-      // For now, let's navigate to a "sub-generator" route or just open in canvas with a flag
-      // Since it's a 'recommendation', navigating to the new topic with context is the most standard approach
-      router.push(`/?topic=${encodeURIComponent(topic)}&depth=${(selectedMapForPreview as any).depth || 'low'}&contextId=${selectedMapForPreview.id}`);
+      // IMMEDIATE - Push to Canvas
+      router.push(`/canvas?topic=${encodeURIComponent(topic)}&depth=${(selectedMapForPreview as any).depth || 'low'}`);
       toast({
-        title: "Integrating...",
-        description: `Shifting context to explore "${topic}" within this niche.`,
+        title: "Initializing...",
+        description: `Redirecting to Canvas to create "${topic}".`,
       });
     }
   };
@@ -653,7 +675,7 @@ export default function DashboardPage() {
 
     // If already shared, just copy the link
     if ((map as any).isShared) {
-      const shareUrl = `${window.location.origin}/canvas?sharedMapId=${map.id}`;
+      const shareUrl = `${window.location.origin}/canvas?mapId=share_${map.id}`;
       await navigator.clipboard.writeText(shareUrl);
       setIsCopiedMapId(map.id);
       setTimeout(() => setIsCopiedMapId(null), 2000);
@@ -760,7 +782,9 @@ export default function DashboardPage() {
 
 
   const handleMindMapClick = (mapId: string) => {
-    router.push(`/canvas?mapId=${mapId}`);
+    // If it's a shared map ID, keep it, otherwise use regular mapId
+    const finalMapId = mapId.startsWith('share_') || mapId.startsWith('public_') ? mapId : mapId;
+    router.push(`/canvas?mapId=${finalMapId}`);
   };
 
   const handleGenerateThumbnail = async (mapToUpdate: SavedMindMap) => {
@@ -844,6 +868,19 @@ export default function DashboardPage() {
     const docRef = doc(firestore, 'users', user.uid, 'mindmaps', idToRemove);
     try {
       await deleteDoc(docRef);
+      // Log map deletion for admin activity
+      try {
+        await addDoc(collection(firestore, 'adminActivityLog'), {
+          timestamp: new Date().toISOString(),
+          type: 'MAP_DELETED',
+          targetId: idToRemove,
+          targetType: 'mindmap',
+          details: `Mindmap deleted by user`,
+          performedBy: user.uid
+        });
+      } catch (logError) {
+        console.error('Failed to log map deletion:', logError);
+      }
       // Successful delete will eventually be reflected by useCollection snapshot
     } catch (serverError) {
       const permissionError = new FirestorePermissionError({ path: docRef.path, operation: 'delete' });
@@ -1108,17 +1145,18 @@ export default function DashboardPage() {
                           <Badge 
                             variant="outline"
                             style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}
-                            className="bg-black/60 text-purple-400 border-white/20 border backdrop-blur-xl text-[10px] uppercase font-bold tracking-tighter gap-1 px-2 h-5 shadow-lg ring-1 ring-black/20"
+                            className="bg-black/60 text-purple-400 border-purple-500/30 border backdrop-blur-xl text-[10px] uppercase font-black tracking-widest gap-1.5 px-2.5 h-5 shadow-lg ring-1 ring-black/20"
                           >
                             <Globe className="h-2.5 w-2.5" />
-                            Community
+                            PUBLISHED
                           </Badge>
                         )}
                       </div>
                       <div className="flex justify-end">
-                        {((map as any).sourceFileType || (map as any).sourceType) && (
-                          <SourceBadge type={(map as any).sourceFileType || (map as any).sourceType} />
-                        )}
+                        <SourceBadge 
+                          type={(map as any).mode === 'multi' ? 'multi' : ((map as any).sourceFileType || (map as any).sourceType || 'text')} 
+                          sourceFileContent={(map as any).sourceFileContent}
+                        />
                       </div>
                     </div>
                     {/* Glassmorphism overlay with buttons on hover */}
@@ -1298,282 +1336,309 @@ export default function DashboardPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-
-
-
       <Sheet open={!!selectedMapForPreview} onOpenChange={(open) => !open && setSelectedMapForPreview(null)}>
-        <SheetContent className="bg-zinc-950 border-zinc-800 text-white w-full sm:max-w-md overflow-hidden flex flex-col p-0">
+        <SheetContent className="bg-zinc-950/40 backdrop-blur-3xl border-white/5 text-white w-full sm:max-w-md overflow-hidden flex flex-col p-0 shadow-2xl">
           {selectedMapForPreview && (
             <>
-              <div className="flex-1 flex flex-col p-6 space-y-5 overflow-hidden">
-                <SheetHeader className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <SheetTitle className="text-xl font-bold tracking-tight text-white leading-tight flex-1">
-                      {(selectedMapForPreview as any).shortTitle || selectedMapForPreview.topic}
-                    </SheetTitle>
-                    {(selectedMapForPreview as any).sourceFileType && (
-                      <SourceBadge type={(selectedMapForPreview as any).sourceFileType} />
-                    )}
+              <SheetHeader className="px-8 pt-8 pb-4 border-b border-white/5 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-violet-500/10 rounded-xl border border-violet-500/20 shadow-lg shadow-violet-500/5">
+                    <Info className="h-5 w-5 text-violet-400" />
                   </div>
-                  <SheetDescription className="text-zinc-400 text-xs line-clamp-2">
-                    {selectedMapForPreview.summary}
-                  </SheetDescription>
-                </SheetHeader>
+                  <SheetTitle className="text-2xl font-black tracking-tight text-white leading-tight flex-1">
+                    {(selectedMapForPreview as any).shortTitle || selectedMapForPreview.topic}
+                  </SheetTitle>
+                </div>
+                <SheetDescription className="text-zinc-500 text-xs font-bold uppercase tracking-[0.15em] line-clamp-2 mt-2">
+                  {selectedMapForPreview.summary}
+                </SheetDescription>
+              </SheetHeader>
 
-                {/* Primary Actions Row */}
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "h-10 rounded-xl border-white/10 bg-white/5 transition-all duration-300 text-[11px] font-bold uppercase tracking-wider",
-                      isLinkCopied ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400" : "hover:bg-white/10 text-zinc-300"
-                    )}
-                    onClick={() => {
-                      navigator.clipboard.writeText(`${window.location.origin}/canvas?mapId=${selectedMapForPreview.id}`);
-                      setIsLinkCopied(true);
-                      setTimeout(() => setIsLinkCopied(false), 2000);
-                      toast({ title: "Link Copied", description: "Shareable link is in your clipboard." });
-                    }}
-                  >
-                    {isLinkCopied ? <Check className="h-3.5 w-3.5 mr-2" /> : <Copy className="h-3.5 w-3.5 mr-2 text-purple-400" />}
-                    {isLinkCopied ? 'Copied!' : 'Copy Link'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => handleDownloadFullData(selectedMapForPreview)}
-                    disabled={isDownloadingFullData || isFullDataLoading}
-                    className="h-10 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-[11px] font-bold uppercase tracking-wider text-zinc-300"
-                  >
-                    {isDownloadingFullData || isFullDataLoading ? (
-                      <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+              <ScrollArea className="flex-1 min-h-0">
+                <div className="p-8 space-y-8 pb-12">
+                  {/* Glass Actions Bar */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "h-12 rounded-2xl border-white/5 bg-white/5 hover:bg-white/10 transition-all duration-300 text-[10px] font-black uppercase tracking-widest gap-2 shadow-xl",
+                        isLinkCopied ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/5" : "text-zinc-400"
+                      )}
+                      onClick={() => {
+                        const shareId = `share_${selectedMapForPreview.id}`;
+                        navigator.clipboard.writeText(`${window.location.origin}/canvas?mapId=${shareId}`);
+                        setIsLinkCopied(true);
+                        setTimeout(() => setIsLinkCopied(false), 2000);
+                        toast({ title: "Share Link Copied", description: "Standardized shared URL is in your clipboard." });
+                      }}
+                    >
+                      {isLinkCopied ? <Check className="h-3 w-3" /> : <Share2 className="h-3 w-3 text-emerald-400" />}
+                      {isLinkCopied ? 'Copied' : 'Share Link'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleDownloadFullData(selectedMapForPreview)}
+                      disabled={isDownloadingFullData || isFullDataLoading}
+                      className="h-12 rounded-2xl border-white/5 bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase tracking-widest text-zinc-400 gap-2 shadow-xl"
+                    >
+                      {isDownloadingFullData || isFullDataLoading ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Database className="h-3 w-3 text-blue-400" />
+                      )}
+                      {isDownloadingFullData ? 'Exporting...' : 'Knowledge Pack'}
+                    </Button>
+                  </div>
+
+                  {/* Premium Visual Preview */}
+                  <div className="relative group/preview w-full aspect-video rounded-2xl overflow-hidden bg-black/60 border border-white/10 shadow-2xl ring-1 ring-white/5">
+                    <img
+                      src={selectedMapForPreview.thumbnailUrl || `https://gen.pollinations.ai/image/${encodeURIComponent(`${selectedMapForPreview.topic}, professional photography, high quality, complex mindmap visualization, detailed, 8k`)}?width=512&height=288&nologo=true&private=true&model=flux&enhance=true`}
+                      alt={selectedMapForPreview.topic}
+                      className={cn(
+                        "w-full h-full object-cover transition-all duration-700 ease-out group-hover/preview:scale-105",
+                        (regeneratingMapIds.has(selectedMapForPreview.id) || isFullDataLoading) ? "blur-xl opacity-30 grayscale" : "opacity-60 group-hover/preview:opacity-100"
+                      )}
+                    />
+                    
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+
+                    {regeneratingMapIds.has(selectedMapForPreview.id) ? (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm">
+                        <Loader2 className="h-8 w-8 text-purple-500 animate-spin mb-2" />
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-purple-300">Syncing Neurons...</p>
+                      </div>
                     ) : (
-                      <Database className="h-3.5 w-3.5 mr-2 text-blue-400" />
+                      <div className="absolute inset-0 flex items-center justify-center gap-3 opacity-0 group-hover/preview:opacity-100 transition-all duration-500 translate-y-4 group-hover/preview:translate-y-0">
+                        <Button
+                          className="rounded-full bg-white text-black hover:bg-zinc-200 text-[10px] h-10 px-8 font-black uppercase tracking-widest shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 flex items-center gap-2"
+                          onClick={() => handleMindMapClick(selectedMapForPreview.id)}
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          Enter Canvas
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleGenerateThumbnail(selectedMapForPreview);
+                          }}
+                          className="rounded-full h-10 w-10 bg-black/60 backdrop-blur-xl border border-white/20 hover:bg-white/20 text-white transition-all duration-300 hover:scale-110 active:scale-90"
+                        >
+                          <Sparkles className="h-4 w-4" />
+                        </Button>
+                      </div>
                     )}
-                    {isDownloadingFullData ? 'Exporting...' : isFullDataLoading ? 'Loading Data...' : 'Knowledge Pack'}
-                  </Button>
-                </div>
+                  </div>
 
-                {/* Visual Preview */}
-                <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-[#050505] mb-6">
-                  <img
-                    src={selectedMapForPreview.thumbnailUrl || `https://gen.pollinations.ai/image/${encodeURIComponent(`${selectedMapForPreview.topic}, professional photography, high quality, detailed, 8k`)}?width=512&height=288&nologo=true&private=true&model=flux&enhance=true`}
-                    alt={selectedMapForPreview.topic}
-                    className={cn(
-                      "w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-all duration-300",
-                      regeneratingMapIds.has(selectedMapForPreview.id) && "blur-sm opacity-40 grayscale"
-                    )}
-                  />
-
-                  {regeneratingMapIds.has(selectedMapForPreview.id) ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm">
-                      <Loader2 className="h-8 w-8 text-purple-500 animate-spin mb-2" />
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-purple-300">Regenerating UI...</p>
+                  {/* VIBGYOR Stats Grid */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10 backdrop-blur-sm flex items-center gap-4 group/stat transition-all hover:bg-purple-500/10 hover:border-purple-500/20 shadow-sm">
+                      <div className="p-2.5 bg-purple-500/10 rounded-xl border border-purple-500/20 group-hover/stat:scale-110 transition-transform">
+                        <BarChart3 className="h-4 w-4 text-purple-400" />
+                      </div>
+                      <div>
+                        <p className="text-[8px] uppercase font-black text-purple-500 tracking-[0.2em] mb-1">Depth</p>
+                        <p className="text-xs font-black text-white uppercase tracking-tight">
+                          {(selectedMapForPreview as any).depth === 'low' ? 'Quick' : 
+                          (selectedMapForPreview as any).depth === 'medium' ? 'Balanced' : 
+                          (selectedMapForPreview as any).depth === 'deep' ? 'Detailed' : 
+                          ((selectedMapForPreview as any).depth || 'Quick')}
+                        </p>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/20 group-hover:bg-black/40 transition-all duration-300">
-                      <Button
-                        className="rounded-full bg-white/10 backdrop-blur-xl border border-white/20 hover:bg-white/20 text-white text-[10px] h-9 px-6 font-black uppercase tracking-widest shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 animate-in fade-in zoom-in duration-500"
-                        onClick={() => handleMindMapClick(selectedMapForPreview.id)}
-                      >
-                        <ExternalLink className="h-3.5 w-3.5 mr-2" />
-                        Open Map
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleGenerateThumbnail(selectedMapForPreview);
-                        }}
-                        className="rounded-full h-9 w-9 bg-purple-600/50 backdrop-blur-xl border border-purple-500/60 hover:bg-purple-600 text-white transition-all duration-300 hover:scale-110 active:scale-90"
-                      >
-                        <Sparkles className="h-4 w-4" />
-                      </Button>
+
+                    <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 backdrop-blur-sm flex items-center gap-4 group/stat transition-all hover:bg-blue-500/10 hover:border-blue-500/20 shadow-sm">
+                      <div className="p-2.5 bg-blue-500/10 rounded-xl border border-blue-500/20 group-hover/stat:scale-110 transition-transform">
+                        <Zap className="h-4 w-4 text-blue-400" />
+                      </div>
+                      <div>
+                        <p className="text-[8px] uppercase font-black text-blue-500 tracking-[0.2em] mb-1">Architecture</p>
+                        <p className="text-xs font-black text-white uppercase tracking-tight">
+                          {(selectedMapForPreview as any).mode || 'Single'}
+                        </p>
+                      </div>
                     </div>
-                  )}
-                </div>
 
-                {/* Quick Stats Grid */}
-                <div className="grid grid-cols-4 gap-2">
-                  <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white/[0.03] border border-white/5 text-center">
-                    <BarChart3 className="h-3.5 w-3.5 text-purple-400 mb-2 opacity-60" />
-                    <p className="text-[8px] uppercase font-bold text-zinc-500 tracking-widest mb-1.5 leading-none">Complexity</p>
-                    <p className="text-[11px] font-bold text-zinc-200 capitalize leading-none">
-                      {(selectedMapForPreview as any).depth === 'low' ? 'Quick' : 
-                       (selectedMapForPreview as any).depth === 'medium' ? 'Balanced' : 
-                       (selectedMapForPreview as any).depth === 'deep' ? 'Detailed' : 
-                       ((selectedMapForPreview as any).depth || 'Quick')}
-                    </p>
+                    <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 backdrop-blur-sm flex items-center gap-4 group/stat transition-all hover:bg-emerald-500/10 hover:border-emerald-500/20 shadow-sm">
+                      <div className="p-2.5 bg-emerald-500/10 rounded-xl border border-emerald-500/20 group-hover/stat:scale-110 transition-transform">
+                        <Binary className="h-4 w-4 text-emerald-400" />
+                      </div>
+                      <div>
+                        <p className="text-[8px] uppercase font-black text-emerald-500 tracking-[0.2em] mb-1">Nodes</p>
+                        <p className="text-xs font-black text-white family-mono">
+                          {isFullDataLoading ? '--' : previewStats.totalNodes}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 backdrop-blur-sm flex items-center gap-4 group/stat transition-all hover:bg-amber-500/10 hover:border-amber-500/20 shadow-sm">
+                      <div className="p-2.5 bg-amber-500/10 rounded-xl border border-amber-500/20 group-hover/stat:scale-110 transition-transform">
+                        <Layers className="h-4 w-4 text-amber-400" />
+                      </div>
+                      <div>
+                        <p className="text-[8px] uppercase font-black text-amber-500 tracking-[0.2em] mb-1">Pathways</p>
+                        <p className="text-xs font-black text-white family-mono">
+                          {isFullDataLoading ? '--' : previewStats.concepts}
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white/[0.03] border border-white/5 text-center">
-                    <Binary className="h-3.5 w-3.5 text-green-400 mb-2 opacity-60" />
-                    <p className="text-[8px] uppercase font-bold text-zinc-500 tracking-widest mb-1.5 leading-none">Total Nodes</p>
-                    <p className="text-[11px] font-bold text-zinc-200 leading-none">
-                      {isFullDataLoading ? '...' : previewStats.totalNodes}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white/[0.03] border border-white/5 text-center">
-                    <Layers className="h-3.5 w-3.5 text-blue-400 mb-2 opacity-60" />
-                    <p className="text-[8px] uppercase font-bold text-zinc-500 tracking-widest mb-1.5 leading-none">Concepts</p>
-                    <p className="text-[11px] font-bold text-zinc-200 leading-none">
-                      {isFullDataLoading ? '...' : previewStats.concepts}
-                    </p>
-                  </div>
-
-
-                  {/* Publish/Unpublish Toggle Button */}
+                  {/* Status Control Card */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (previewMapPublishStatus) {
-                        handleUnpublish(selectedMapForPreview);
-                      } else {
-                        handlePublish(selectedMapForPreview);
-                      }
+                      if (previewMapPublishStatus) handleUnpublish(selectedMapForPreview);
+                      else handlePublish(selectedMapForPreview);
                     }}
                     disabled={isPublishingMapId === selectedMapForPreview.id || isUnpublishingMapId === selectedMapForPreview.id}
                     className={cn(
-                      "flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all duration-300",
-                      (isPublishingMapId === selectedMapForPreview.id || isUnpublishingMapId === selectedMapForPreview.id)
-                        ? "opacity-60 cursor-not-allowed"
-                        : "hover:scale-105 active:scale-95 cursor-pointer",
-                      previewMapPublishStatus
-                        ? "bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20"
-                        : "bg-purple-500/10 border-purple-500/20 hover:bg-purple-500/20"
+                      "w-full flex items-center justify-between p-6 rounded-[32px] border transition-all duration-500 group/publish relative overflow-hidden",
+                      previewMapPublishStatus 
+                        ? "bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/15" 
+                        : "bg-purple-500/10 border-purple-500/20 hover:bg-purple-500/15"
                     )}
                   >
-                    {(isPublishingMapId === selectedMapForPreview.id || isUnpublishingMapId === selectedMapForPreview.id) ? (
-                      <Loader2 className="h-3.5 w-3.5 mb-2 animate-spin text-zinc-400" />
-                    ) : (
-                      <Globe className={cn(
-                        "h-3.5 w-3.5 mb-2",
-                        previewMapPublishStatus ? "text-emerald-400" : "text-purple-400"
-                      )} />
-                    )}
-                    <p className={cn(
-                      "text-[8px] uppercase font-bold tracking-widest mb-1.5 leading-none",
-                      previewMapPublishStatus ? "text-emerald-500" : "text-purple-500"
-                    )}>
-                      {(isPublishingMapId === selectedMapForPreview.id || isUnpublishingMapId === selectedMapForPreview.id)
-                        ? "Processing..."
-                        : previewMapPublishStatus ? "Published" : "Private"}
-                    </p>
-                    <p className={cn(
-                      "text-[11px] font-bold leading-none",
-                      previewMapPublishStatus ? "text-emerald-400" : "text-purple-400"
-                    )}>
-                      {(isPublishingMapId === selectedMapForPreview.id || isUnpublishingMapId === selectedMapForPreview.id)
-                        ? "Please wait"
-                        : previewMapPublishStatus ? "Unpublish" : "Publish"}
-                    </p>
-                  </button>
-                </div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover/publish:translate-x-full transition-transform duration-1000" />
+                    
+                    <div className="flex items-center gap-4 relative z-10 text-left">
+                      <div className={cn(
+                        "p-2.5 rounded-xl border transition-all duration-500",
+                        previewMapPublishStatus ? "bg-emerald-500/20 border-emerald-400/30" : "bg-purple-500/20 border-purple-400/30"
+                      )}>
+                        <Globe className={cn("h-4 w-4", previewMapPublishStatus ? "text-emerald-400" : "text-purple-400")} />
+                      </div>
+                      <div>
+                        <p className="text-[8px] uppercase font-black tracking-widest text-zinc-500 mb-0.5">Publication Hub</p>
+                        <p className={cn("text-xs font-black uppercase tracking-tight", previewMapPublishStatus ? "text-emerald-400" : "text-purple-400")}>
+                          {previewMapPublishStatus ? 'Live on Community' : 'Private to Library'}
+                        </p>
+                      </div>
+                    </div>
 
-                {/* AI Recommendations */}
-                <div className="flex-1 flex flex-col min-h-0 space-y-3">
-                  <div className="flex items-center gap-2 px-1 mb-1">
-                    <Sparkles className="h-3.5 w-3.5 text-purple-400" />
-                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-zinc-300">
-                      Generate new maps from these related topics
-                    </h4>
-                  </div>
-                  <ScrollArea className="flex-1 pr-3">
-                    <div className="grid gap-2">
-                      {isSuggestingTopics ? (
-                        Array(3).fill(0).map((_, i) => (
-                          <div key={i} className="h-12 rounded-xl bg-white/5 animate-pulse" />
-                        ))
+                    <div className="relative z-10">
+                      {(isPublishingMapId === selectedMapForPreview.id || isUnpublishingMapId === selectedMapForPreview.id) ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
                       ) : (
-                        (suggestedTopics.length > 0 ? suggestedTopics : [
-                          `Advanced ${selectedMapForPreview.topic}`,
-                          `Real world applications`,
-                          `History & Evolution`
-                        ]).map((idea, i) => (
-                          <button
-                            key={i}
-                            onClick={() => {
-                              setSelectedIdeaForAction(idea);
-                              setShowChoiceDialog(true);
-                            }}
-                            className="flex items-center justify-between px-4 py-3 rounded-xl bg-purple-500/5 border border-purple-500/10 hover:bg-purple-500/10 hover:border-purple-500/30 transition-all text-left group"
-                          >
-                            <span className="text-[11px] leading-relaxed text-zinc-400 group-hover:text-purple-300 transition-colors">{idea}</span>
-                            <ChevronRight className="h-3.5 w-3.5 text-zinc-700 group-hover:text-purple-500" />
-                          </button>
-                        ))
+                        <Badge className={cn(
+                          "rounded-lg border font-black text-[9px] px-4 py-1.5 shadow-sm",
+                          previewMapPublishStatus ? "bg-emerald-500/20 text-emerald-400 border-emerald-400/20" : "bg-purple-500/20 text-purple-400 border-purple-400/20"
+                        )}>
+                          {previewMapPublishStatus ? 'UNPUBLISH' : 'PUBLISH'}
+                        </Badge>
                       )}
                     </div>
-                  </ScrollArea>
+                  </button>
+
+                    {/* Neural Expansion Paths */}
+                    <div className="space-y-5">
+                      <div className="flex items-center justify-between px-1">
+                        <div className="flex items-center gap-2.5">
+                          <Sparkles className="h-4 w-4 text-amber-400" />
+                          <h4 className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-400">
+                            Neural Expansion Paths
+                          </h4>
+                        </div>
+                        {isSuggestingTopics && <Loader2 className="h-3 w-3 animate-spin text-zinc-700" />}
+                      </div>
+                      
+                      <div className="grid gap-3">
+                        {isSuggestingTopics ? (
+                          Array(3).fill(0).map((_, i) => (
+                            <div key={i} className="h-16 rounded-2xl bg-white/[0.02] border border-white/5 animate-pulse" />
+                          ))
+                        ) : (
+                          (suggestedTopics.length > 0 ? suggestedTopics : [
+                            `Technical deep dive into the underlying architecture`,
+                            `Practical implementation & Professional use-cases`,
+                            `Historical development & Future evolution`
+                          ]).map((idea, i) => (
+                            <button
+                              key={i}
+                              onClick={() => {
+                                setSelectedIdeaForAction(idea);
+                                setShowChoiceDialog(true);
+                              }}
+                              className="flex items-center justify-between p-5 rounded-2xl bg-zinc-900/40 border border-white/5 hover:border-violet-500/30 hover:bg-violet-500/5 transition-all duration-300 text-left group/path shadow-sm"
+                            >
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-xs font-black uppercase tracking-tight text-zinc-400 group-hover:text-violet-300 transition-colors leading-relaxed block">{idea}</span>
+                                </div>
+                              <ChevronRight className="h-4 w-4 text-zinc-700 group-hover/path:text-violet-500 group-hover/path:translate-x-1 transition-all" />
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
                 </div>
-              </div>
+              </ScrollArea>
             </>
           )}
         </SheetContent>
       </Sheet>
 
-      {/* Recommendation Choice Dialog - Enhanced UI */}
+      {/* Recommendation Choice Dialog - Refined for Creation Flow */}
       <AlertDialog open={showChoiceDialog} onOpenChange={setShowChoiceDialog}>
         <AlertDialogContent className="z-[400] glassmorphism border-white/10 sm:max-w-[450px] p-0 overflow-hidden shadow-[0_0_50px_rgba(139,92,246,0.15)] animate-in zoom-in-95 duration-300">
           <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-emerald-500/5 pointer-events-none" />
 
           <div className="relative p-8 space-y-6">
             <AlertDialogHeader className="space-y-4">
-              <div className="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center shadow-xl shadow-purple-500/20 rotate-3 group-hover:rotate-0 transition-transform duration-500">
+              <div className="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center shadow-xl shadow-purple-500/20 rotate-3 transition-transform duration-500">
                 <Sparkles className="h-8 w-8 text-white animate-pulse" />
               </div>
               <div className="space-y-2 text-center">
                 <AlertDialogTitle className="text-2xl font-black tracking-tighter uppercase font-orbitron text-white">
-                  Contextual <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">Exploration</span>
+                  Knowledge <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">Expansion</span>
                 </AlertDialogTitle>
                 <AlertDialogDescription className="text-zinc-400 text-sm leading-relaxed px-4">
-                  We've analyzed your map. How would you like to explore "<span className="text-purple-300 font-bold italic">{selectedIdeaForAction}</span>"?
+                  How would you like to build the mind map for "<span className="text-purple-300 font-bold italic">{selectedIdeaForAction}</span>"?
                 </AlertDialogDescription>
               </div>
             </AlertDialogHeader>
 
             <div className="grid grid-cols-1 gap-4">
               <button
-                onClick={() => handleRecommendationAction(true)}
+                onClick={() => handleRecommendationAction('background')}
                 className="group relative flex items-center gap-4 p-5 rounded-2xl border border-white/5 bg-white/5 hover:bg-purple-500/10 hover:border-purple-500/30 transition-all duration-300 text-left overflow-hidden h-24"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="relative h-12 w-12 rounded-xl bg-purple-500/20 flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform duration-500">
-                  <Plus className="h-6 w-6 text-purple-400" />
+                  <Database className="h-6 w-6 text-purple-400" />
                 </div>
-                <div className="relative flex flex-col">
-                  <span className="font-bold text-white text-base tracking-tight mb-0.5">Create New Map</span>
-                  <span className="text-[11px] text-zinc-500 group-hover:text-zinc-400 transition-colors leading-tight">Generate a fresh, independent branch of knowledge.</span>
+                <div className="flex-1">
+                  <h4 className="text-sm font-black text-white uppercase tracking-tight">Generate in Background</h4>
+                  <p className="text-[10px] text-zinc-500 font-medium italic">Stay here; we'll notify you when it's ready.</p>
                 </div>
-                <ChevronRight className="relative ml-auto h-5 w-5 text-zinc-700 group-hover:text-purple-500 group-hover:translate-x-1 transition-all" />
+                <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:translate-x-1 transition-transform" />
               </button>
 
               <button
-                onClick={() => handleRecommendationAction(false)}
-                className="group relative flex items-center gap-4 p-5 rounded-2xl border border-white/5 bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all duration-300 text-left overflow-hidden h-24"
+                onClick={() => handleRecommendationAction('immediate')}
+                className="group relative flex items-center gap-4 p-5 rounded-2xl border border-white/5 bg-white/5 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all duration-300 text-left overflow-hidden h-24"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="relative h-12 w-12 rounded-xl bg-emerald-500/20 flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform duration-500">
-                  <LayoutGrid className="h-6 w-6 text-emerald-400" />
+                  <ExternalLink className="h-6 w-6 text-emerald-400" />
                 </div>
-                <div className="relative flex flex-col">
-                  <span className="font-bold text-white text-base tracking-tight mb-0.5">Deep Dive Integration</span>
-                  <span className="text-[11px] text-zinc-500 group-hover:text-zinc-400 transition-colors leading-tight">Expand the current map with this specialized context.</span>
+                <div className="flex-1">
+                  <h4 className="text-sm font-black text-white uppercase tracking-tight">Start Creation Now</h4>
+                  <p className="text-[10px] text-zinc-500 font-medium italic">Jump to the Canvas to begin right away.</p>
                 </div>
-                <ChevronRight className="relative ml-auto h-5 w-5 text-zinc-700 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" />
+                <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
 
-            <AlertDialogFooter className="pt-2">
-              <AlertDialogCancel className="w-full rounded-xl border-white/5 bg-zinc-900/50 hover:bg-white/5 text-[10px] font-bold uppercase tracking-widest text-zinc-500 hover:text-white transition-all h-10 border-none">
-                Dismiss Exploration
+            <div className="pt-2 text-center">
+              <AlertDialogCancel className="w-full h-11 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                Cancel
               </AlertDialogCancel>
-            </AlertDialogFooter>
+            </div>
           </div>
         </AlertDialogContent>
       </AlertDialog>
-      {/* Visual Insight Lab for Thumbnails */}
       {mapForImageLab && (
         <ImageGenerationDialog
           isOpen={isImageLabOpen}

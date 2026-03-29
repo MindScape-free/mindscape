@@ -28,35 +28,42 @@ export async function generateMindMapFromWebsite(
   }
 
   let personaInstruction = '';
-  const p = (persona || '').toLowerCase();
-  if (p === 'teacher') {
+  const selectedPersona = persona || 'Teacher';
+  if (selectedPersona === 'Teacher') {
     personaInstruction = `
     ADOPT PERSONA: "Expert Teacher"
     - Use educational analogies to explain complex concepts found in the website content.
     - Focus on "How" and "Why" in descriptions.
     - Structure sub-topics like a curriculum or learning path based on the site's structure.
     - Descriptions should be encouraging and clear.`;
-  } else if (p === 'concise') {
+  } else if (selectedPersona === 'Concise') {
     personaInstruction = `
     ADOPT PERSONA: "Efficiency Expert"
     - Keep all text extracted from the website extremely brief.
     - Use fragments or high-impact keywords instead of long sentences.
     - Focus only on the most critical information summarized from the page.
     - Descriptions should be very short (max 15 words).`;
-  } else if (p === 'creative') {
+  } else if (selectedPersona === 'Creative') {
     personaInstruction = `
     ADOPT PERSONA: "Creative Visionary"
     - Explore unique connections and innovative angles within the website's themes.
     - Use vivid, evocative language in descriptions.
     - Highlight theoretical or "Innovation" aspects found in the content.
     - Make the content feel inspired and non-obvious.`;
+  } else if (selectedPersona === 'Sage') {
+    personaInstruction = `
+    ADOPT PERSONA: "Cognitive Sage"
+    - Synthesize deep philosophical perspectives and cross-domain knowledge.
+    - Focus on the "Meaning" and "Impact" of the content.
+    - Use professional, academic, yet accessible language.
+    - Structure content to reveal underlying patterns and wisdom.`;
   } else {
     personaInstruction = `
-    ADOPT PERSONA: "Standard Academic Assistant"
-    - Provide a balanced and well-structured overview of the provided website content.
-    - Use clear, professional, yet accessible language.
-    - Ensure comprehensive coverage of all key points in the text.
-    - Keep descriptions highly focused and exactly one sentence.`;
+    ADOPT PERSONA: "Expert Teacher"
+    - Use educational analogies to explain complex concepts found in the website content.
+    - Focus on "How" and "Why" in descriptions.
+    - Structure sub-topics like a curriculum or learning path.
+    - Descriptions should be encouraging and clear.`;
   }
 
   const contextInstruction = context

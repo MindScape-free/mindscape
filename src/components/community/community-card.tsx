@@ -12,6 +12,8 @@ import { doc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { DepthBadge } from '@/components/mind-map/depth-badge';
+import { ModeBadge } from '@/components/mind-map/mode-badge';
+
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -168,8 +170,10 @@ export const CommunityCard = ({ map, onClick }: CommunityCardProps) => {
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                         loading="lazy"
                     />
-                    <div className="absolute top-2 left-2 z-10">
-                        <DepthBadge depth={map.depth} className="backdrop-blur-md bg-black/40 border-white/10" />
+                    <div className="absolute top-2 left-2 z-10 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                            <DepthBadge depth={map.depth} className="backdrop-blur-md bg-black/40 border-white/10" />
+                        </div>
                     </div>
                     {/* Glassmorphism overlay with button on hover */}
                     <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover/image:opacity-100 group-hover/image:bg-black/40 transition-all duration-300">

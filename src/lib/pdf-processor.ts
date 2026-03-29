@@ -5,17 +5,46 @@
 
 const isBrowser = typeof window !== 'undefined';
 
+export const MAX_PDF_SIZE_MB = 10;
+export const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
+
+export interface PDFValidationResult {
+    valid: boolean;
+    error?: string;
+    size?: number;
+}
+
+export function validatePdfSize(sizeBytes: number): PDFValidationResult {
+    if (sizeBytes === 0) {
+        return { valid: false, error: 'File is empty' };
+    }
+    
+    if (sizeBytes > MAX_PDF_SIZE_BYTES) {
+        return { 
+            valid: false, 
+            error: `PDF file too large. Maximum size is ${MAX_PDF_SIZE_MB}MB`,
+            size: sizeBytes
+        };
+    }
+    
+    return { valid: true, size: sizeBytes };
+}
+
 async function getPdfJsLib() {
     if (!isBrowser) {
         throw new Error('parsePdfContent can only be used in a browser environment.');
     }
 
-    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfjsDist = require('pdfjs-dist/legacy/build/pdf');
 
-    // Configure PDF.js worker for browser runtime
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+    pdfjsDist.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
-    return pdfjsLib;
+    return pdfjsDist;
+}
+
+interface TextItem {
+    str: string;
 }
 
 export interface PDFParseProgress {
@@ -39,6 +68,11 @@ export async function parsePdfContent(
     onProgress?: (progress: PDFParseProgress) => void,
     maxChars: number = 100000
 ): Promise<PDFParseResult> {
+    const sizeValidation = validatePdfSize(arrayBuffer.byteLength);
+    if (!sizeValidation.valid) {
+        throw new Error(sizeValidation.error);
+    }
+    
     const pdfjsLib = await getPdfJsLib();
     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
     const pdf = await loadingTask.promise;
@@ -52,12 +86,12 @@ export async function parsePdfContent(
         const textContent = await page.getTextContent();
 
         // Extract text items, filter and trim
-        const lines = textContent.items
-            .map((item: any) => item.str.trim())
+        const lines = (textContent.items as TextItem[])
+            .map((item: TextItem) => item.str.trim())
             .filter((str: string) => str.length > 0);
 
         // Heuristic for headers/footers: if a line appears in the exact same position/content across pages
-        const filteredLines = lines.filter((line, index) => {
+        const filteredLines = lines.filter((line: string, index: number) => {
             // Strip standalone page numbers (e.g., "1", "2", "Page 1")
             if (/^(page\s+)?\d+(\s+of\s+\d+)?$/i.test(line)) return false;
 

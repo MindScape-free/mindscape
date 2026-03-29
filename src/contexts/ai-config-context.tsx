@@ -5,6 +5,7 @@ import { useLocalStorage } from '@/hooks/use-local-storage';
 import { AIProvider } from '@/ai/client-dispatcher';
 import { useUser, useFirestore } from '@/firebase';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { checkPollenBalanceAction } from '@/app/actions';
 
 interface AIConfig {
     provider: AIProvider;
@@ -13,12 +14,16 @@ interface AIConfig {
     temperature: number;
     topP: number;
     pollinationsModel?: string;
+    pollenBalance?: number | null;
 }
 
 interface AIConfigContextType {
     config: AIConfig;
     updateConfig: (updates: Partial<AIConfig>) => void;
     resetConfig: () => void;
+    pollenBalance: number | null;
+    isBalanceLoading: boolean;
+    refreshBalance: () => Promise<void>;
 }
 
 const DEFAULT_CONFIG: AIConfig = {
@@ -38,6 +43,9 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
     const firestore = useFirestore();
 
     const [hydrated, setHydrated] = useState(false);
+    const [pollenBalance, setPollenBalance] = useState<number | null>(null);
+    const [isBalanceLoading, setIsBalanceLoading] = useState(false);
+    const isRefreshingRef = React.useRef(false);
 
     // Track if we're currently syncing from Firestore to prevent loops
     const isSyncingFromFirestore = React.useRef(false);
@@ -57,12 +65,50 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
             setStoredConfig(newConfig);
             return newConfig;
         });
+        
+        // If updates contains pollenBalance, update the separate state too if needed
+        // but it's better to keep them in sync
+        if (updates.pollenBalance !== undefined) {
+             setPollenBalance(updates.pollenBalance ?? null);
+        }
     }, [setStoredConfig]);
 
     const resetConfig = useCallback(() => {
         setConfig(DEFAULT_CONFIG);
         setStoredConfig(DEFAULT_CONFIG);
     }, [setStoredConfig]);
+
+    const refreshBalance = useCallback(async (apiKeyOverride?: string) => {
+        const apiKey = apiKeyOverride ?? configRef.current.pollinationsApiKey;
+        if (!user || !apiKey || isRefreshingRef.current) {
+            if (!apiKey) setPollenBalance(null);
+            return;
+        }
+
+        isRefreshingRef.current = true;
+        setIsBalanceLoading(true);
+        try {
+            const result = await checkPollenBalanceAction({ apiKey, userId: user.uid });
+            if (!result.error) {
+                setPollenBalance(result.balance);
+                updateConfig({ pollenBalance: result.balance });
+            }
+        } catch (error) {
+            console.error('Error refreshing pollen balance:', error);
+        } finally {
+            isRefreshingRef.current = false;
+            setIsBalanceLoading(false);
+        }
+    }, [user, updateConfig]);
+
+    // Refresh balance when API key changes in state (e.g. new key saved)
+    useEffect(() => {
+        if (config.pollinationsApiKey && user) {
+            refreshBalance(config.pollinationsApiKey);
+        } else if (!config.pollinationsApiKey) {
+            setPollenBalance(null);
+        }
+    }, [config.pollinationsApiKey, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Reset config when user logs out
     useEffect(() => {
@@ -80,6 +126,9 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
             if (storedConfigStr !== lastStoredConfigRef.current) {
                 lastStoredConfigRef.current = storedConfigStr;
                 setConfig(storedConfig);
+                if (storedConfig.pollenBalance !== undefined) {
+                    setPollenBalance(storedConfig.pollenBalance ?? null);
+                }
             }
         }
         // Reset the flag after processing
@@ -105,6 +154,11 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
                 setConfig(merged);
                 setStoredConfig(merged);
                 console.log('✅ AI Config synced from Firestore');
+            }
+            // Always fetch balance after Firestore sync if key is present,
+            // regardless of whether config changed (handles page refresh case)
+            if (merged.pollinationsApiKey) {
+                refreshBalance(merged.pollinationsApiKey);
             }
         };
 
@@ -134,6 +188,7 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
             setHydrated(true);
         });
 
+
         // Listen to new /users/{uid}/settings/imageGeneration (preferred storage place)
         const settingsRef = doc(firestore, 'users', user.uid, 'settings', 'imageGeneration');
         const unsubscribeSettings = onSnapshot(settingsRef, (snap) => {
@@ -153,15 +208,23 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
             setHydrated(true);
         });
 
-        return () => {
-            console.log('🔄 Cleaning up AI config listener');
-            unsubscribeUserDoc();
-            unsubscribeSettings();
-        };
-    }, [user, firestore, setStoredConfig]);
+    // Auto-refresh balance every 60 seconds while user is active
+    const intervalId = setInterval(() => {
+        if (configRef.current.pollinationsApiKey) {
+            refreshBalance();
+        }
+    }, 60_000);
+
+    return () => {
+        console.log('🔄 Cleaning up AI config listener');
+        unsubscribeUserDoc();
+        unsubscribeSettings();
+        clearInterval(intervalId);
+    };
+    }, [user, firestore, setStoredConfig, refreshBalance]);
 
     return (
-        <AIConfigContext.Provider value={{ config, updateConfig, resetConfig }}>
+        <AIConfigContext.Provider value={{ config, updateConfig, resetConfig, pollenBalance, isBalanceLoading, refreshBalance }}>
             {children}
         </AIConfigContext.Provider>
     );

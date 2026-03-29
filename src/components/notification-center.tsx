@@ -35,6 +35,11 @@ export function NotificationCenter() {
     const { notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications } = useNotifications();
     const router = useRouter();
     const { status, aiHealth, activeTaskName } = useActivity();
+    const [mounted, setMounted] = React.useState(false);
+
+    React.useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const isBusy = status !== 'idle' || aiHealth.some(h => h.status !== 'healthy');
 
@@ -62,8 +67,8 @@ export function NotificationCenter() {
                     size="icon"
                     className="relative rounded-xl hover:bg-white/5 transition-colors"
                 >
-                    <Bell className={cn("h-5 w-5", unreadCount > 0 && !isBusy ? "text-primary" : "text-zinc-400")} />
-                    {(unreadCount > 0 || isBusy) && (
+                    <Bell className={cn("h-5 w-5", mounted && unreadCount > 0 && !isBusy ? "text-primary" : "text-zinc-400")} />
+                    {mounted && (unreadCount > 0 || isBusy) && (
                         <span className="absolute top-2 right-2 flex h-2 w-2">
                             <span className={cn(
                                 "animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",
@@ -101,7 +106,7 @@ export function NotificationCenter() {
                         <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 bg-white/[0.01]">
                             <DropdownMenuLabel className="p-0 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500/70">Activity Log</DropdownMenuLabel>
                             <div className="flex gap-1.5">
-                                {notifications.length > 0 && (
+                                {mounted && notifications.length > 0 && (
                                     <>
                                         <Button
                                             variant="ghost"
@@ -124,7 +129,7 @@ export function NotificationCenter() {
                             </div>
                         </div>
 
-                        {isBusy && (
+                        {mounted && isBusy && (
                             <div className="p-4 border-b border-white/5 bg-amber-500/5">
                                 <div className="flex items-center gap-2 mb-3">
                                     <div className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
@@ -151,7 +156,7 @@ export function NotificationCenter() {
                         )}
 
                         <ScrollArea className="h-[350px]">
-                            {notifications.length === 0 ? (
+                            {!mounted ? null : notifications.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-full py-16 text-center">
                                     <div className="h-12 w-12 rounded-full bg-white/5 flex items-center justify-center mb-3">
                                         <BellOff className="h-6 w-6 text-zinc-700" />

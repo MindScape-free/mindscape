@@ -35,7 +35,8 @@ export interface ChatSession {
 export interface AdminStats {
   date: string; // YYYY-MM-DD
   totalUsers: number;
-  totalMaps: number;
+  totalMaps: number; // Public mindmaps only
+  totalMindmaps: number; // All mindmaps from all users
   totalChats: number;
   dailyActiveUsers: number;
   timestamp?: Timestamp | string;

@@ -297,6 +297,7 @@ export async function generateMindMapAction(
     if (!result) return { data: null, error: 'AI failed to generate content.' };
 
     const sanitized = await mapToMindMapData(result, depth);
+    sanitized.aiPersona = input.persona as string || 'Teacher';
 
     if (searchContext && searchContext.sources.length > 0) {
       sanitized.searchSources = searchContext.sources;
@@ -358,6 +359,7 @@ export async function generateMindMapFromImageAction(
     if (!rawResult) return { data: null, error: 'AI failed to process image.' };
 
     const sanitized = await mapToMindMapData(rawResult, depth);
+    sanitized.aiPersona = input.persona as string || 'Teacher';
     return { data: sanitized, error: null };
   } catch (error) {
     console.error('Error in generateMindMapFromImageAction:', error);
@@ -382,11 +384,12 @@ export async function generateMindMapFromPdfAction(
     const effectiveApiKey = await resolveApiKey(options);
     const depth = (input.depth === 'auto' || !input.depth)
       ? await resolveDepth(input.text.substring(0, 200), effectiveApiKey)
-      : input.depth;
+      : input.depth as 'low' | 'medium' | 'deep';
     const result = await generateMindMapFromPdf({ ...input, depth, ...options, apiKey: effectiveApiKey });
     if (!result) return { data: null, error: 'AI failed to process PDF.' };
 
     const sanitized = await mapToMindMapData(result, depth);
+    sanitized.aiPersona = input.persona as string || 'Teacher';
     return { data: sanitized, error: null };
   } catch (error) {
     console.error('Error in generateMindMapFromPdfAction:', error);
@@ -414,12 +417,13 @@ export async function generateMindMapFromTextAction(
 
   try {
     const effectiveApiKey = await resolveApiKey(options);
-    const depth = (input.depth === ('auto' as any) || !input.depth)
+    const depth = (input.depth === 'auto' || !input.depth)
       ? await resolveDepth(input.text.substring(0, 300), effectiveApiKey)
       : input.depth as 'low' | 'medium' | 'deep';
     const result = await generateMindMapFromText({ ...input, depth, ...options, apiKey: effectiveApiKey });
     if (!result) return { data: null, error: 'AI failed to process text.' };
     const sanitized = await mapToMindMapData(result, depth);
+    sanitized.aiPersona = input.persona as string || 'Teacher';
     return { data: sanitized, error: null };
   } catch (error) {
     console.error('Error in generateMindMapFromTextAction:', error);
@@ -458,6 +462,7 @@ export async function generateYouTubeMindMapAction(
     if (!result.data) return result;
 
     const sanitized = await mapToMindMapData(result.data, input.depth || 'low');
+    sanitized.aiPersona = input.persona as string || 'Teacher';
     return { data: sanitized, error: null };
   } catch (error) {
     console.error('Error in generateYouTubeMindMapAction:', error);
@@ -533,6 +538,7 @@ export async function generateMindMapFromWebsiteAction(
 
     // 4. Sanitize and format the output
     const sanitized = await mapToMindMapData(result, depth);
+    sanitized.aiPersona = input.persona as string || 'Teacher';
     
     // Attach source metadata
     sanitized.sourceUrl = input.url;
@@ -933,6 +939,7 @@ export async function generateComparisonMapAction(
     if (!result) return { data: null, error: 'AI failed to generate comparison.' };
 
     const sanitized = await mapToMindMapData(result, input.depth || 'low');
+    sanitized.aiPersona = input.persona as string || 'Teacher';
 
     // Attach search metadata if search was used
     if (searchContextA || searchContextB) {

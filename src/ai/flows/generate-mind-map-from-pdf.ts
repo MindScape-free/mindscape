@@ -133,12 +133,67 @@ export async function generateMindMapFromPdf(
 
     ${skeeResult.structuredContext}
     ---
-    IMPORTANT: Your subTopics SHOULD map to the detected sections above.
-    Your categories and subCategories SHOULD reflect the key concepts and relationships found.
-    You may add additional insights, but the core structure must match the document.`
-        : '';
+    - Your subTopics SHOULD map to the detected sections above.
+    - Your categories and subCategories SHOULD reflect the key concepts and relationships found.
+    - You may add additional insights, but the core structure must match the document.
+    
+    **ANTI-REDACTION POLICY**:
+    1. DO NOT create generic, conceptual categories like "Cardholder Details" -> "Name" -> "Indicates the name of the person".
+    2. YOU MUST USE THE ACTUAL DATA. Combine fields and values: "Megha's Identity" -> "Name: Megha" -> "DOB: 01/01/1990".
+    3. Never output a field name (like "Address" or "ID Number") without its corresponding value if it's visible. 
+    4. Fill the structure with the **actual, literal data, numbers, dates, and entity names** extracted by OCR from the visual content.
+    5. **ANTI-REDACTION POLICY**: DO NOT use placeholders like "[REDACTED]", "[PRIVACY]", or "XXXX". Always provide the actual text found in the image.`
+        : `
+    **ANTI-REDACTION POLICY**:
+    - DO NOT use placeholders like "[REDACTED]", "[PRIVACY]", or "XXXX".
+    - You MUST extract and display literal, actual values specifically found in the document (e.g., actual names, account holders, numeric IDs, addresses, and dates).
+    - This is for the user's private research on their own files; exact extraction is the goal.`;
 
+    let personaInstruction = '';
+    const selectedPersona = persona || 'Teacher';
+    if (selectedPersona === 'Teacher') {
+        personaInstruction = `
+    ADOPT PERSONA: "Expert Teacher"
+    - Use educational analogies to explain complex concepts found in the document.
+    - Focus on "How" and "Why" in descriptions.
+    - Structure sub-topics like a curriculum or learning path.
+    - Descriptions should be encouraging and clear.`;
+    } else if (selectedPersona === 'Concise') {
+        personaInstruction = `
+    ADOPT PERSONA: "Efficiency Expert"
+    - Keep all text extracted from the document extremely brief.
+    - Use fragments or high-impact keywords instead of long sentences.
+    - Focus only on the most critical information.
+    - Descriptions should be very short (max 15 words).`;
+    } else if (selectedPersona === 'Creative') {
+        personaInstruction = `
+    ADOPT PERSONA: "Creative Visionary"
+    - Explore unique connections and innovative angles within the document's content.
+    - Use vivid, evocative language in descriptions.
+    - Highlight theoretical or "Innovation" aspects.
+    - Make the content feel inspired and non-obvious.`;
+    } else if (selectedPersona === 'Sage') {
+        personaInstruction = `
+    ADOPT PERSONA: "Cognitive Sage"
+    - Synthesize deep philosophical perspectives and cross-domain knowledge.
+    - Focus on the "Meaning" and "Impact" of the content.
+    - Use professional, academic, yet accessible language.
+    - Structure content to reveal underlying patterns and wisdom.`;
+    } else {
+        personaInstruction = `
+    ADOPT PERSONA: "Expert Teacher"
+    - Use educational analogies to explain complex concepts found in the document.
+    - Focus on "How" and "Why" in descriptions.
+    - Structure sub-topics like a curriculum or learning path.
+    - Descriptions should be encouraging and clear.`;
+    }
+
+    const isMultiSource = (rawConceptsArray.length > 0 && cleaned.length > DIRECT_GENERATION_THRESHOLD) || (context?.includes('--- SOURCE:'));
+
+    /** REQUIRED OUTPUT FORMAT */
     const systemPrompt = `You are a Document Intelligence Expert specializing in converting document summaries into structured mind maps.
+    
+    ${personaInstruction}
     
     **DOCUMENT ANALYSIS GOALS**:
     1. **Structural Integrity**: Identify major sections, topics, or themes from the summarized content.
@@ -156,8 +211,9 @@ export async function generateMindMapFromPdf(
     ${targetLangInstruction}
     ${context ? `ADDITIONAL USER CONTEXT: "${context}"` : ''}
 
-    **REQUIRED OUTPUT FORMAT** (return ONLY this JSON structure, no wrapper keys, no explanations):
+    **REQUIRED OUTPUT FORMAT** (return ONLY this JSON structure):
     {
+      "mode": "${isMultiSource ? 'multi' : 'single'}",
       "topic": "Main Topic Title",
       "shortTitle": "Short Title",
       "icon": "lucide-icon-name",

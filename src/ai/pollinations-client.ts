@@ -5,6 +5,8 @@
 
 'use server';
 
+import { jsonrepair } from 'jsonrepair';
+
 // ----------------------------------------------------------------------
 // Types & Constants
 // ----------------------------------------------------------------------
@@ -161,18 +163,21 @@ CRITICAL SAFETY & OUTPUT RULES:
         }
 
         // Context token management
+        // Higher limits for larger mind maps (especially multi-source)
         if (targetModelDef && targetModelDef.context >= 16000 && !(options as any)._stripParameters) {
             if (model?.includes('deepseek')) {
                 body.max_tokens = 4092;
-            } else if (model === 'qwen-coder' || model === 'gemini-fast') {
-                body.max_tokens = 9000;
-            } else if (model === 'openai' || model === 'sur' || model === 'openai-fast' || model === 'mistral-nemo' || model === 'mistral') {
+            } else if (model === 'qwen-coder' || model === 'gemini-fast' || model === 'gemini-search') {
+                body.max_tokens = 16000;
+            } else if (model === 'openai' || model === 'openai-fast') {
+                body.max_tokens = 12000;
+            } else if (model === 'mistral' || model === 'claude-fast') {
                 body.max_tokens = 8192;
             } else {
-                body.max_tokens = 4092;
+                body.max_tokens = 8192;
             }
         } else if (!targetModelDef && !(options as any)._stripParameters) {
-            body.max_tokens = 4092;
+            body.max_tokens = 8192;
         }
 
         // API Key logic: STRICT client-only enforcement
@@ -289,60 +294,59 @@ CRITICAL SAFETY & OUTPUT RULES:
 
         let parsedResponse;
         try {
+            // 1. Try standard JSON.parse first
             parsedResponse = JSON.parse(text);
         } catch (e) {
-            // Find the first '{' and the LAST valid top-level '}'
+            console.warn('⚠️ Standard JSON parse failed, attempting repairs...');
+            
+            // 2. Find the JSON boundaries
             const firstBrace = text.indexOf('{');
-            if (firstBrace === -1) return text;
+            const lastBrace = text.lastIndexOf('}');
+            
+            if (firstBrace === -1) return text; // Not a JSON object
 
-            let braceCount = 0;
-            let lastValidBrace = -1;
-            let inString = false;
-            let isEscaped = false;
+            let targetText = text.substring(firstBrace, lastBrace !== -1 && lastBrace > firstBrace ? lastBrace + 1 : undefined).trim();
 
-            for (let i = firstBrace; i < text.length; i++) {
-                const char = text[i];
-                if (isEscaped) { isEscaped = false; continue; }
-                if (char === '\\') { isEscaped = true; continue; }
-                if (char === '"') { inString = !inString; continue; }
-                if (!inString) {
-                    if (char === '{') braceCount++;
-                    else if (char === '}') {
-                        braceCount--;
-                        if (braceCount === 0) { lastValidBrace = i; break; }
-                    }
-                }
-            }
+            try {
+                // 3. Try specialized 'jsonrepair' library
+                console.log('🔧 Attempting jsonrepair...');
+                parsedResponse = JSON.parse(jsonrepair(targetText));
+            } catch (repairError) {
+                console.warn('⚠️ jsonrepair failed, falling back to manual structural repair...');
 
-            if (lastValidBrace === -1) {
-                console.warn('⚠️ Incomplete JSON detected, attempting structural repair...');
-                let extracted = text.substring(firstBrace).trim();
+                // 4. Manual Structural Repair for Truncated Responses
+                let extracted = targetText;
 
-                // 1. Clean up "..." and other noise that might be mid-structure
+                // Clean up common AI truncation noise
                 extracted = extracted.replace(/\[\s*\.\.\.\s*\]/g, '[]')
                     .replace(/\.\.\.\s*\(truncated\)/g, '')
                     .replace(/\.\.\./g, '');
 
-                // 2. Remove trailing garbage that would prevent closing (comma, colon, or partial structural symbols)
-                // We keep repeating this until no more trailing garbage exists (e.g., if we have ", ")
-                while (extracted.length > 0 && /[,:\[\{]\s*$/.test(extracted)) {
-                    extracted = extracted.trim().slice(0, -1);
+                // Step Back Logic: Remove trailing fragments that prevent valid JSON
+                // We strip back until we hit a structural divider (comma, colon, brace, bracket)
+                // then remove the divider itself to get to a "safe" previous state.
+                while (extracted.length > 0 && !/[,:\[\{]\s*$/.test(extracted)) {
+                    const lastMarker = Math.max(
+                        extracted.lastIndexOf(','),
+                        extracted.lastIndexOf(':'),
+                        extracted.lastIndexOf('['),
+                        extracted.lastIndexOf('{'),
+                        extracted.lastIndexOf('"')
+                    );
+                    if (lastMarker !== -1) {
+                        extracted = extracted.substring(0, lastMarker);
+                    } else {
+                        break;
+                    }
                 }
 
-                // 3. Close open quotes if any
+                // Remove the dangling structural symbol itself to clean up
+                extracted = extracted.replace(/[,:\[\{]\s*$/, '').trim();
+
+                // 5. Close open structures using a stack
+                const stack: string[] = [];
                 let inString = false;
                 let isEscaped = false;
-                for (let i = 0; i < extracted.length; i++) {
-                    if (isEscaped) { isEscaped = false; continue; }
-                    if (extracted[i] === '\\') { isEscaped = true; continue; }
-                    if (extracted[i] === '"') inString = !inString;
-                }
-                if (inString) extracted += '"';
-
-                // 4. Use a stack to track open structural elements and close them in order
-                const stack: string[] = [];
-                inString = false;
-                isEscaped = false;
                 for (let i = 0; i < extracted.length; i++) {
                     const char = extracted[i];
                     if (isEscaped) { isEscaped = false; continue; }
@@ -355,7 +359,6 @@ CRITICAL SAFETY & OUTPUT RULES:
                     }
                 }
 
-                // Append closing characters in correct reverse order
                 while (stack.length > 0) {
                     const openChar = stack.pop();
                     extracted += (openChar === '{' ? '}' : ']');
@@ -363,13 +366,11 @@ CRITICAL SAFETY & OUTPUT RULES:
 
                 try {
                     parsedResponse = JSON.parse(extracted);
-                } catch (repairError) {
-                    console.error("❌ Stack-based JSON repair failed:", repairError, "\nPartial JSON extracted:", extracted);
+                } catch (finalError) {
+                    console.error("❌ All JSON repair attempts failed.");
                     const { StructuredOutputError } = await import('./client-dispatcher');
-                    throw new StructuredOutputError(`Failed to parse or repair JSON: ${repairError}`, extracted);
+                    throw new StructuredOutputError(`Failed to parse or repair JSON: ${finalError}`, extracted);
                 }
-            } else {
-                parsedResponse = JSON.parse(text.substring(firstBrace, lastValidBrace + 1));
             }
         }
 

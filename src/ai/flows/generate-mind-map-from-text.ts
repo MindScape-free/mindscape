@@ -23,9 +23,26 @@ export async function generateMindMapFromText(
 ): Promise<GenerateMindMapFromTextOutput> {
   const { provider, apiKey, context, targetLang, text, persona, strict, depth = 'low' } = input;
 
+  // ── Multi-Source Detection ──
+  const sourceCount = context ? (context.split('--- SOURCE:').length - 1) : 0;
+  const isMultiSource = sourceCount > 0;
+
   // Map depth to structural density
   let densityInstruction = '';
-  if (depth === 'medium') {
+  if (isMultiSource) {
+    // Dynamic density implementation for Multi-Source
+    // We aim for at least as many subTopics as there are sources, capped at 12 to avoid JSON overflow.
+    const minSubTopics = Math.max(4, Math.min(sourceCount, 12));
+    const catsPerSub = depth === 'deep' ? 4 : (depth === 'medium' ? 3 : 2);
+    const subCatsPerCat = depth === 'deep' ? 5 : (depth === 'medium' ? 4 : 3);
+    
+    densityInstruction = `
+    **MULTI-SOURCE DENSITY PLAN**:
+    - Because you are processing ${sourceCount} sources, you MUST generate AT LEAST ${minSubTopics} subTopics.
+    - Each subTopic MUST have ${catsPerSub} categories.
+    - Each category MUST have ${subCatsPerCat} subCategories.
+    - TOTAL COVERAGE: Ensure every one of the ${sourceCount} sources has at least one dedicated subTopic or major category branch. Do NOT omit any source.`;
+  } else if (depth === 'medium') {
     densityInstruction = 'STRUCTURE DENSITY: Generate EXACTLY 5 subTopics. Each subTopic MUST have EXACTLY 3 categories. Each category MUST have EXACTLY 3-4 subCategories. (Target: ~60 nodes)';
   } else if (depth === 'deep') {
     densityInstruction = 'STRUCTURE DENSITY: Generate EXACTLY 6 subTopics. Each subTopic MUST have EXACTLY 4 categories. Each category MUST have EXACTLY 5 subCategories. (Target: ~120 nodes)';
@@ -34,35 +51,42 @@ export async function generateMindMapFromText(
   }
 
   let personaInstruction = '';
-  const p = (persona || '').toLowerCase();
-  if (p === 'teacher') {
+  const selectedPersona = persona || 'Teacher';
+  if (selectedPersona === 'Teacher') {
     personaInstruction = `
     ADOPT PERSONA: "Expert Teacher"
-    - Use educational analogies to explain complex concepts found in the text.
+    - Use educational analogies to explain complex concepts found in the content.
     - Focus on "How" and "Why" in descriptions.
     - Structure sub-topics like a curriculum or learning path.
     - Descriptions should be encouraging and clear.`;
-  } else if (p === 'concise') {
+  } else if (selectedPersona === 'Concise') {
     personaInstruction = `
     ADOPT PERSONA: "Efficiency Expert"
     - Keep all text extracted from the source extremely brief.
     - Use fragments or high-impact keywords instead of long sentences.
     - Focus only on the most critical information from the text.
     - Descriptions should be very short (max 15 words).`;
-  } else if (p === 'creative') {
+  } else if (selectedPersona === 'Creative') {
     personaInstruction = `
     ADOPT PERSONA: "Creative Visionary"
     - Explore unique connections and innovative angles within the text.
     - Use vivid, evocative language in descriptions.
     - Highlight theoretical or "Innovation" aspects found in the content.
     - Make the content feel inspired and non-obvious.`;
+  } else if (selectedPersona === 'Sage') {
+    personaInstruction = `
+    ADOPT PERSONA: "Cognitive Sage"
+    - Synthesize deep philosophical perspectives and cross-domain knowledge.
+    - Focus on the "Meaning" and "Impact" of the content.
+    - Use professional, academic, yet accessible language.
+    - Structure content to reveal underlying patterns and wisdom.`;
   } else {
     personaInstruction = `
-    ADOPT PERSONA: "Standard Academic Assistant"
-    - Provide a balanced and well-structured overview of the provided text.
-    - Use clear, professional, yet accessible language.
-    - Ensure comprehensive coverage of all key points in the text.
-    - Keep descriptions highly focused and exactly one sentence.`;
+    ADOPT PERSONA: "Expert Teacher"
+    - Use educational analogies to explain complex concepts found in the text.
+    - Focus on "How" and "Why" in descriptions.
+    - Structure sub-topics like a curriculum or learning path.
+    - Descriptions should be encouraging and clear.`;
   }
 
   let contextInstruction = '';
@@ -70,11 +94,14 @@ export async function generateMindMapFromText(
     if (context.includes('--- SOURCE:')) {
       contextInstruction = `
     **MULTI-SOURCE CONTEXT**:
-    The provided "Context" contains information from multiple different sources delineated by "--- SOURCE: [Name] ---" blocks.
-    Your objective is to SYNTHESIZE all this information into a single coherent mind map.
-    - Look for common themes, overlapping facts, and shared relationships across the sources.
-    - Highlight unique insights or specific data points found only in one source.
-    - Use the user's primary focus (the "Text/Topic" provided below) as the central lens to organize this context.
+    The provided "Context" contains information from ${sourceCount} different sources delineated by "--- SOURCE: [Name] ---" blocks.
+    Your absolute priority is to SYNTHESIZE all this information into a single coherent mind map while ensuring TOTAL COVERAGE.
+    
+    **CRITICAL COVERAGE RULES**:
+    1. You MUST ensure that every one of the ${sourceCount} sources is clearly represented in the mind map.
+    2. Use the user's primary focus (the "Text/Topic" provided below) as the central lens.
+    3. If topics across sources are radically different, create dedicated \`subTopics\` for each distinct source to ensure nothing is lost.
+    4. Link overlapping facts across sources using categories, but keep unique data alive in subCategories.
 
     CONTEXT TO SYNTHESIZE:
     """
@@ -92,7 +119,6 @@ export async function generateMindMapFromText(
   // ── SKEE: Deterministic Document Analysis ──
   // In multi-source mode, the actual "document" is the context (merged sources),
   // while "text" is just the user's focus topic.
-  const isMultiSource = !!(context && context.includes('--- SOURCE:'));
   const sourceToAnalyze = (isMultiSource && context) ? context : text;
   
   const skeeResult = analyzeDocument(sourceToAnalyze);
@@ -135,6 +161,7 @@ export async function generateMindMapFromText(
     - Each \`subCategory\` MUST contain a specific fact, definition, or takeaway from the text.
     - Avoid repetitive or redundant nodes.
     - If the text is long, synthesize the core message of each section.
+    ${isMultiSource ? '- CONCISENESS RULE (MULTI-SOURCE): Keep descriptions extremely brief (MAX 10 words) to ensure all sources fit in the structural map.' : ''}
 
     ${densityInstruction}
   
@@ -147,7 +174,7 @@ export async function generateMindMapFromText(
     ${isMultiSource ? 'Since you are in MULTI-SOURCE mode, focus on synthesizing the overlapping and unique perspectives from all sources onto the central topic.' : 'Focus on extracting the most important hierarchical information from the provided text.'}
     The output must be a valid JSON object that strictly adheres to the following structure:
     {
-      "mode": "single",
+      "mode": "${isMultiSource ? 'multi' : 'single'}",
       "topic": "Main Topic",
       "shortTitle": "Short Title",
       "icon": "icon-name",

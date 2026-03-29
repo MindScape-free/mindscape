@@ -27,6 +27,7 @@ import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { parsePdfContent } from '@/lib/pdf-processor';
+import { safeSetItem, safeGetItem, safeRemoveItem, STORAGE_LIMITS } from '@/lib/storage';
 import {
   Select,
   SelectContent,
@@ -128,6 +129,13 @@ function Hero({
     content: string;
     originalContent?: string;
   } | null>(null);
+  const [uploadedFile2, setUploadedFile2] = useState<{
+    name: string;
+    type: 'text' | 'pdf' | 'image';
+    content: string;
+    originalContent?: string;
+  } | null>(null);
+  const [uploadTarget, setUploadTarget] = useState<'file1' | 'file2'>('file1');
 
   const [pdfProgress, setPdfProgress] = useState<{ current: number; total: number } | null>(null);
   const [openSelect, setOpenSelect] = useState<string | null>(null);
@@ -167,9 +175,9 @@ function Hero({
     }
   };
 
-  // Trigger generation when a file is uploaded
+  // Trigger generation when a file is uploaded (Single Mode Only)
   useEffect(() => {
-    if (uploadedFile) {
+    if (uploadedFile && activeMode === 'single') {
       if (!isSetupComplete) {
         window.dispatchEvent(new CustomEvent(TRIGGER_ONBOARDING_EVENT));
         return;
@@ -177,7 +185,7 @@ function Hero({
       onGenerate(topic, uploadedFile);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uploadedFile]);
+  }, [uploadedFile, activeMode]);
 
   const handleInternalSubmit = () => {
     if (!isSetupComplete) {
@@ -186,18 +194,23 @@ function Hero({
     }
 
     if (isCompareMode) {
-      if (!topic.trim() || !topic2.trim()) {
+      if (!topic.trim() && !uploadedFile && !topic2.trim() && !uploadedFile2) {
         toast({
           variant: 'destructive',
           title: 'Topics Required',
-          description: 'Please enter both topics to generate a comparison.',
+          description: 'Please enter topics or attach files for comparison.',
         });
         return;
       }
-      onCompare(topic, topic2);
+      
+      // If files are attached, we use their content as the base topic
+      const finalTopic1 = uploadedFile ? (topic ? `${topic}\n\n[Content from ${uploadedFile.name}]: ${uploadedFile.content}` : uploadedFile.content) : topic;
+      const finalTopic2 = uploadedFile2 ? (topic2 ? `${topic2}\n\n[Content from ${uploadedFile2.name}]: ${uploadedFile2.content}` : uploadedFile2.content) : topic2;
+      
+      onCompare(finalTopic1, finalTopic2);
     } else {
       if (!topic && !uploadedFile) return;
-      // For file uploads, generation is triggered by the useEffect
+      // For file uploads in single mode, generation is triggered by the useEffect
       if (!uploadedFile) {
         onGenerate(topic);
       } else {
@@ -211,7 +224,8 @@ function Hero({
     }
   };
 
-  const handleFileIconClick = () => {
+  const handleFileIconClick = (target: 'file1' | 'file2' = 'file1') => {
+    setUploadTarget(target);
     fileInputRef.current?.click();
   };
 
@@ -249,7 +263,9 @@ function Hero({
           reader.onloadend = () => resolve(reader.result as string);
           reader.readAsDataURL(file);
         });
-        setUploadedFile({ name: file.name, type, content });
+        
+        if (uploadTarget === 'file2') setUploadedFile2({ name: file.name, type, content });
+        else setUploadedFile({ name: file.name, type, content });
       } else if (file.type === 'application/pdf') {
         type = 'pdf';
         const arrayBuffer = await file.arrayBuffer();
@@ -268,12 +284,15 @@ function Hero({
           });
 
           setPdfProgress(null);
-          setUploadedFile({
+          const pdfData = {
             name: file.name,
-            type: 'pdf',
+            type: 'pdf' as const,
             content: cleanedText,
             originalContent: originalPdfDataUrl
-          });
+          };
+          
+          if (uploadTarget === 'file2') setUploadedFile2(pdfData);
+          else setUploadedFile(pdfData);
         } catch (err: any) {
           console.error("PDF Parsing error:", err);
           setPdfProgress(null);
@@ -286,7 +305,9 @@ function Hero({
         return;
       } else {
         content = await file.text();
-        setUploadedFile({ name: file.name, type, content });
+        const textData = { name: file.name, type: 'text' as const, content };
+        if (uploadTarget === 'file2') setUploadedFile2(textData);
+        else setUploadedFile(textData);
       }
 
     } catch (err) {
@@ -296,9 +317,13 @@ function Hero({
     }
   };
 
-  const handleRemoveFile = (e: React.MouseEvent) => {
+  const handleRemoveFile = (e: React.MouseEvent, target: 'file1' | 'file2' = 'file1') => {
     e.stopPropagation();
-    setUploadedFile(null);
+    if (target === 'file1') {
+      setUploadedFile(null);
+    } else {
+      setUploadedFile2(null);
+    }
     setPdfProgress(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -576,9 +601,8 @@ function Hero({
                               }}
                             />
 
-                            {/* Integrated File Upload Badge for Single Mode */}
-                            {!isCompareMode && (
-                              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                            {/* Integrated File Upload Badge for Single/Compare Mode */}
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                 <AnimatePresence>
                                   {pdfProgress ? (
                                     <motion.div
@@ -601,7 +625,7 @@ function Hero({
                                     >
                                       <Badge variant="secondary" className="bg-primary/20 text-primary-foreground border-primary/30 h-9 px-3 rounded-xl backdrop-blur-sm">
                                         <span className="max-w-[80px] truncate text-[10px] font-bold uppercase">{uploadedFile.name}</span>
-                                        <button onClick={handleRemoveFile} className="ml-2 hover:text-white transition p-0.5 rounded-full hover:bg-white/10">
+                                        <button onClick={(e) => handleRemoveFile(e, 'file1')} className="ml-2 hover:text-white transition p-0.5 rounded-full hover:bg-white/10">
                                           <X className="h-3 w-3" />
                                         </button>
                                       </Badge>
@@ -611,32 +635,59 @@ function Hero({
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  onClick={handleFileIconClick}
+                                  onClick={() => handleFileIconClick('file1')}
                                   disabled={isGenerating}
                                   className="rounded-xl text-zinc-500 hover:text-zinc-100 hover:bg-white/10 transition-all duration-300 h-10 w-10 flex items-center justify-center p-0"
                                 >
                                   <Paperclip className="h-5 w-5" />
                                 </Button>
                               </div>
-                            )}
-                          </div>
+                            </div>
 
                           {isCompareMode && (
                             <motion.div
                               initial={{ opacity: 0, x: -20 }}
                               animate={{ opacity: 1, x: 0 }}
-                              className="flex-1"
+                              className="flex-1 relative"
                             >
                               <input
-                                placeholder="Second topic to compare..."
+                                placeholder={uploadedFile2 ? 'Add context for the file...' : "Second topic to compare..."}
                                 value={topic2}
                                 onChange={(e) => setTopic2(e.target.value)}
-                                className="w-full h-16 rounded-3xl bg-black/40 px-8 text-zinc-100 outline-none placeholder:text-zinc-600 border border-white/5 focus:border-primary/50 focus:bg-black/60 transition-all text-lg font-medium"
+                                className="w-full h-16 rounded-3xl bg-black/40 px-8 pr-40 text-zinc-100 outline-none placeholder:text-zinc-600 border border-white/5 focus:border-primary/50 focus:bg-black/60 transition-all text-lg font-medium"
                                 disabled={isGenerating}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') handleInternalSubmit();
                                 }}
                               />
+                              
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                <AnimatePresence>
+                                  {uploadedFile2 && (
+                                    <motion.div
+                                      initial={{ opacity: 0, scale: 0.8, x: 10 }}
+                                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                                      exit={{ opacity: 0, scale: 0.8, x: 10 }}
+                                    >
+                                      <Badge variant="secondary" className="bg-primary/20 text-primary-foreground border-primary/30 h-9 px-3 rounded-xl backdrop-blur-sm">
+                                        <span className="max-w-[80px] truncate text-[10px] font-bold uppercase">{uploadedFile2.name}</span>
+                                        <button onClick={(e) => handleRemoveFile(e, 'file2')} className="ml-2 hover:text-white transition p-0.5 rounded-full hover:bg-white/10">
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </Badge>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleFileIconClick('file2')}
+                                  disabled={isGenerating}
+                                  className="rounded-xl text-zinc-500 hover:text-zinc-100 hover:bg-white/10 transition-all duration-300 h-10 w-10 flex items-center justify-center p-0"
+                                >
+                                  <Paperclip className="h-5 w-5" />
+                                </Button>
+                              </div>
                             </motion.div>
                           )}
                         </div>
@@ -668,7 +719,7 @@ function Hero({
             className="hidden"
             onChange={handleFileUpload}
             accept="image/*,application/pdf,.txt,.md"
-            multiple
+            multiple={activeMode === 'multi'}
           />
         </motion.div>
       </motion.div>
@@ -752,9 +803,9 @@ export default function Home() {
     if (websiteRegex.test(trimmedTopic) && !youtubeRegex.test(trimmedTopic)) {
       const timestamp = Date.now();
       const sessionId = `web-${timestamp}`;
-      sessionStorage.setItem(`session-type-${sessionId}`, 'website');
-      sessionStorage.setItem(`session-content-${sessionId}`, trimmedTopic); // The URL itself
-      sessionStorage.setItem(`session-persona-${sessionId}`, persona);
+      safeSetItem(`session-type-${sessionId}`, 'website');
+      safeSetItem(`session-content-${sessionId}`, trimmedTopic);
+      safeSetItem(`session-persona-${sessionId}`, persona);
       router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${depth}&persona=${persona}`);
       return;
     }
@@ -763,9 +814,9 @@ export default function Home() {
     if (youtubeRegex.test(trimmedTopic)) {
       const timestamp = Date.now();
       const sessionId = `yt-${timestamp}`;
-      sessionStorage.setItem(`session-type-${sessionId}`, 'youtube');
-      sessionStorage.setItem(`session-content-${sessionId}`, trimmedTopic); // The URL itself
-      sessionStorage.setItem(`session-persona-${sessionId}`, persona);
+      safeSetItem(`session-type-${sessionId}`, 'youtube');
+      safeSetItem(`session-content-${sessionId}`, trimmedTopic);
+      safeSetItem(`session-persona-${sessionId}`, persona);
       router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${depth}&persona=${persona}`);
       return;
     }
@@ -775,15 +826,24 @@ export default function Home() {
         const timestamp = Date.now();
         const sessionId = `vision-${timestamp}`;
         const finalSessionType = fileInfo.type;
-        const contentToStore = JSON.stringify({
+        const contentToStore = {
           file: fileInfo.content,
-          text: topic, // User-typed context
+          text: topic,
           originalFile: fileInfo.originalContent
-        });
+        };
 
-        sessionStorage.setItem(`session-content-${sessionId}`, contentToStore);
-        sessionStorage.setItem(`session-type-${sessionId}`, finalSessionType);
-        sessionStorage.setItem(`session-persona-${sessionId}`, persona);
+        const result = safeSetItem(`session-content-${sessionId}`, contentToStore, STORAGE_LIMITS.SOFT_LIMIT_BYTES);
+        if (!result.success) {
+          toast({
+            variant: 'destructive',
+            title: 'File Too Large',
+            description: result.warning || 'Content exceeds storage limits.',
+          });
+          setIsGenerating(false);
+          return;
+        }
+        safeSetItem(`session-type-${sessionId}`, finalSessionType);
+        safeSetItem(`session-persona-${sessionId}`, persona);
 
         router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${depth}&persona=${persona}`);
       } catch (error: any) {
@@ -813,14 +873,23 @@ export default function Home() {
     const timestamp = Date.now();
     const sessionId = `multi-${timestamp}`;
 
-    const contentToStore = JSON.stringify({
+    const contentToStore = {
       file: mergedContent,
       text: topic
-    });
+    };
 
-    sessionStorage.setItem(`session-type-${sessionId}`, 'multi');
-    sessionStorage.setItem(`session-content-${sessionId}`, contentToStore);
-    sessionStorage.setItem(`session-persona-${sessionId}`, persona);
+    const result = safeSetItem(`session-content-${sessionId}`, contentToStore, STORAGE_LIMITS.SOFT_LIMIT_BYTES);
+    if (!result.success) {
+      toast({
+        variant: 'destructive',
+        title: 'Content Too Large',
+        description: result.warning || 'Multi-source content exceeds storage limits.',
+      });
+      setIsGenerating(false);
+      return;
+    }
+    safeSetItem(`session-type-${sessionId}`, 'multi');
+    safeSetItem(`session-persona-${sessionId}`, persona);
 
     router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${depth}&persona=${persona}`);
   };

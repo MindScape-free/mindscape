@@ -46,7 +46,7 @@ export default function AboutPage() {
 
                     <h1 className="text-5xl md:text-7xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60">
                         Mapping the <br className="md:hidden" />
-                        <span className="text-primary">Future of Thought.</span>
+                        <span className="text-primary">Future of Knowledge.</span>
                     </h1>
 
                     <p className="text-zinc-400 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed">

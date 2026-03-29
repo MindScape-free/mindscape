@@ -143,12 +143,12 @@ export const TopicHeader = ({
 
                             {/* Persona Badge */}
                             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-zinc-900/50 border border-white/10 text-zinc-300 text-[10px] font-black tracking-[0.2em] uppercase backdrop-blur-md">
-                                {(!persona || persona === 'Standard') && <Bot className="h-3 w-3 text-zinc-400" />}
+                                {!persona && <Bot className="h-3 w-3 text-zinc-400" />}
                                 {persona === 'Teacher' && <UserRound className="h-3 w-3 text-blue-400" />}
                                 {persona === 'Concise' && <Zap className="h-3 w-3 text-amber-400" />}
                                 {persona === 'Creative' && <Palette className="h-3 w-3 text-pink-400" />}
                                 {persona === 'Sage' && <Brain className="h-3 w-3 text-purple-400" />}
-                                {persona || 'Standard'}
+                                {persona || 'Teacher'}
                             </div>
 
                             {/* Depth Badge */}

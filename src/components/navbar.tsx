@@ -36,7 +36,7 @@ export function Navbar() {
   const { firestore, isAdmin } = useFirebase();
   const router = useRouter();
   const pathname = usePathname();
-  const { resetConfig } = useAIConfig();
+  const { resetConfig, pollenBalance, isBalanceLoading } = useAIConfig();
   const [profileName, setProfileName] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -193,6 +193,23 @@ export function Navbar() {
 
             {/* Right Section: Auth & Profile */}
             <div className="flex flex-1 items-center justify-end gap-3">
+              {user && (
+                <Link
+                  href="/profile?tab=lab"
+                  className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 hover:bg-violet-500/20 transition-all group min-w-[80px] justify-center"
+                >
+                  <span className="text-base group-hover:scale-110 transition-transform inline-block">🍄</span>
+                  {isBalanceLoading ? (
+                    <div className="h-4 w-12 bg-violet-500/20 animate-pulse rounded" />
+                  ) : pollenBalance !== null ? (
+                    <span className="text-xs font-black tracking-wider font-orbitron">
+                      {pollenBalance.toLocaleString()}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-black text-violet-400/50">--</span>
+                  )}
+                </Link>
+              )}
               <NotificationCenter />
               {renderUserAuth()}
 

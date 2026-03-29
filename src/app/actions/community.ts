@@ -112,8 +112,8 @@ export async function removeFromCommunityAction(
 
         // Authorization check
         const isAuthor = mapData.originalAuthorId === userId;
-        const adminIds = process.env.ADMIN_USER_IDS?.split(',').map(id => id.trim()) || [];
-        const isAdmin = adminIds.includes(userId);
+        const { isUserAdmin } = await import('@/lib/admin-helpers');
+        const isAdmin = await isUserAdmin(userId);
 
         if (!isAuthor && !isAdmin) {
             return {
@@ -163,6 +163,88 @@ export async function removeFromCommunityAction(
 }
 
 /**
+ * Server action to publish a mind map to the community.
+ * Handles admin overrides to bypass client-side security rules.
+ */
+export async function publishMindMapAction(
+    mapId: string,
+    publicData: any,
+    userId: string
+): Promise<{ success: boolean; error: string | null }> {
+    try {
+        if (!userId) {
+            return { success: false, error: 'User must be authenticated' };
+        }
+
+        if (!mapId || !publicData) {
+            return { success: false, error: 'Map ID and data are required' };
+        }
+
+        const { initializeFirebaseServer } = await import('@/firebase/server');
+        const { firestore } = initializeFirebaseServer();
+
+        if (!firestore) {
+            throw new Error('Firestore not initialized');
+        }
+
+        // Authorization check
+        const targetAuthorId = publicData.originalAuthorId || publicData.userId || publicData.uid;
+        const isAuthor = targetAuthorId === userId;
+        const { isUserAdmin } = await import('@/lib/admin-helpers');
+        const isAdmin = await isUserAdmin(userId);
+
+        if (!isAuthor && !isAdmin) {
+            return {
+                success: false,
+                error: 'Unauthorized: Only the original author or admin can publish this map'
+            };
+        }
+
+        // 1. Update the original private map status
+        if (targetAuthorId) {
+            try {
+                const userMapRef = firestore
+                    .collection('users')
+                    .doc(targetAuthorId)
+                    .collection('mindmaps')
+                    .doc(mapId);
+                
+                await userMapRef.update({
+                    isPublic: true,
+                    publicCategories: publicData.publicCategories || [],
+                    updatedAt: Date.now()
+                });
+            } catch (err) {
+                console.warn('⚠️ Could not update original map status (might be missing or restricted):', err);
+                // Continue if we have admin rights, as the public entry is more important
+                if (!isAdmin) throw err;
+            }
+        }
+
+        // 2. Save to publicMindmaps
+        const publicMapRef = firestore.collection('publicMindmaps').doc(mapId);
+        
+        // Ensure the public data is a plain object and has timestamps
+        const finalPublicData = {
+            ...publicData,
+            isPublic: true,
+            updatedAt: Date.now(),
+            publishedAt: Date.now()
+        };
+
+        await publicMapRef.set(finalPublicData, { merge: true });
+
+        return { success: true, error: null };
+    } catch (error: any) {
+        console.error('Error publishing map to community:', error);
+        return {
+            success: false,
+            error: error.message || 'Failed to publish map to community'
+        };
+    }
+}
+
+/**
  * Check if the current user is an admin
  */
 export async function checkIsAdminAction(userId: string): Promise<{ isAdmin: boolean }> {
@@ -170,6 +252,8 @@ export async function checkIsAdminAction(userId: string): Promise<{ isAdmin: boo
         return { isAdmin: false };
     }
 
-    const adminIds = process.env.ADMIN_USER_IDS?.split(',').map(id => id.trim()) || [];
-    return { isAdmin: adminIds.includes(userId) };
+    const { isUserAdmin } = await import('@/lib/admin-helpers');
+    const isAdmin = await isUserAdmin(userId);
+    return { isAdmin };
 }
+

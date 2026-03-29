@@ -114,9 +114,6 @@ export function ModelSelector({
                             <>
                                 <selectedModel.icon className="w-4 h-4" />
                                 <span>{selectedModel.label}</span>
-                                {selectedModel.isNew && (
-                                    <Badge variant="secondary" className="text-xs">NEW</Badge>
-                                )}
                             </>
                         )}
                     </div>

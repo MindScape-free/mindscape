@@ -145,7 +145,7 @@ import {
   ExplainableNode,
   ExplanationMode
 } from '@/types/mind-map';
-import { categorizeMindMapAction } from '@/app/actions/community';
+import { categorizeMindMapAction, publishMindMapAction } from '@/app/actions/community';
 import { MindMapStatus } from '@/hooks/use-mind-map-stack';
 import { LeafNodeCard } from './mind-map/leaf-node-card';
 import { ExplanationDialog } from './mind-map/explanation-dialog';
@@ -302,7 +302,7 @@ export const MindMap = ({
   const router = useRouter();
   const { toast } = useToast();
   const { user, firestore } = useFirebase();
-  const { config } = useAIConfig();
+  const { config, refreshBalance } = useAIConfig();
   const [activeTab, setActiveTab] = useState<'visual' | 'radial' | 'accordion' | 'compare'>('visual');
   const useSearch = true; // Always ON in background
 
@@ -967,6 +967,9 @@ export const MindMap = ({
         }
       }
 
+      // Refresh global pollen balance
+      await refreshBalance();
+
       update({
         id: toastId,
         title: 'Insight Generated!',
@@ -1053,9 +1056,9 @@ export const MindMap = ({
       const params = new URLSearchParams();
       if (isPublicOrShared) {
         if (data.isPublic) {
-          params.set('publicMapId', id);
+          params.set('mapId', id.startsWith('public_') ? id : `public_${id}`);
         } else {
-          params.set('sharedMapId', id);
+          params.set('mapId', id.startsWith('share_') ? id : `share_${id}`);
         }
       } else {
         params.set('mapId', id);
@@ -1104,9 +1107,10 @@ export const MindMap = ({
     setIsSharing(true);
     try {
       // 1. Create shared entry (Unlisted)
+      const shareId = `share_${effectiveId}`;
       const sharedData = {
         ...toPlainObject(data),
-        id: effectiveId,
+        id: shareId,
         isShared: true, // Mark as shared
         isPublic: false, // Explicitly not public in community
         sharedAt: serverTimestamp(),
@@ -1115,7 +1119,7 @@ export const MindMap = ({
       };
 
       // Save to 'sharedMindmaps' collection
-      await setDoc(doc(firestore, 'sharedMindmaps', effectiveId), sharedData);
+      await setDoc(doc(firestore, 'sharedMindmaps', shareId), sharedData);
 
       // 2. Update user doc to reflect shared status
       await updateDoc(doc(firestore, 'users', user.uid, 'mindmaps', effectiveId), {
@@ -1185,31 +1189,34 @@ export const MindMap = ({
       update({ id: toastId, title: 'Uploading Data...', description: 'Saving your mind map to the community repository.' });
 
       // 3. Prepare Community Data
+      const targetUid = data.userId || data.uid || user.uid;
+      
+      // Fix: Prioritize original author name from data, fallback to current user ONLY if it's their own map
+      const authorName = data.authorName || 
+                         (targetUid !== user.uid ? 'Explorer' : (user.displayName || 'Anonymous'));
+      
       const publicData: any = {
         ...toPlainObject(data),
         isPublic: true,
         publicCategories: categories,
         originalMapId: data.id,
-        originalAuthorId: user.uid,
-        authorName: user.displayName || 'ADMIN',
-        authorAvatar: user.photoURL || '',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        originalAuthorId: targetUid,
+        authorName: authorName,
+        authorAvatar: data.authorAvatar || (targetUid === user.uid ? (user.photoURL || '') : ''),
         views: 0,
       };
 
-      // 4. Save to publicMindmaps (use document ID from private map for consistency)
-      const publicDocRef = doc(firestore, 'publicMindmaps', data.id!);
-      await setDoc(publicDocRef, publicData);
+      // 4. Save via Server Action (handles Admin bypass)
+      const { success, error: publishError } = await publishMindMapAction(data.id!, publicData, user.uid);
+
+      if (!success) {
+        throw new Error(publishError || 'Failed to publish mind map.');
+      }
 
       // 5. Update Local Status
       if (onUpdate) {
         onUpdate({ isPublic: true, publicCategories: categories });
       }
-
-      // 6. Update Private Document Status
-      const privateDocRef = doc(firestore, 'users', user.uid, 'mindmaps', data.id!);
-      await updateDoc(privateDocRef, { isPublic: true, publicCategories: categories });
 
       update({
         id: toastId,
@@ -1549,6 +1556,9 @@ export const MindMap = ({
               }
 
               const imageData = await response.json();
+
+              // Refresh global pollen balance after successful generation
+              await refreshBalance();
 
               // Update LOCAL nestedExpansions state
               setNestedExpansions((prev: any[]) => prev.map(exp =>

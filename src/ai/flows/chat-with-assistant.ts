@@ -30,9 +30,9 @@ const ChatWithAssistantInputSchema = z.object({
     .optional()
     .describe('Previous chat history to provide context.'),
   persona: z
-    .enum(['Standard', 'Teacher', 'Concise', 'Creative'])
+    .enum(['Teacher', 'Concise', 'Creative', 'Sage'])
     .optional()
-    .default('Standard')
+    .default('Teacher')
     .describe('The personality/style of the AI assistant.'),
   attachments: z
     .array(
