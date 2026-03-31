@@ -6,7 +6,7 @@ const securityHeaders = [
     key: 'Content-Security-Policy',
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.pollinations.ai https://cdnjs.cloudflare.com",
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.pollinations.ai https://cdnjs.cloudflare.com https://apis.google.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://placehold.co https://picsum.photos https://image.pollinations.ai https://gen.pollinations.ai https://*.firebaseapp.com https://*.googleusercontent.com",

@@ -322,7 +322,8 @@ export async function checkPollenBalanceAction(
   options: { apiKey?: string; userId?: string } = {}
 ): Promise<{ balance: number | null; error: string | null }> {
   try {
-    const effectiveApiKey = await resolveApiKey({ ...options, provider: 'pollinations' });
+    // Use the client-provided key directly - avoids Firebase Admin SDK call which causes 500s on Vercel.
+    const effectiveApiKey = options.apiKey;
 
     if (!effectiveApiKey) {
       return { balance: null, error: 'No API key provided. Please check your settings.' };

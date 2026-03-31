@@ -1,5 +1,5 @@
 
-import { Sparkles, Zap, Palette, Layout, Network, Image as ImageIcon, FastForward, Info, Shield, Brain, Cpu, RefreshCw, Trash2, Eye, FileText, MessageSquare, Search, Youtube, Layers, Globe, Folders, SlidersHorizontal, ListFilter } from 'lucide-react';
+import { Sparkles, Zap, Palette, Layout, Network, Image as ImageIcon, FastForward, Info, Shield, Brain, Cpu, RefreshCw, Trash2, Eye, FileText, MessageSquare, Search, Youtube, Layers, Globe, Folders, SlidersHorizontal, ListFilter, BarChart2, Wrench, MousePointerClick, Gem } from 'lucide-react';
 
 export interface ChangelogHighlight {
     icon: any;
@@ -23,6 +23,55 @@ export interface ChangelogVersion {
 }
 
 export const CHANGELOG_DATA: ChangelogVersion[] = [
+    {
+        version: '1.6.5',
+        slug: 'modernization-analytics-reliability',
+        date: 'March 29, 2026',
+        title: 'Modernization, Analytics & Reliability',
+        summary: 'Premium glassmorphic UI, robust JSON repair engine, VIBGYOR analytics, interactive source intelligence, and a refined creation flow.',
+        coverImage: '/changelog/homepage-hero.png',
+        tags: ['UI/UX', 'AI', 'Analytics', 'Reliability'],
+        impact: 'minor',
+        highlights: [
+            {
+                icon: Gem,
+                color: 'text-violet-400 bg-violet-500/10',
+                title: 'Premium Glassmorphic Dashboard',
+                description: 'Re-imagined Library and User Profile with a high-end translucent design system featuring 3xl backdrop blurs and refined border treatments.',
+            },
+            {
+                icon: Wrench,
+                color: 'text-blue-400 bg-blue-500/10',
+                title: 'Robust JSON Repair Engine',
+                description: 'Dual-layered JSON recovery using the jsonrepair library and custom structural step-back logic ensures even the most complex maps render without errors.',
+            },
+            {
+                icon: BarChart2,
+                color: 'text-emerald-400 bg-emerald-500/10',
+                title: 'VIBGYOR Analytics Standard',
+                description: 'Sidebar stats and source badges now use a consistent VIBGYOR color palette. Hover the Source Badge for a detailed multi-source breakdown.',
+            },
+            {
+                icon: MousePointerClick,
+                color: 'text-pink-400 bg-pink-500/10',
+                title: 'Refined Creation Flow',
+                description: 'Suggested topics now offer two clear paths: Background Generation (stay in current view) or Immediate Creation (jump to Canvas).',
+            },
+        ],
+        content: [
+            "v1.6.5 is a focused quality release that raises the visual bar, hardens AI reliability, and makes analytics instantly readable.",
+            "## Premium Glassmorphic Dashboard",
+            "The Library and User Profile pages have been re-imagined with a high-end translucent design system featuring `3xl` backdrop blurs and refined border treatments. The Neural Expansion Sidebar also received a dedicated `ScrollArea` and improved structural hierarchy.",
+            "## Robust JSON Repair Engine",
+            "A dual-layered JSON recovery system using the `jsonrepair` library and custom structural step-back logic was implemented. This ensures that even the most complex, deep mind maps render correctly without errors. AI generation protocols were also updated to prioritize closing data structures correctly when approaching output limits.",
+            "## VIBGYOR Analytics Standard",
+            "Sidebar stats (Depth, Architecture, Nodes, Pathways) are now standardized with a consistent VIBGYOR color palette. The Source Badge supports a multi-source breakdown — hovering reveals a detailed tooltip showing exact counts of IMAGES, PDF, WEBSITES, YOUTUBE, and TEXT sources.",
+            "## Refined Creation Flow",
+            "Suggested topics in the Info sidebar now offer a clear two-path creation choice: **Background Generation** (build your next map while staying in the current view) or **Immediate Creation** (jump directly to the Canvas). Background generation also features real-time success/error alerts and persistent links in the Notification Center.",
+            "## Multi-Source Naming",
+            "'Documents' has been renamed to **TEXT** across the application for clearer differentiation between source types.",
+        ],
+    },
     {
         version: '1.6.0',
         slug: 'multi-source-auto-depth',
@@ -320,5 +369,5 @@ export const CHANGELOG_DATA: ChangelogVersion[] = [
     },
 ];
 
-export const CURRENT_VERSION = CHANGELOG_DATA[0].version;
+export const CURRENT_VERSION = '1.6.5';
 export const STORAGE_KEY = 'mindscape_changelog_version';

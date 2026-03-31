@@ -34,7 +34,15 @@ export function useChatPersistence() {
 
     // Use onAuthStateChanged to ensure the Firestore SDK has processed 
     // the auth state before we attempt a query.
+    let unsubscribeSnap: (() => void) | null = null;
+
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      // Clean up previous snapshot listener whenever auth state changes
+      if (unsubscribeSnap) {
+        unsubscribeSnap();
+        unsubscribeSnap = null;
+      }
+
       if (!firebaseUser) {
         setSessions([]);
         setIsLoading(false);
@@ -44,7 +52,7 @@ export function useChatPersistence() {
       const sessionsRef = collection(firestore, 'users', firebaseUser.uid, 'chatSessions');
       const q = query(sessionsRef, orderBy('updatedAt', 'desc'));
 
-      const unsubscribeSnap = onSnapshot(q, (snapshot) => {
+      unsubscribeSnap = onSnapshot(q, (snapshot) => {
         const fetchedSessions: ChatSession[] = [];
         snapshot.forEach((doc) => {
           fetchedSessions.push({ id: doc.id, ...doc.data() } as ChatSession);
@@ -55,11 +63,12 @@ export function useChatPersistence() {
         console.error("Error fetching chat sessions:", error);
         setIsLoading(false);
       });
-
-      return () => unsubscribeSnap();
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnap) unsubscribeSnap();
+    };
   }, [firestore, auth]);
 
   /**

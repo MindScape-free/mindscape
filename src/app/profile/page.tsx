@@ -499,7 +499,8 @@ export default function ProfilePage() {
         : 'New';
 
     const stats = {
-        maps: profile.statistics.totalMapsCreated || activeMapsCount,
+        currentMaps: activeMapsCount,
+        totalMapsCreated: profile.statistics.totalMapsCreated || 0,
         streak: profile.statistics.currentStreak,
         longestStreak: profile.statistics.longestStreak || 0,
         nodes: profile.statistics.totalNodes || 0,
@@ -749,10 +750,10 @@ export default function ProfilePage() {
                                 {/* Dashboard Stats Grid - 6 Cards in one row */}
                                 <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
                                     {[
-                                        { label: 'Current Mindmap', value: stats.maps || 0, icon: Map, color: 'violet' },
+                                        { label: 'Current Mindmap', value: stats.currentMaps, icon: Map, color: 'violet' },
+                                        { label: 'Total Mindmap', value: stats.totalMapsCreated, icon: Library, color: 'purple' },
                                         { label: 'Nodes', value: stats.nodes || 0, icon: Layers, color: 'blue' },
                                         { label: 'Images', value: stats.images || 0, icon: ImageIcon, color: 'pink' },
-                                        { label: 'Chats', value: chatCount ?? '-', icon: BarChart3, color: 'cyan' },
                                         { label: 'Streak', value: `${stats.streak || 0}d`, icon: Zap, color: 'yellow' },
                                         { label: 'Study Time', value: formatDuration(stats.studyMinutes), icon: Clock, color: 'emerald' },
                                     ].map((stat, idx) => (

@@ -129,7 +129,30 @@ export default function DashboardPage() {
   // Recommendation Action State
   const [showChoiceDialog, setShowChoiceDialog] = useState(false);
   const [selectedIdeaForAction, setSelectedIdeaForAction] = useState<string | null>(null);
+  const [isChangelogOpen, setIsChangelogOpen] = useState(false);
+  const [hasUnseenUpdates, setHasUnseenUpdates] = useState(false);
   const { addNotification, updateNotification } = useNotifications();
+
+  // Version Control & Changelog Auto-Popup (v1.6.5)
+  const CURRENT_VERSION = '1.6.5';
+
+  useEffect(() => {
+    const lastViewed = localStorage.getItem('mindscape_viewed_version');
+    if (lastViewed !== CURRENT_VERSION) {
+      setHasUnseenUpdates(true);
+      // Short delay to allow dashboard to settle before popping up
+      const timer = setTimeout(() => {
+        setIsChangelogOpen(true);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  const handleCloseChangelog = () => {
+    setIsChangelogOpen(false);
+    setHasUnseenUpdates(false);
+    localStorage.setItem('mindscape_viewed_version', CURRENT_VERSION);
+  };
 
   // Fetch dynamic suggestions and full data when previewing
   useEffect(() => {
@@ -868,19 +891,6 @@ export default function DashboardPage() {
     const docRef = doc(firestore, 'users', user.uid, 'mindmaps', idToRemove);
     try {
       await deleteDoc(docRef);
-      // Log map deletion for admin activity
-      try {
-        await addDoc(collection(firestore, 'adminActivityLog'), {
-          timestamp: new Date().toISOString(),
-          type: 'MAP_DELETED',
-          targetId: idToRemove,
-          targetType: 'mindmap',
-          details: `Mindmap deleted by user`,
-          performedBy: user.uid
-        });
-      } catch (logError) {
-        console.error('Failed to log map deletion:', logError);
-      }
       // Successful delete will eventually be reflected by useCollection snapshot
     } catch (serverError) {
       const permissionError = new FirestorePermissionError({ path: docRef.path, operation: 'delete' });
@@ -1026,15 +1036,38 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
-          <div className="relative w-full max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search maps..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full flex pl-10 h-11 rounded-full bg-black/40 text-zinc-100 outline-none focus:ring-0 placeholder:text-zinc-600 border border-white/5 focus:border-primary/50 focus:bg-black/60 transition-all font-medium"
-            />
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-2xl justify-center">
+            <div className="relative w-full max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search maps..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full flex pl-10 h-11 rounded-full bg-black/40 text-zinc-100 outline-none focus:ring-0 placeholder:text-zinc-600 border border-white/5 focus:border-primary/50 focus:bg-black/60 transition-all font-medium"
+              />
+            </div>
+
+            {/* What's New Release Trigger - v1.6.5 */}
+            <button
+              onClick={() => {
+                setIsChangelogOpen(true);
+                setHasUnseenUpdates(false);
+                localStorage.setItem('mindscape_viewed_version', CURRENT_VERSION);
+              }}
+              className={cn(
+                "relative h-11 px-6 rounded-full bg-black/40 border transition-all group flex items-center gap-2 shadow-lg shrink-0",
+                hasUnseenUpdates 
+                  ? "border-violet-500/50 bg-violet-600/10 shadow-[0_0_20px_rgba(139,92,246,0.2)] animate-pulse" 
+                  : "border-white/5 hover:border-violet-500/30 hover:bg-black/60"
+              )}
+            >
+              <Zap className={cn("h-4 w-4 transition-transform group-hover:scale-110", hasUnseenUpdates ? "text-violet-400 fill-violet-400" : "text-amber-400")} />
+              <span className={cn("text-[10px] font-black uppercase tracking-widest italic transition-colors", hasUnseenUpdates ? "text-violet-200" : "text-zinc-400 group-hover:text-zinc-100")}>v1.6.5 Highlights</span>
+              {hasUnseenUpdates && (
+                <span className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-violet-600 rounded-full border-2 border-zinc-950 animate-bounce shadow-[0_0_15px_rgba(139,92,246,0.6)]" />
+              )}
+            </button>
           </div>
           <Select value={sortOption} onValueChange={(value) => setSortOption(value as SortOption)}>
             <SelectTrigger className="w-full sm:w-[180px] h-11 rounded-full glassmorphism border-white/5 bg-black/40 hover:bg-black/60 focus:ring-0 focus:ring-offset-0 transition-all">
@@ -1639,6 +1672,93 @@ export default function DashboardPage() {
           </div>
         </AlertDialogContent>
       </AlertDialog>
+      {/* What's New Modal - v1.6.5 Highlights */}
+      <AlertDialog open={isChangelogOpen} onOpenChange={setIsChangelogOpen}>
+        <AlertDialogContent className="z-[500] glassmorphism border-white/10 sm:max-w-[550px] p-0 overflow-hidden shadow-[0_0_80px_rgba(139,92,246,0.2)] animate-in zoom-in-95 duration-500">
+          <div className="absolute inset-0 bg-gradient-to-br from-violet-600/10 via-transparent to-emerald-500/5 pointer-events-none" />
+
+          <div className="relative">
+            <div className="p-8 pb-4">
+              <AlertDialogHeader className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
+                    <Zap className="h-6 w-6 text-white" />
+                  </div>
+                  <Badge className="bg-violet-500/10 text-violet-400 border-violet-500/20 px-3 py-1 font-orbitron text-[10px] tracking-[0.2em] font-black uppercase">
+                    v1.6.5
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  <AlertDialogTitle className="text-3xl font-black tracking-tighter uppercase font-orbitron text-white leading-none">
+                    Intelligence <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-400">Refined</span>
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="text-zinc-400 text-sm font-medium uppercase tracking-tight">
+                    Discovery Edition • Platform Modernization
+                  </AlertDialogDescription>
+                </div>
+              </AlertDialogHeader>
+            </div>
+
+            <ScrollArea className="h-[400px] px-8">
+              <div className="space-y-8 py-4">
+                {/* Modernization */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1 w-1 rounded-full bg-violet-500" />
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-400">Dashboard Modernization</h4>
+                  </div>
+                  <p className="text-zinc-300 text-sm leading-relaxed">
+                    The Library and User Profile have been reimagined with a <span className="text-white font-bold italic">premium glassmorphic Aesthetic</span>, featuring standardized VIBGYOR analytics and 3XL backdrop blurs.
+                  </p>
+                </div>
+
+                {/* Intelligence */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1 w-1 rounded-full bg-emerald-500" />
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400">Neural Source Intelligence</h4>
+                  </div>
+                  <p className="text-zinc-300 text-sm leading-relaxed">
+                    Introducing interactive source tooltips. Hover over source symbols to see a full breakdown of <span className="text-white font-bold italic">PDF, YouTube, and Website</span> counts powering your maps.
+                  </p>
+                </div>
+
+                {/* Reliability */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1 w-1 rounded-full bg-amber-500" />
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-400">Structural Stability</h4>
+                  </div>
+                  <p className="text-zinc-300 text-sm leading-relaxed">
+                    Embedded a new <span className="text-white font-bold italic">Dual-Layered JSON Repair Engine</span>. Deep mindmap generations are now more robust, ensuring your complex data renders flawlessly even at extreme density.
+                  </p>
+                </div>
+
+                {/* Expansion */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1 w-1 rounded-full bg-rose-500" />
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-400">Streamlined Exploration</h4>
+                  </div>
+                  <p className="text-zinc-300 text-sm leading-relaxed">
+                    Refined the "Neural Expansion Paths" workflow. Choose between <span className="text-white font-bold italic">Background Generation</span> OR jumping straight to the Canvas for your next deep dive.
+                  </p>
+                </div>
+              </div>
+            </ScrollArea>
+
+            <div className="p-8 pt-4">
+              <AlertDialogCancel
+                className="w-full h-12 rounded-xl border-white/5 bg-zinc-900/50 hover:bg-white/5 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-white transition-all border-none"
+                onClick={handleCloseChangelog}
+              >
+                Dismiss Updates
+              </AlertDialogCancel>
+            </div>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {mapForImageLab && (
         <ImageGenerationDialog
           isOpen={isImageLabOpen}

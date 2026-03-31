@@ -303,7 +303,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
                 nodeCount: calculatedNodeCount,
                 categoriesCount: calculatedCategoriesCount,
                 sourcesCount: calculatedSourcesCount,
-                aiPersona: aiPersona || 'Teacher',
+                aiPersona: mapToSave.aiPersona || aiPersona || 'Teacher',
             };
 
             // Only include parentMapId if it exists (Firestore doesn't allow undefined)
@@ -430,7 +430,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
         } finally {
             isSavingRef.current = false;
         }
-    }, [user, firestore, toast]);
+    }, [user, firestore, toast, aiPersona]);
 
     // 5. Track study time every 5 minutes
     useEffect(() => {
