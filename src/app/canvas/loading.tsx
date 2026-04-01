@@ -1,6 +1,4 @@
 
-'use client';
-
 import { NeuralLoader } from '@/components/loading/neural-loader';
 
 /**

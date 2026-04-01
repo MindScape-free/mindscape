@@ -24,15 +24,16 @@ export async function executeGoogleSearch(params: SearchRequest & { apiKey?: str
     try {
         // Construct search prompt
         const searchPrompt = depth === 'deep'
-            ? `Search the web for comprehensive, in-depth information about: "${query}". 
-         Focus on recent developments, authoritative documentation, and expert tutorials.
-          Return a detailed summary with EXACT source citations using markers like [1], [2], etc.
-          Also, find and return a list of 4-6 high-quality relevant IMAGE URLs with their sources.
-          For each source, I need a clear title and a professional snippet.`
+            ? `Search the web for comprehensive, in-depth information about: "${query}".
+Focus on recent developments, authoritative documentation, and expert sources.
+Ignore low-quality, SEO-optimized, or thin content.
+Return a detailed summary with EXACT source citations using markers like [1], [2], etc.
+Also find 4–6 high-quality relevant IMAGE URLs with their sources.
+For each source: clear title and professional snippet.`
             : `Research authoritative information about: "${query}".
-          Provide a factual, concise summary with citations like [1], [2].
-          Include 3-4 relevant high-quality IMAGE URLs that visually represent the topic.
-          Focus on the most trusted documentation and official sources.`;
+Provide a factual, concise summary with citations like [1], [2].
+Ignore low-quality or SEO content — prefer official docs and authoritative sources.
+Include 3–4 relevant high-quality IMAGE URLs that visually represent the topic.`;
 
         // Prepare request body for Pollinations API with search-optimized model
         const body = {
@@ -41,9 +42,10 @@ export async function executeGoogleSearch(params: SearchRequest & { apiKey?: str
                     role: 'system',
                     content: `You are a research assistant with access to Google Search.
 Use the google_search tool to find current, factual information.
+Ignore low-quality, SEO-optimized, or thin content.
+Prefer official documentation, academic sources, and authoritative references.
 Provide clear summaries with source citations.
-Identify and provide direct image URLs (jpg, png, webp) for visual reference.
-Focus on authoritative and recent sources.`
+Identify and provide direct image URLs (jpg, png, webp) for visual reference.`
                 },
                 {
                     role: 'user',
@@ -147,8 +149,8 @@ Focus on authoritative and recent sources.`
                 // We use a simpler fetch here to avoid circular dependencies with dispatcher
                 const body = {
                     messages: [
-                        { role: 'system', content: 'You are a research assistant. Provide a brief, factual summary of the given topic based on your internal knowledge.' },
-                        { role: 'user', content: `Summarize key facts and categories for: "${query}"` }
+                        { role: 'system', content: 'You are a research assistant. Provide a brief, factual summary of the given topic based on your internal knowledge. Prefer specific facts over general statements.' },
+                        { role: 'user', content: `Summarize key facts and specific concepts for: "${query}"` }
                     ],
                     model: 'mistral',
                     stream: false

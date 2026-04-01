@@ -1,160 +1,105 @@
 
 'use server';
 
-/**
- * @fileOverview Provides detailed explanations for mind map nodes.
- *
- * - explainMindMapNode - A function that generates a detailed explanation for a mind map node.
- * - ExplainMindMapNodeInput - The input type for the explainMindMapNode function.
- * - ExplainMindMapNodeOutput - The return type for the explainMindMapNode function.
- */
-
 import { z } from 'zod';
 import { mindscapeMap } from '@/lib/mindscape-data';
-
-const ExplainMindMapNodeInputSchema = z.object({
-  mainTopic: z.string().describe('The main topic of the mind map.'),
-  subCategoryName: z.string().describe('The name of the sub-category.'),
-  subCategoryDescription: z
-    .string()
-    .describe('The brief description of the sub-category.'),
-  explanationMode: z
-    .enum(['Beginner', 'Intermediate', 'Expert'])
-    .describe('The desired level of detail for the explanation.'),
-  apiKey: z.string().optional().describe('Optional custom API key to use for this request.'),
-  pdfContext: z.string().optional().describe('Extracted text from a source PDF or file for contextual awareness.'),
-});
-export type ExplainMindMapNodeInput = z.infer<
-  typeof ExplainMindMapNodeInputSchema
->;
-
-const ExplainMindMapNodeOutputSchema = z.object({
-  explanationPoints: z
-    .array(z.string())
-    .describe(
-      'A list of small, focused bullet points explaining the sub-category.'
-    ),
-});
-export type ExplainMindMapNodeOutput = z.infer<
-  typeof ExplainMindMapNodeOutputSchema
->;
-
 import { generateContent, AIProvider } from '@/ai/client-dispatcher';
 
-// Simplified to always use client-dispatcher
+const ExplainMindMapNodeInputSchema = z.object({
+  mainTopic: z.string(),
+  subCategoryName: z.string(),
+  subCategoryDescription: z.string(),
+  explanationMode: z.enum(['Beginner', 'Intermediate', 'Expert']),
+  apiKey: z.string().optional(),
+  pdfContext: z.string().optional(),
+});
+export type ExplainMindMapNodeInput = z.infer<typeof ExplainMindMapNodeInputSchema>;
+
+const ExplainMindMapNodeOutputSchema = z.object({
+  explanationPoints: z.array(z.string()),
+});
+export type ExplainMindMapNodeOutput = z.infer<typeof ExplainMindMapNodeOutputSchema>;
+
+const SYSTEM_GUARANTEES = `SYSTEM GUARANTEES:
+- Output MUST be valid JSON (no markdown, no extra text)
+- If invalid → internally self-correct before final output
+- Do NOT explain, only generate
+
+PRIORITY ORDER:
+1. JSON schema correctness
+2. Factual accuracy
+3. Completeness
+4. Brevity
+5. Style/persona
+
+CONFLICT RESOLVER: If instructions conflict → schema > brevity > ignore style`;
+
 export async function explainMindMapNode(
   input: ExplainMindMapNodeInput & { apiKey?: string; provider?: AIProvider; strict?: boolean; pdfContext?: string }
 ): Promise<ExplainMindMapNodeOutput> {
-  const { provider, apiKey, mainTopic, subCategoryName, subCategoryDescription, explanationMode, strict, pdfContext: inputPdfContext } = input;
-
-  const pdfContext = inputPdfContext || input.pdfContext;
-
+  const { provider, apiKey, mainTopic, subCategoryName, subCategoryDescription, explanationMode, strict, pdfContext } = input;
   const isUserGuideMode = mainTopic.toLowerCase() === 'mindscape';
-  let systemPrompt = '';
 
-  if (isUserGuideMode) {
-    systemPrompt = `You are the official **MindScape Product Expert**.
-    
-    The user is asking for an explanation of a feature within the MindScape application itself.
-    Feature Name: "${subCategoryName}"
-    Description: "${subCategoryDescription}"
-    
-    ## 📘 Official MindScape Feature Map (Source of Truth)
-    ${JSON.stringify(mindscapeMap, null, 2)}
-    
-    Your task is to generate 3-7 distinct, high-quality explanation points about this SPECIFIC MindScape feature.
-    
-    The explanation must be:
-    1. **Accurate**: Based strictly on the feature map data above.
-    2. **Actionable**: Explain where to find the feature (e.g., Toolbar, Home Page) and how to use it.
-    3. **Level-Appropriate**: "${explanationMode}" level.
-       - Beginner: Simple "How-to" and basic benefits.
-       - Intermediate: Specific workflows and feature details.
-       - Expert: Technical details, stack info (if technical), and advanced capabilities.
-       
-    The output MUST be a valid JSON object with the following structure:
-    {
-      "explanationPoints": [
-        "First point about where to find this feature...",
-        "Second point explaining exactly what it does...",
-        "Third point giving a usage tip..."
-      ]
-    }
-    
-    IMPORTANT: Do not give generic definitions (e.g., "Mind mapping is..."). Explain "MindScape's Mind Map Engine". Return ONLY the raw JSON object.`;
-  } else {
-    systemPrompt = `You are an expert AI assistant providing detailed, multi-faceted explanations for mind map concepts.
-    
-    The main topic of the mind map is: "${mainTopic}".
-    The specific concept to explain is: "${subCategoryName}".
-    Current brief description: "${subCategoryDescription}".
-    
-    The user has requested a "${explanationMode}" level explanation.
-    - Beginner: Simple terms, daily analogies, no jargon.
-    - Intermediate: Conceptual depth, professional tone, practical context.
-    - Expert: Technical details, nuance, advanced terminology.
-    
-    Each point should:
-    1. Focus on a specific aspect (e.g., definition, use case, historical context, key feature, or relationship to "${mainTopic}").
-    2. Be informative and provide knowledge beyond the current brief description.
-    3. Be formatted as a single, clear sentence or short paragraph.
-    
-    ${pdfContext ? `## 📄 Source File Context
-    The user has provided a source file (PDF/Image text) related to this mind map. 
-    CRITICAL: You MUST prioritize using the information from this source document for your explanation to ensure it is contextually accurate to the user's specific research material.
-    
-    Source Content:
-    ${pdfContext.substring(0, 6000)}
-    ` : ''}
-    
-    The output MUST be a valid JSON object with the following structure:
-    {
-      "explanationPoints": [
-        "First detailed point about the concept...",
-        "Second detailed point focusing on a different aspect...",
-        "Third point providing context or an example..."
-      ]
-    }
-    
-    IMPORTANT: Provide 3-7 points depending on the depth of the concept. Return ONLY the raw JSON object. No extra text, no markdown, no apologies, and no internal constraint markers.`;
-  }
+  const systemPrompt = isUserGuideMode
+    ? `${SYSTEM_GUARANTEES}
 
-  const userPrompt = `Generate a "${explanationMode}" level explanation JSON for "${subCategoryName}".`;
+You are the official MindScape Product Expert.
 
-  const maxAttempts = 2;
-  let lastError = null;
+Feature: "${subCategoryName}"
+Description: "${subCategoryDescription}"
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+## MindScape Feature Map (Source of Truth)
+${JSON.stringify(mindscapeMap, null, 2)}
+
+Generate 3–7 explanation points about this specific MindScape feature.
+
+RULES:
+- Each point must add NEW information — no repetition across points.
+- Accurate: based strictly on the feature map above.
+- Actionable: state where to find the feature and how to use it.
+- Level: "${explanationMode}" (Beginner=how-to, Intermediate=workflows, Expert=technical details).
+- Do NOT give generic definitions.
+
+Return ONLY: { "explanationPoints": ["point1", "point2", ...] }`
+    : `${SYSTEM_GUARANTEES}
+
+You are an expert AI assistant explaining mind map concepts.
+
+Topic: "${mainTopic}"
+Concept: "${subCategoryName}"
+Current description: "${subCategoryDescription}"
+Level: "${explanationMode}"
+
+LEVEL GUIDE:
+- Beginner: simple terms, everyday analogies, no jargon.
+- Intermediate: conceptual depth, professional tone, practical context.
+- Expert: technical details, nuance, advanced terminology.
+
+POINT RULES:
+- Each point must add NEW information — no repetition across points.
+- Each point covers a distinct aspect: definition, use case, history, key feature, or relationship to "${mainTopic}".
+- Concrete and specific — avoid vague statements.
+${pdfContext ? `\nSOURCE FILE CONTEXT (prioritize for accuracy):\n${pdfContext.substring(0, 6000)}` : ''}
+
+Return ONLY: { "explanationPoints": ["point1", "point2", ...] }
+Provide 3–7 points. No extra text, no markdown outside JSON.`;
+
+  const userPrompt = `Generate "${explanationMode}" level explanation for "${subCategoryName}".`;
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const result = await generateContent({
-        provider,
-        apiKey,
-        systemPrompt,
-        userPrompt,
-        schema: ExplainMindMapNodeOutputSchema,
-        strict
-      });
-
-      // Post-process: Clean up any AI artifacts (leakage) in the explanation points
+      const result = await generateContent({ provider, apiKey, systemPrompt, userPrompt, schema: ExplainMindMapNodeOutputSchema, strict });
       if (result && Array.isArray(result.explanationPoints)) {
-        result.explanationPoints = result.explanationPoints.map((point: string) => {
-          return point
-            .replace(/<\|[\s\S]*?\|>/g, '') // Remove <|constrain|> and similar markers
-            .replace(/\} \}/g, '')          // Remove leaked JSON closing brackets
-            .replace(/Sorry, but there's no problem\.?/gi, '') // Remove common AI filler
-            .replace(/"] }/g, '')           // Remove another common leakage pattern
-            .trim();
-        }).filter((p: string) => p.length > 5); // Filter out any empty/garbage points
+        result.explanationPoints = result.explanationPoints
+          .map((p: string) => p.replace(/<\|[\s\S]*?\|>/g, '').replace(/\} \}/g, '').replace(/"\] }/g, '').trim())
+          .filter((p: string) => p.length > 5);
       }
-
       return result;
     } catch (e: any) {
-      lastError = e;
       console.error(`❌ Explanation attempt ${attempt} failed:`, e.message);
-      if (attempt === maxAttempts) throw e;
-      await new Promise(res => setTimeout(res, 1000));
+      if (attempt === 2) throw e;
+      await new Promise(r => setTimeout(r, 1000));
     }
   }
-
-  throw lastError || new Error('Explanation generation failed');
+  throw new Error('Explanation generation failed');
 }

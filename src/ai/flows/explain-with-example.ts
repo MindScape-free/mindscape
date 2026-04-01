@@ -1,99 +1,70 @@
 
 'use server';
 
-/**
- * @fileOverview Provides real-life examples for mind map nodes.
- *
- * - explainWithExample - A function that generates a real-life example for a topic.
- * - ExplainWithExampleInput - The input type for the explainWithExample function.
- * - ExplainWithExampleOutput - The return type for the explainWithExample function.
- */
-
 import { z } from 'zod';
+import { generateContent, AIProvider } from '@/ai/client-dispatcher';
 
 const ExplainWithExampleInputSchema = z.object({
-  mainTopic: z.string().describe('The main topic of the mind map.'),
-  topicName: z.string().describe('The name of the node to explain.'),
-  explanationMode: z
-    .enum(['Beginner', 'Intermediate', 'Expert'])
-    .describe('The desired level of detail for the example.'),
-  pdfContext: z.string().optional().describe('Text content from a source PDF or image for context.'),
+  mainTopic: z.string(),
+  topicName: z.string(),
+  explanationMode: z.enum(['Beginner', 'Intermediate', 'Expert']),
+  pdfContext: z.string().optional(),
 });
-export type ExplainWithExampleInput = z.infer<
-  typeof ExplainWithExampleInputSchema
->;
+export type ExplainWithExampleInput = z.infer<typeof ExplainWithExampleInputSchema>;
 
-const ExplainWithExampleOutputSchema = z.object({
-  example: z
-    .string()
-    .describe('A short, relatable, real-life example for the topic.'),
-});
-export type ExplainWithExampleOutput = z.infer<
-  typeof ExplainWithExampleOutputSchema
->;
+const ExplainWithExampleOutputSchema = z.object({ example: z.string() });
+export type ExplainWithExampleOutput = z.infer<typeof ExplainWithExampleOutputSchema>;
 
-import { generateContent, AIProvider } from '@/ai/client-dispatcher';
+const SYSTEM_GUARANTEES = `SYSTEM GUARANTEES:
+- Output MUST be valid JSON (no markdown, no extra text)
+- If invalid → internally self-correct before final output
+- Do NOT explain, only generate
+
+PRIORITY ORDER:
+1. JSON schema correctness
+2. Factual accuracy
+3. Completeness
+4. Brevity
+5. Style/persona
+
+CONFLICT RESOLVER: If instructions conflict → schema > brevity > ignore style`;
 
 export async function explainWithExample(
   input: ExplainWithExampleInput & { apiKey?: string; provider?: AIProvider; strict?: boolean }
 ): Promise<ExplainWithExampleOutput> {
   const { provider, apiKey, mainTopic, topicName, explanationMode, strict, pdfContext } = input;
 
-  const systemPrompt = `You are an expert at explaining complex topics with simple, relatable, real-life examples.
+  const systemPrompt = `${SYSTEM_GUARANTEES}
 
-    The main topic is "${mainTopic}". The user wants an example for the concept: "${topicName}".
-    
-    The user has requested the example at the "${explanationMode}" level.
-    - For "Beginner", use a very simple, everyday analogy.
-    - For "Intermediate", use a more detailed but still accessible example.
-    - For "Expert", use a specific, technical, or industry-related example.
+You are an expert at explaining concepts with precise, direct real-life examples.
 
-    ${pdfContext
-      ? `
-    CONTEXT FROM ATTACHED FILE (PDF/IMAGE):
-    The following is relevant text extracted from the user's uploaded document. 
-    Use this context to make the example more relevant to the specific document content if applicable.
-    
-    --- START OF CONTEXT ---
-    ${pdfContext}
-    --- END OF CONTEXT ---
-    `
-      : ''
-    }
-    
-    Your goal is to provide a single, concise, and easy-to-understand analogy or example tailored to the requested mode.
-    
-    The output MUST be a valid JSON object with the following structure:
-    {
-      "example": "Your example text here"
-    }
+Topic: "${mainTopic}"
+Concept: "${topicName}"
+Level: "${explanationMode}"
 
-    IMPORTANT: Return ONLY the raw JSON object, no other text or explanation.`;
+LEVEL GUIDE:
+- Beginner: simple everyday analogy.
+- Intermediate: detailed but accessible real-world scenario.
+- Expert: specific technical or industry-related case study.
 
-  const userPrompt = "Generate the example.";
+EXAMPLE RULES:
+- Example must map DIRECTLY to the concept — no loose or tangential analogies.
+- The example must clearly illustrate the specific mechanism or property of "${topicName}".
+- Concrete and specific — name real tools, systems, or scenarios.
+${pdfContext ? `\nSOURCE CONTEXT (use if relevant to make example more specific):\n${pdfContext}` : ''}
 
-  const maxAttempts = 2;
-  let lastError = null;
+Return ONLY: { "example": "Your example text here" }`;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  const userPrompt = `Generate the example.`;
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const result = await generateContent({
-        provider,
-        apiKey,
-        systemPrompt,
-        userPrompt,
-        schema: ExplainWithExampleOutputSchema,
-        strict
-      });
-
-      return result;
+      return await generateContent({ provider, apiKey, systemPrompt, userPrompt, schema: ExplainWithExampleOutputSchema, strict });
     } catch (e: any) {
-      lastError = e;
-      console.error(`❌ Example generation attempt ${attempt} failed:`, e.message);
-      if (attempt === maxAttempts) throw e;
-      await new Promise(res => setTimeout(res, 1000));
+      console.error(`❌ Example attempt ${attempt} failed:`, e.message);
+      if (attempt === 2) throw e;
+      await new Promise(r => setTimeout(r, 1000));
     }
   }
-
-  throw new Error("Explanation generation failed after all attempts.");
+  throw new Error('Example generation failed');
 }

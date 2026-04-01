@@ -40,8 +40,8 @@ export function OnboardingWizard() {
     const [step, setStep] = useState(1);
     const [isDismissed, setIsDismissed] = useState(false);
 
-    // Block show on specific pages
-    const isAuthPage = pathname === '/login' || pathname === '/signup';
+    // Block show on signup page only (/login page does not exist — login is a dialog)
+    const isAuthPage = pathname === '/signup';
 
     const checkAndShow = useCallback((isManual = false) => {
         if (isUserLoading || isAuthPage) return;
@@ -101,8 +101,9 @@ export function OnboardingWizard() {
     const handleBack = () => setStep(s => s - 1);
 
     const handleLogin = () => {
-        router.push('/login');
-        setIsOpen(false); // Close modal so they can see the login page
+        setIsOpen(false);
+        // Dispatch event so Navbar opens its LoginDialog (no /login page exists)
+        window.dispatchEvent(new CustomEvent('mindscape:trigger-login'));
     };
 
     const handleConnectPollinations = () => {

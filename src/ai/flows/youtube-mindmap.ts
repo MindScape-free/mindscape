@@ -1,3 +1,4 @@
+
 import { getVideoId } from '@/utils/youtube/extract-id';
 import { fetchTranscriptParts, normalizeTranscript, getVideoMetadata, TranscriptPart } from '@/utils/youtube/transcript';
 import { generateContent } from '@/ai/client-dispatcher';
@@ -17,185 +18,147 @@ export interface GenerateYouTubeMindMapOutput {
   error: string | null;
 }
 
-/**
- * Main flow for generating a mindmap from a YouTube URL.
- */
+const SYSTEM_GUARANTEES = `SYSTEM GUARANTEES:
+- Output MUST be valid JSON (no markdown, no extra text)
+- If invalid → internally self-correct before final output
+- Do NOT explain, only generate
+
+PRIORITY ORDER:
+1. JSON schema correctness
+2. Factual accuracy
+3. Completeness
+4. Brevity
+5. Style/persona
+
+CONFLICT RESOLVER: If instructions conflict → schema > brevity > ignore style
+
+GLOBAL RULES:
+- Descriptions: exactly 1 sentence, ≤20 words
+- Avoid vague words (important, various, many)
+- Prefer concrete, specific terms
+- Optional fields (thought, insight, tags, timestamp): omit if not adding value — never fabricate`;
+
+function buildPersona(persona: string): string {
+  const p = (persona || 'teacher').toLowerCase().trim();
+  if (p === 'concise') return `PERSONA: Concise — remove all explanations, use keywords only.`;
+  if (p === 'creative') return `PERSONA: Creative — allow metaphors and non-obvious angles.`;
+  if (p === 'sage') return `PERSONA: Cognitive Sage — reveal patterns, cross-domain links, philosophical depth.`;
+  return `PERSONA: Structured Expert — clear, specific, curriculum-style.`;
+}
+
 export async function generateYouTubeMindMap(
   input: GenerateYouTubeMindMapInput,
-  options: {
-    provider?: string;
-    apiKey?: string;
-    model?: string;
-    userId?: string;
-  }
+  options: { provider?: string; apiKey?: string; model?: string; userId?: string }
 ): Promise<GenerateYouTubeMindMapOutput> {
   const { url, targetLang = 'en', persona = 'Teacher', depth = 'medium' } = input;
 
   try {
-    // 1. Extract Video ID
     const videoId = getVideoId(url);
-    console.log('DEBUG: YouTube Video ID:', videoId);
-    if (!videoId) {
-      return { data: null, error: 'Invalid YouTube URL' };
-    }
+    if (!videoId) return { data: null, error: 'Invalid YouTube URL' };
 
-    // 2. Fetch Transcript and Metadata
     let transcriptParts: TranscriptPart[] = [];
     let metadata = await getVideoMetadata(videoId);
-    console.log('DEBUG: YouTube Metadata:', metadata ? 'Found' : 'NULL');
     let isFallback = false;
 
     try {
       transcriptParts = await fetchTranscriptParts(videoId);
-      console.log('DEBUG: Transcript parts fetched:', transcriptParts.length);
-    } catch (transcriptError: any) {
-      console.warn('Transcript fetch failed, trying metadata fallback:', transcriptError.message);
-      if (!metadata) {
-        console.error('DEBUG: Both transcript and metadata failed.');
-        throw transcriptError;
-      }
+    } catch (err: any) {
+      console.warn('Transcript fetch failed, using metadata fallback:', err.message);
+      if (!metadata) throw err;
       isFallback = true;
     }
 
-    // 3. Normalize and Segment Transcript
-    // Use 120s segments for better semantic grouping as recommended
-    const segmentDuration = 120;
-    const fullTranscript = isFallback ? '' : normalizeTranscript(transcriptParts, segmentDuration);
-    console.log('DEBUG: Full transcript length:', fullTranscript.length);
-
-    // 4. Handle Size Constraints (Truncate for now, or chunk if needed)
-    const maxChars = 25000;
-    const truncatedTranscript = fullTranscript.length > maxChars
-      ? fullTranscript.substring(0, maxChars) + '\n\n... (transcript truncated for length) ...'
+    const fullTranscript = isFallback ? '' : normalizeTranscript(transcriptParts, 120);
+    const truncatedTranscript = fullTranscript.length > 25000
+      ? fullTranscript.substring(0, 25000) + '\n\n[transcript truncated]'
       : fullTranscript;
 
-    // 5. Construct Prompt
-    const densityInstruction = depth === 'deep'
-      ? 'Generate a very detailed mind map with at least 8 main subtopics and rich categories.'
-      : depth === 'medium'
-        ? 'Generate a balanced mind map with 5-6 subtopics and moderate detail.'
-        : 'Generate a concise mind map with 4 subtopics focusing on the core essentials.';
+    const densityMap: Record<string, string> = {
+      low:    `subTopics: 4 | categories: 2 | subCategories: 2–3`,
+      medium: `subTopics: 4–5 | categories: 3 | subCategories: 3–4`,
+      deep:   `subTopics: 6–7 | categories: 4 | subCategories: 4–5`,
+    };
+    const density = densityMap[depth] || densityMap.medium;
 
     const contextSource = isFallback
-      ? `VIDEO METADATA (No transcript found):
-         Title: ${metadata?.title}
-         Creator: ${metadata?.author_name}
-         Description: ${metadata?.description || 'No description available.'}
-         
-         INSTRUCTIONS:
-         Since no transcript is available, use the video title and description to understand the core concepts. 
-         If the description is detailed, use it as your primary source of facts. 
-         Otherwise, use your internal knowledge about this topic to generate the mind map.`
-      : `VIDEO CONTENT (Segmented Transcript):
-         Title: ${metadata?.title}
-         Creator: ${metadata?.author_name}
-         Description: ${metadata?.description ? (metadata.description.substring(0, 1000) + '...') : 'N/A'}
-         
-         SEGMENTED TRANSCRIPT:
-         ${truncatedTranscript}`;
+      ? `VIDEO METADATA (no transcript available):
+Title: ${metadata?.title}
+Creator: ${metadata?.author_name}
+Description: ${metadata?.description || 'No description.'}
 
-    let personaInstruction = '';
-    const selectedPersona = persona || 'Teacher';
-    if (selectedPersona === 'Teacher') {
-      personaInstruction = `
-      ADOPT PERSONA: "Expert Teacher"
-      - Use educational analogies to explain complex concepts found in the video.
-      - Focus on tutorial-style descriptions.
-      - Structure the map like a syllabus.
-      - Descriptions should be encouraging and clear.`;
-    } else if (selectedPersona === 'Concise') {
-      personaInstruction = `
-      ADOPT PERSONA: "Efficiency Expert"
-      - Keep all analyzed content extremely brief.
-      - Use high-impact keywords for topics and categories.
-      - Descriptions should be very short pointers (max 15 words).`;
-    } else if (selectedPersona === 'Creative') {
-      personaInstruction = `
-      ADOPT PERSONA: "Creative Visionary"
-      - Find imaginative interpretations of the video content.
-      - Use vivid, descriptive language.
-      - Imagine future or alternate versions of the concepts discussed.
-      - Make the result feel inspired and non-obvious.`;
-    } else if (selectedPersona === 'Sage') {
-      personaInstruction = `
-      ADOPT PERSONA: "Cognitive Sage"
-      - Synthesize deep philosophical perspectives and cross-domain knowledge.
-      - Focus on the "Meaning" and "Impact" of the video content.
-      - Use professional, academic, yet accessible language.
-      - Structure content to reveal underlying patterns and wisdom.`;
-    } else {
-      personaInstruction = `
-      ADOPT PERSONA: "Expert Teacher"
-      - Use educational analogies to explain complex concepts found in the video.
-      - Focus on tutorial-style descriptions.
-      - Structure the map like a syllabus.
-      - Descriptions should be encouraging and clear.`;
+FALLBACK RULE: No transcript available → use video title and description as primary source.
+If description is detailed → use it as factual basis.
+If description is sparse → use structured knowledge about this topic.`
+      : `VIDEO CONTENT:
+Title: ${metadata?.title}
+Creator: ${metadata?.author_name}
+Description: ${metadata?.description ? metadata.description.substring(0, 500) : 'N/A'}
+
+TRANSCRIPT:
+${truncatedTranscript}`;
+
+    const systemPrompt = `${SYSTEM_GUARANTEES}
+
+You are a professional YouTube Mind Map Generator.
+
+${buildPersona(persona)}
+LANGUAGE: ${targetLang}
+DENSITY: ${density}
+
+TRANSCRIPT RULES:
+- If transcript is incomplete or missing → fallback to topic-based structured knowledge.
+- Use chapter markers in transcript as primary subTopic names if present.
+- Each leaf node (subCategory) MUST have a "description" and optionally a "timestamp" (seconds, integer).
+
+SCHEMA (return ONLY this JSON):
+{
+  "mode": "single",
+  "topic": "Central video topic",
+  "shortTitle": "2–4 word title",
+  "icon": "lucide-kebab-case",
+  "subTopics": [
+    {
+      "name": "Chapter or Theme Name",
+      "icon": "lucide-kebab-case",
+      "categories": [
+        {
+          "name": "Category Name",
+          "icon": "lucide-kebab-case",
+          "subCategories": [
+            {
+              "name": "Specific Point",
+              "description": "Exactly 1 sentence, ≤20 words, concrete.",
+              "icon": "lucide-kebab-case",
+              "timestamp": 0
+            }
+          ]
+        }
+      ]
     }
+  ]
+}
 
-    const systemPrompt = `You are a professional Mind Map Generator. Your goal is to transform YouTube video content into a structured, hierarchical JSON mind map.
-    
-    Target Language: ${targetLang}
-    ${personaInstruction}
-    Depth: ${depth}
-    ${densityInstruction}
+VALIDATION:
+1. Root uses "topic" (not "centralTopic")
+2. Every object has "icon"
+3. Every subTopic has "categories"
+4. Every category has "subCategories"
+5. subCategories have "description"
+6. timestamps are integers (seconds)`;
 
-    CORE JSON STRUCTURE (MANDATORY KEYS):
-    - "topic": The central title (string)
-    - "shortTitle": 2-4 word condensed title (string)
-    - "icon": Lucide icon name (string, e.g., "brain-circuit")
-    - "subTopics": Array of objects containing:
-        - "name", "icon", "categories" (Array)
-    - "categories": Array of objects containing:
-        - "name", "icon", "subCategories" (Array)
-    - "subCategories": Array of objects containing:
-        - "name", "description", "icon", "timestamp" (number)
+    const userPrompt = `Generate a comprehensive mind map for this YouTube video:\n\n${contextSource}`;
 
-    Instructions:
-    - Create a central topic that accurately reflects the video content.
-    - STRUCTURE IS CRITICAL: You MUST use a strictly hierarchical structure:
-      Main Topics -> Categories -> Sub-categories (Leaf Nodes).
-    - EACH category MUST have at least 2-3 subCategories (leaf nodes).
-    - Leaf nodes (subCategories) MUST have a detailed "description".
-    - ICONS ARE MANDATORY: Every single node at every level MUST have a relevant "icon" from lucide-react (kebab-case).
-    - USE THE TIMESTAMPS: For each leaf node (subCategory), include the "timestamp" field in seconds if it corresponds to a specific segment or mention in the video.
-    - If chapters are evident in the segments, use them as primary "name" for SubTopics.
-    - Ensure all text is in ${targetLang}.
-    - The output MUST be a valid JSON object matching the provided schema.
-    
-    Pre-flight Verification:
-    1. Does the root use "topic" (not "centralTopic")?
-    2. Does every single object have an "icon" field?
-    3. Does every subTopic have categories?
-    4. Does every category have subCategories?
-    5. Do subCategories have descriptions?
-    6. Are timestamps integers representing seconds?`;
-
-    const userPrompt = `Please generate a comprehensive mind map for this YouTube video:
-    
-    ${contextSource}`;
-
-    // 6. Generate Mind Map via AI
-    console.log('🤖 Calling AI for YouTube Mind Map generation...');
     const result = await generateContent({
       provider: (options.provider as any) || 'pollinations',
       apiKey: options.apiKey,
       systemPrompt,
       userPrompt,
       schema: AIGeneratedMindMapSchema,
-      options: {
-        model: options.model || 'openai', // Default to better model for complex structure
-        capability: depth === 'deep' ? 'fast' : 'creative'
-      }
+      options: { model: options.model || 'openai', capability: depth === 'deep' ? 'fast' : 'creative' },
     });
 
-    if (!result) {
-      console.error('❌ YouTube MindMap: AI returned null or empty result');
-      return { data: null, error: 'AI failed to generate content or the response format was invalid.' };
-    }
+    if (!result) return { data: null, error: 'AI returned empty result.' };
 
-    console.log('✅ YouTube MindMap: AI generated content successfully');
-
-    // Attach YouTube-specific metadata
     const data = result as MindMapData;
     data.sourceUrl = url;
     data.videoId = videoId;
@@ -206,16 +169,10 @@ export async function generateYouTubeMindMap(
 
     return { data, error: null };
   } catch (error: any) {
-    console.error('❌ YouTube MindMap Flow Error:', error);
-
-    // Check for specific schema errors logged by client-dispatcher
+    console.error('❌ YouTube MindMap Error:', error);
     if (error.name === 'StructuredOutputError') {
-      return {
-        data: null,
-        error: `The AI response was malformed. Try a different depth or persona. (Details in server logs)`
-      };
+      return { data: null, error: `AI response malformed. Try different depth or persona.` };
     }
-
-    return { data: null, error: error.message || 'Failed to generate mind map from YouTube video.' };
+    return { data: null, error: error.message || 'Failed to generate mind map from YouTube.' };
   }
 }

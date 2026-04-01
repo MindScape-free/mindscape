@@ -1,186 +1,123 @@
 
 'use server';
 
-/**
- * @fileOverview Generates a mind map from an image.
- *
- * - generateMindMapFromImage - A function that generates the mind map from an image.
- * - GenerateMindMapFromImageInput - The input type for the function.
- * - GenerateMindMapFromImageOutput - The return type for the function.
- */
-
 import { z } from 'zod';
 import { AIGeneratedMindMapSchema, AIGeneratedMindMap } from '@/ai/mind-map-schema';
+import { generateContent, AIProvider } from '@/ai/client-dispatcher';
 
 const GenerateMindMapFromImageInputSchema = z.object({
-  imageDataUri: z
-    .string()
-    .describe(
-      "An image of a diagram, chart, or concept, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
-    ),
-  targetLang: z
-    .string()
-    .optional()
-    .describe('The target language for the mind map content (e.g., "es").'),
-  persona: z
-    .string()
-    .optional()
-    .describe('The AI persona / style to use (e.g., "Teacher", "Concise", "Creative").'),
-  depth: z
-    .enum(['low', 'medium', 'deep', 'auto'])
-    .default('auto')
-    .describe('The level of detail/depth for the mind map structure.'),
-  apiKey: z.string().optional().describe('Optional custom API key to use for this request.'),
-  sessionId: z.string().optional().describe('The session ID for the current mind map.'),
+  imageDataUri: z.string(),
+  targetLang: z.string().optional(),
+  persona: z.string().optional(),
+  depth: z.enum(['low', 'medium', 'deep', 'auto']).default('auto'),
+  apiKey: z.string().optional(),
+  sessionId: z.string().optional(),
 });
-type GenerateMindMapFromImageInput = z.infer<
-  typeof GenerateMindMapFromImageInputSchema
->;
-
-const GenerateMindMapFromImageOutputSchema = AIGeneratedMindMapSchema;
-
+type GenerateMindMapFromImageInput = z.infer<typeof GenerateMindMapFromImageInputSchema>;
 export type GenerateMindMapFromImageOutput = AIGeneratedMindMap;
 
-import { generateContent, AIProvider } from '@/ai/client-dispatcher';
+const SYSTEM_GUARANTEES = `SYSTEM GUARANTEES:
+- Output MUST be valid JSON (no markdown, no extra text)
+- If invalid → internally self-correct before final output
+- Do NOT explain, only generate
+
+PRIORITY ORDER:
+1. JSON schema correctness
+2. Factual accuracy
+3. Completeness
+4. Brevity
+5. Style/persona
+
+CONFLICT RESOLVER: If instructions conflict → schema > brevity > ignore style
+
+GLOBAL RULES:
+- Descriptions: exactly 1 sentence, ≤20 words
+- Avoid vague words (important, various, many)
+- Prefer concrete, specific terms
+- Optional fields (thought, insight, tags): omit if not adding value — never fabricate`;
+
+function buildPersona(persona: string): string {
+  const p = (persona || 'teacher').toLowerCase().trim();
+  if (p === 'concise') return `PERSONA: Concise — remove all explanations, use keywords only.`;
+  if (p === 'creative') return `PERSONA: Creative — allow metaphors and non-obvious angles.`;
+  if (p === 'sage') return `PERSONA: Cognitive Sage — reveal patterns, cross-domain links, philosophical depth.`;
+  return `PERSONA: Structured Expert — clear, specific, curriculum-style.`;
+}
 
 export async function generateMindMapFromImage(
   input: GenerateMindMapFromImageInput & { apiKey?: string; provider?: AIProvider; strict?: boolean }
 ): Promise<GenerateMindMapFromImageOutput> {
   const { provider, apiKey, strict, depth = 'low' } = input;
 
-  // Map depth to structural density
-  let densityInstruction = '';
-  if (depth === 'medium') {
-    densityInstruction = 'STRUCTURE DENSITY: Generate AT LEAST 6 subTopics. Each subTopic MUST have AT LEAST 4 categories. Each category MUST have AT LEAST 6 subCategories.';
-  } else if (depth === 'deep') {
-    densityInstruction = 'STRUCTURE DENSITY: Generate AT LEAST 8 subTopics. Each subTopic MUST have AT LEAST 6 categories. Each category MUST have AT LEAST 9 subCategories. Extract as much detail as possible from the image.';
-  } else {
-    densityInstruction = 'STRUCTURE DENSITY: Generate AT LEAST 4 subTopics. Each subTopic MUST have AT LEAST 2 categories. Each category MUST have AT LEAST 3 subCategories.';
-  }
+  const densityMap: Record<string, string> = {
+    low:    `subTopics: ≥4 | categories: ≥2 | subCategories: ≥3`,
+    medium: `subTopics: ≥6 | categories: ≥4 | subCategories: ≥6`,
+    deep:   `subTopics: ≥8 | categories: ≥6 | subCategories: ≥9`,
+    auto:   `subTopics: ≥4 | categories: ≥2 | subCategories: ≥3`,
+  };
+  const density = densityMap[depth] || densityMap.low;
 
-  const targetLangInstruction = input.targetLang
-    ? `The entire mind map, including all topics, categories, and descriptions, MUST be in the following language: ${input.targetLang}.`
-    : `The entire mind map MUST be in English.`;
+  const systemPrompt = `${SYSTEM_GUARANTEES}
 
-  let personaInstruction = '';
-  const selectedPersona = input.persona || 'Teacher';
-  if (selectedPersona === 'Teacher') {
-    personaInstruction = `
-    ADOPT PERSONA: "Expert Teacher"
-    - Use educational analogies to explain concepts found in the image.
-    - Focus on tutorial-style descriptions.
-    - Structure the map like a syllabus.
-    - Descriptions should be encouraging and clear.`;
-  } else if (selectedPersona === 'Concise') {
-    personaInstruction = `
-    ADOPT PERSONA: "Efficiency Expert"
-    - Keep all analyzed content extremely brief.
-    - Use high-impact keywords for topics and categories.
-    - Descriptions should be very short pointers (max 15 words).`;
-  } else if (selectedPersona === 'Creative') {
-    personaInstruction = `
-    ADOPT PERSONA: "Creative Visionary"
-    - Find imaginative interpretations of the visual data.
-    - Use vivid, descriptive language.
-    - Imagine future or alternate versions of the concepts in the image.
-    - Make the result feel inspired and non-obvious.`;
-  } else if (selectedPersona === 'Sage') {
-    personaInstruction = `
-    ADOPT PERSONA: "Cognitive Sage"
-    - Synthesize deep philosophical perspectives and cross-domain knowledge.
-    - Focus on the "Meaning" and "Impact" of the visual content.
-    - Use professional, academic, yet accessible language.
-    - Structure content to reveal underlying patterns and wisdom.`;
-  } else {
-    personaInstruction = `
-    ADOPT PERSONA: "Expert Teacher"
-    - Use educational analogies to explain concepts found in the image.
-    - Focus on tutorial-style descriptions.
-    - Structure the map like a curriculum or learning path.
-    - Descriptions should be encouraging and clear.`;
-  }
+You are an expert image analyst and mind map generator.
 
-  const systemPrompt = `You are an expert in analyzing images and PDF documents and creating structured, comprehensive mind maps from them.
-  
-  ${personaInstruction}
-  
-  Analyze the provided image or document and generate a detailed, multi-layered mind map based on its content.
-  
-  **CRITICAL ENTITY EXTRACTION RULE**: 
-  If the image appears to be an identity document (Aadhar card, ID, passport), an invoice, a receipt, or a form, your PRIMARY GOAL is exact data extraction.
-  1. DO NOT create generic, conceptual categories like "Cardholder Details" -> "Name" -> "Indicates the name of the person".
-  2. YOU MUST USE THE ACTUAL DATA. Combine fields and values: "Megha's Identity" -> "Name: Megha" -> "DOB: 01/01/1990".
-  3. Never output a field name (like "Address" or "ID Number") without its corresponding value if it's visible. 
-  4. Fill the structure with the **actual, literal data, numbers, dates, and entity names** extracted by OCR from the visual content.
-  5. **ANTI-REDACTION POLICY**: DO NOT use placeholders like "[REDACTED]", "[PRIVACY]", or "XXXX". Always provide the actual text found in the image.
-  
-  ${densityInstruction}
-  
-  ${targetLangInstruction}
-  
-  The mind map must have the following structure:
-  {
-    "mode": "single",
-    "topic": "The main topic identified from the content",
-    "shortTitle": "A condensed, smart, and catchy version (max 2-4 words). DO NOT include 'Mind Map'.",
-    "icon": "relevant-lucide-icon",
-    "subTopics": [
-      {
-        "name": "Main sub-topic name",
-        "icon": "relevant-lucide-icon",
-        "categories": [
-          {
-            "name": "Category name",
-            "icon": "relevant-lucide-icon",
-            "subCategories": [
-              {
-                "name": "Detailed sub-category name",
-                "description": "Exactly one sentence derived from image data.",
-                "icon": "relevant-lucide-icon",
-                "tags": ["key1", "key2"]
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  }
-  
-  The output must be a valid JSON object that adheres to the schema.`;
+${buildPersona(input.persona || 'teacher')}
+LANGUAGE: ${input.targetLang ? input.targetLang : 'en'}
+DENSITY: ${density}
 
-  const userPrompt = "Analyze this image/document and generate the mind map JSON.";
+ENTITY EXTRACTION RULES (CRITICAL):
+- If image is an ID, invoice, receipt, or form → PRIMARY GOAL is exact data extraction.
+- Combine field + value always: "Name: Megha" not just "Name".
+- Never output a field label without its value if visible.
+- DO NOT use placeholders like "[REDACTED]", "[PRIVACY]", "XXXX" — always use actual text.
+- If OCR confidence is low for a field → skip that field entirely (do not guess).
 
-  // Parse Data URI
+SCHEMA (return ONLY this JSON):
+{
+  "mode": "single",
+  "topic": "Main topic from image content",
+  "shortTitle": "2–4 word title (no 'Mind Map')",
+  "icon": "lucide-kebab-case",
+  "subTopics": [
+    {
+      "name": "Specific Section or Entity",
+      "icon": "lucide-kebab-case",
+      "categories": [
+        {
+          "name": "Category Name",
+          "icon": "lucide-kebab-case",
+          "subCategories": [
+            {
+              "name": "Specific Detail Name",
+              "description": "Exactly 1 sentence, ≤20 words, concrete value from image.",
+              "icon": "lucide-kebab-case",
+              "tags": ["tag1"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+RULES:
+- NEVER truncate — close all { and [ before stopping
+- Return ONLY raw JSON`;
+
+  const userPrompt = `Analyze this image and generate the mind map JSON.`;
+
   const matches = input.imageDataUri.match(/^data:(.+);base64,(.+)$/);
-  let images: { inlineData: { mimeType: string, data: string } }[] | undefined;
+  let images: { inlineData: { mimeType: string; data: string } }[] | undefined;
+  if (matches) images = [{ inlineData: { mimeType: matches[1], data: matches[2] } }];
 
-  if (matches) {
-    images = [{ inlineData: { mimeType: matches[1], data: matches[2] } }];
-  }
-
-  const maxAttempts = 2;
-  let lastError = null;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const result = await generateContent({
-        provider,
-        apiKey,
-        systemPrompt,
-        userPrompt,
-        images,
-        schema: GenerateMindMapFromImageOutputSchema,
-        strict
-      });
-
-      return result;
+      return await generateContent({ provider, apiKey, systemPrompt, userPrompt, images, schema: AIGeneratedMindMapSchema, strict });
     } catch (e: any) {
-      lastError = e;
-      console.error(`❌ Image-to-map generation attempt ${attempt} failed:`, e.message);
-      if (attempt === maxAttempts) throw e;
-      await new Promise(res => setTimeout(res, 1000));
+      console.error(`❌ Image-to-map attempt ${attempt} failed:`, e.message);
+      if (attempt === 2) throw e;
+      await new Promise(r => setTimeout(r, 1000));
     }
   }
-
-  throw lastError || new Error('Image-to-map generation failed');
+  throw new Error('Image-to-map generation failed');
 }

@@ -1,58 +1,53 @@
 
 'use server';
-/**
- * @fileOverview A flow to summarize a chat history into a short topic.
- *
- * - summarizeChat - A function that takes chat history and returns a topic.
- */
 
 import {
   SummarizeChatInput,
   SummarizeChatOutput,
   SummarizeChatOutputSchema,
 } from '@/ai/schemas/summarize-chat-schema';
-
 import { generateContent, AIProvider } from '@/ai/client-dispatcher';
+
+const SYSTEM_GUARANTEES = `SYSTEM GUARANTEES:
+- Output MUST be valid JSON (no markdown, no extra text)
+- If invalid → internally self-correct before final output
+- Do NOT explain, only generate`;
 
 export async function summarizeChat(
   input: SummarizeChatInput & { apiKey?: string; provider?: AIProvider; strict?: boolean }
 ): Promise<SummarizeChatOutput> {
   const { provider, apiKey, strict } = input;
   const historyText = input.history.map(h => `${h.role}: ${h.content}`).join('\n');
-  const systemPrompt = `Based on the following conversation history, create a short, descriptive topic title (3-5 words).
 
-  Example:
-  - History: "User: Tell me about photosynthesis. Model: Photosynthesis is the process..." -> Topic: "The Process of Photosynthesis"
-  - History: "User: I need ideas for a fantasy story. Model: How about a dragon..." -> Topic: "Fantasy Story Brainstorming"
+  const systemPrompt = `${SYSTEM_GUARANTEES}
 
-  Conversation:
-  ${historyText}
+Create a short, specific topic title (3–5 words) for this conversation.
 
-  Generate a concise topic title for this conversation. Return valid JSON { "topic": "Title" }`;
+RULES:
+- Avoid generic titles like "Discussion about X", "Chat about X", "Conversation on X".
+- Use the most specific concept discussed (e.g., "Photosynthesis Light Reactions" not "Biology Discussion").
+- Capture the core subject, not the format.
 
-  const userPrompt = "Summarize the chat history into a JSON { topic: 'Title' } object.";
-  const maxAttempts = 2;
-  let lastError = null;
+Examples:
+- "User: Tell me about photosynthesis..." → "Photosynthesis Light Reactions"
+- "User: Fantasy story ideas..." → "Fantasy World Building"
+- "User: How does React hooks work..." → "React Hooks Internals"
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+Conversation:
+${historyText}
+
+Return ONLY: { "topic": "Title" }`;
+
+  const userPrompt = `Generate the title.`;
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const result = await generateContent({
-        provider: provider,
-        apiKey: apiKey,
-        systemPrompt,
-        userPrompt,
-        schema: SummarizeChatOutputSchema,
-        strict
-      });
-
-      return result;
+      return await generateContent({ provider, apiKey, systemPrompt, userPrompt, schema: SummarizeChatOutputSchema, strict });
     } catch (e: any) {
-      lastError = e;
       console.error(`❌ Chat summarization attempt ${attempt} failed:`, e.message);
-      if (attempt === maxAttempts) throw e;
-      await new Promise(res => setTimeout(res, 1000));
+      if (attempt === 2) throw e;
+      await new Promise(r => setTimeout(r, 1000));
     }
   }
-
-  throw lastError || new Error('Chat summarization failed');
+  throw new Error('Chat summarization failed');
 }

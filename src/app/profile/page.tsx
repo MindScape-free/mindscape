@@ -108,6 +108,7 @@ export default function ProfilePage() {
     const [activeTab, setActiveTab] = useState<'overview' | 'lab' | 'preferences' | 'security'>(
         (searchParams.get('tab') as 'overview' | 'lab' | 'preferences' | 'security') || 'overview'
     );
+    const isSetupMode = searchParams.get('setup') === 'true';
     const [isSyncing, setIsSyncing] = useState(false);
     const [showApiKey, setShowApiKey] = useState(false);
     const [preferredModel, setPreferredModel] = useState('flux');
@@ -560,6 +561,69 @@ export default function ProfilePage() {
 
     return (
         <div className="h-[calc(100vh-80px)] bg-zinc-950 text-zinc-100 flex overflow-hidden selection:bg-violet-500/30 font-sans">
+            {/* Welcome Setup Dialog for New Users */}
+            {isSetupMode && !profile?.displayName && !isEditing && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+                    <div className="relative w-full max-w-md mx-4 rounded-2xl border border-white/10 bg-zinc-900 p-8 shadow-2xl">
+                        <div className="text-center mb-8">
+                            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 mb-4">
+                                <Sparkles className="w-8 h-8 text-white" />
+                            </div>
+                            <h2 className="text-2xl font-bold text-white mb-2">Welcome to MindScape!</h2>
+                            <p className="text-muted-foreground">Let's set up your profile. What should we call you?</p>
+                        </div>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-sm font-medium text-white mb-2 block">Your Name</label>
+                                <Input
+                                    type="text"
+                                    value={editName}
+                                    onChange={(e) => setEditName(e.target.value)}
+                                    placeholder="Enter your name"
+                                    className="h-12 bg-zinc-800 border-white/10 text-white placeholder:text-zinc-500"
+                                    autoFocus
+                                />
+                            </div>
+                            
+                            <Button
+                                onClick={async () => {
+                                    if (!editName.trim()) {
+                                        toast({ variant: 'destructive', title: 'Name required', description: 'Please enter your name.' });
+                                        return;
+                                    }
+                                    setIsSaving(true);
+                                    try {
+                                        await setDoc(doc(firestore!, 'users', user!.uid), { displayName: editName.trim() }, { merge: true });
+                                        await updateProfile(user!, { displayName: editName.trim() });
+                                        toast({ title: 'Profile saved!', description: 'Welcome to MindScape!' });
+                                        setProfile((prev: any) => prev ? { ...prev, displayName: editName.trim() } : prev);
+                                        router.replace('/profile');
+                                    } catch (error) {
+                                        console.error('Error saving name:', error);
+                                        toast({ variant: 'destructive', title: 'Error', description: 'Failed to save name' });
+                                    } finally {
+                                        setIsSaving(false);
+                                    }
+                                }}
+                                disabled={isSaving || !editName.trim()}
+                                className="w-full h-12 bg-gradient-to-r from-purple-600 to-purple-400 hover:from-purple-700 hover:to-purple-500 text-white font-semibold"
+                            >
+                                {isSaving ? (
+                                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                                ) : (
+                                    <>Continue to MindScape</>
+                                )}
+                            </Button>
+                            
+                            <p className="text-xs text-center text-zinc-500">
+                                You can always change this later in your profile settings.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
             {/* Professional Background Layer */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
                 <div className="absolute top-[10%] left-[10%] w-[40%] h-[40%] bg-violet-600/10 blur-[120px] rounded-full animate-pulse duration-[10s]" />

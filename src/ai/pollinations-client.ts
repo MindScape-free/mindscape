@@ -166,7 +166,7 @@ CRITICAL SAFETY & OUTPUT RULES:
         // Higher limits for larger mind maps (especially multi-source)
         if (targetModelDef && targetModelDef.context >= 16000 && !(options as any)._stripParameters) {
             if (model?.includes('deepseek')) {
-                body.max_tokens = 4092;
+                body.max_tokens = 8192;
             } else if (model === 'qwen-coder' || model === 'gemini-fast' || model === 'gemini-search') {
                 body.max_tokens = 16000;
             } else if (model === 'openai' || model === 'openai-fast') {

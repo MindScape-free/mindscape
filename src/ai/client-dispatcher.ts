@@ -366,6 +366,8 @@ function performSchemaValidation(parsed: any, schema: any, originalRaw: string, 
     if (!schema) return parsed;
 
     const result = schema.safeParse(parsed);
+    console.log(`🔍 Schema validation: success=${result.success}, keys=${result.success ? Object.keys(result.data || {}).join(',') : 'N/A'}`);
+    
     if (!result.success) {
         // --- Enhanced Partial Salvage Acceptance ---
         const partial = parsed as any;
@@ -425,6 +427,20 @@ function performSchemaValidation(parsed: any, schema: any, originalRaw: string, 
             console.warn("⚠️ Schema validation failed (non-strict). Issues:", result.error.message);
         }
     }
-    return result.data;
+    
+    // Defensive: Ensure result.data has expected structure
+    const validatedData = result.data;
+    if (!validatedData || typeof validatedData !== 'object' || Array.isArray(validatedData)) {
+        console.warn('⚠️ Zod returned invalid data structure, falling back to parsed data');
+        return parsed;
+    }
+    
+    // Ensure subTopics exists and has at least 1 item
+    if (!Array.isArray(validatedData.subTopics) || validatedData.subTopics.length === 0) {
+        console.warn('⚠️ Zod returned empty subTopics, falling back to parsed data');
+        return parsed.subTopics && parsed.subTopics.length > 0 ? parsed : validatedData;
+    }
+    
+    return validatedData;
 }
 

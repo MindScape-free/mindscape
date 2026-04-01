@@ -10,7 +10,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://placehold.co https://picsum.photos https://image.pollinations.ai https://gen.pollinations.ai https://*.firebaseapp.com https://*.googleusercontent.com",
-      "connect-src 'self' https://gen.pollinations.ai https://r.jina.ai https://*.firebaseio.com https://*.googleapis.com https://www.googleapis.com wss://*.firebaseio.com",
+      "connect-src 'self' https://gen.pollinations.ai https://r.jina.ai https://*.firebaseio.com https://*.googleapis.com https://www.googleapis.com https://apis.google.com wss://*.firebaseio.com",
       "frame-src 'self' blob: data: https:",
       "child-src 'self' blob: data: https:",
       "frame-ancestors 'none'",

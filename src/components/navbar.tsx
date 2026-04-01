@@ -30,6 +30,7 @@ import { Icons } from './icons';
 import { cn } from '@/lib/utils';
 import { NotificationCenter } from './notification-center';
 import { useAIConfig } from '@/contexts/ai-config-context';
+import { LoginDialog } from './login-dialog';
 
 export function Navbar() {
   const { user, isUserLoading } = useUser();
@@ -39,6 +40,13 @@ export function Navbar() {
   const { resetConfig, pollenBalance, isBalanceLoading } = useAIConfig();
   const [profileName, setProfileName] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+
+  useEffect(() => {
+    const openLogin = () => setIsLoginOpen(true);
+    window.addEventListener('mindscape:trigger-login', openLogin);
+    return () => window.removeEventListener('mindscape:trigger-login', openLogin);
+  }, []);
 
   // Listen to Firestore for real-time displayName updates
   useEffect(() => {
@@ -52,7 +60,7 @@ export function Navbar() {
       }
     }, (error) => {
       if (error.code !== 'permission-denied') {
-        console.error("Navbar profile snapshot error:", error);
+        console.error('Navbar profile snapshot error: code=' + error.code);
       }
     });
 
@@ -134,8 +142,8 @@ export function Navbar() {
     }
 
     return (
-      <Button asChild className="rounded-xl bg-zinc-800/80 px-4 py-2 text-sm text-zinc-200 ring-1 ring-white/10 transition hover:bg-zinc-800 hover:text-white">
-        <Link href="/login">Login</Link>
+      <Button className="rounded-xl bg-zinc-800/80 px-4 py-2 text-sm text-zinc-200 ring-1 ring-white/10 transition hover:bg-zinc-800 hover:text-white" onClick={() => setIsLoginOpen(true)}>
+        Login
       </Button>
     );
   };
@@ -271,6 +279,8 @@ export function Navbar() {
           <div className="absolute bottom-0 left-0 h-[1px] w-full bg-gradient-to-r from-transparent via-primary/40 to-transparent opacity-50" />
         </div>
       </div>
+
+      <LoginDialog open={isLoginOpen} onOpenChange={setIsLoginOpen} />
     </header>
   );
 }
