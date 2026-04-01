@@ -188,7 +188,7 @@ CRITICAL SAFETY & OUTPUT RULES:
             throw new Error(`Authentication failed: No API key available. Please add your Pollinations API key in settings.`);
         }
 
-        console.log(`🔑 Using Pollinations Key: ${effectiveApiKey.substring(0, 7)}... (Client-side)`);
+        console.log(`🔑 Using Pollinations Key: ${effectiveApiKey.substring(0, 7)}... (Server-side)`);
 
         let response: Response;
         const controller = new AbortController();

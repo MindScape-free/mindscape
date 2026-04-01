@@ -397,7 +397,7 @@ function Hero({
                   {[
                     { id: 'single', label: 'Single' },
                     { id: 'compare', label: 'Compare' },
-                    { id: 'multi', label: 'Multi-Source', badge: 'NEW' }
+                    { id: 'multi', label: 'Multi-Source' }
                   ].map((mode) => (
                     <Button
                       key={mode.id}
@@ -412,11 +412,6 @@ function Hero({
                       onClick={() => handleModeChange(mode.id as any)}
                     >
                       {mode.label}
-                      {mode.badge && (
-                        <span className="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full bg-primary text-[8px] font-black text-white shadow-lg animate-pulse">
-                          {mode.badge}
-                        </span>
-                      )}
                     </Button>
                   ))}
                 </div>

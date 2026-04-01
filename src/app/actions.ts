@@ -6,7 +6,6 @@ import {
   GenerateMindMapOutput,
   GenerateMindMapInput,
 } from '@/ai/flows/generate-mind-map';
-import { getUserImageSettings } from '@/lib/firestore-helpers';
 import {
   generateMindMapFromImage,
   GenerateMindMapFromImageOutput,
@@ -322,8 +321,7 @@ export async function checkPollenBalanceAction(
   options: { apiKey?: string; userId?: string } = {}
 ): Promise<{ balance: number | null; error: string | null }> {
   try {
-    // Use the client-provided key directly - avoids Firebase Admin SDK call which causes 500s on Vercel.
-    const effectiveApiKey = options.apiKey;
+    const effectiveApiKey = await resolveApiKey(options);
 
     if (!effectiveApiKey) {
       return { balance: null, error: 'No API key provided. Please check your settings.' };
