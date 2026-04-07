@@ -1,8 +1,7 @@
 "use server";
 
-import { Readability } from "@mozilla/readability";
 import * as cheerio from "cheerio";
-import { JSDOM } from "jsdom";
+import { headers } from "next/headers";
 
 /**
  * Extracts the main content from a website URL.
@@ -67,13 +66,23 @@ export async function extractWebsiteContent(url: string) {
 
     const cleanedHtml = $.html();
 
-    // 5. Extract Main Content with Readability
-    const dom = new JSDOM(cleanedHtml, { url: validatedUrl.origin });
-    const reader = new Readability(dom.window.document);
-    const article = reader.parse();
+    // 5. Extract Main Content via internal API (Node.js runtime required for JSDOM)
+    const host = headers().get("host");
+    const protocol = process.env.NODE_ENV === "development" ? "http" : "https";
+    const apiResponse = await fetch(`${protocol}://${host}/api/extract`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ html: cleanedHtml, url: validatedUrl.origin }),
+    });
 
-    if (!article) {
-      throw new Error("Failed to extract article content from the page.");
+    if (!apiResponse.ok) {
+      throw new Error(`Failed to extract content via API: ${apiResponse.statusText}`);
+    }
+
+    const { article, error } = await apiResponse.json();
+
+    if (error || !article) {
+      throw new Error(error || "Failed to extract article content from the page.");
     }
 
     // 6. Further Structure Extraction (Headings & Paragraphs)

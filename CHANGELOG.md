@@ -1,3 +1,15 @@
+## [v1.6.6] - 2026-04-08
+
+### 🛠️ Admin & Infrastructure
+- **Admin Dashboard Overhaul**: Completely redesigned the administrative interface with a high-performance **Virtualized Users Tab**. 
+- **User Intelligence**: Added advanced searching, multi-criteria sorting (A-Z, Latest, etc.), and deep-fetch capabilities from Firebase.
+- **Performance Virtualization**: Implemented a custom virtualization engine for the user list to maintain 60fps performance even with thousands of records.
+
+### 🧩 System & Logic
+- **AI Model Synchronization**: Updated internal model references for improved generation consistency.
+- **Feedback Loop**: Integrated a new system-wide feedback mechanism for real-time user insights.
+- **Structural Fixes**: Resolved edge-case rendering issues in the "Pollen" generation engine.
+
 ## [v1.6.5] - 2026-03-29
 
 ### 🌟 Modernization & Aesthetics

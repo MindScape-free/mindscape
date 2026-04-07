@@ -24,6 +24,45 @@ export interface ChangelogVersion {
 
 export const CHANGELOG_DATA: ChangelogVersion[] = [
     {
+        version: '1.6.6',
+        slug: 'feedback-profile-pollination-sync',
+        date: 'April 8, 2026',
+        title: 'Feedback, Profile Rework & Pollination Sync',
+        summary: 'A massive intelligence and UX update introducing a new Feedback system, a completely rebuilt Profile Dashboard, and automated AI model synchronization via Pollination.',
+        coverImage: '/changelog/homepage-hero.png',
+        tags: ['Feedback', 'Profile', 'AI', 'Sync'],
+        impact: 'major',
+        highlights: [
+            {
+                icon: MessageSquare,
+                color: 'text-violet-400 bg-violet-500/10',
+                title: 'New Feedback Feature',
+                description: 'Share your thoughts directly from the navbar with our new context-aware feedback system supporting bugs, suggestions, and feature requests.',
+            },
+            {
+                icon: Layout,
+                color: 'text-blue-400 bg-blue-500/10',
+                title: 'Profile Dashboard Rework',
+                description: 'A premium glassmorphic overhaul of your profile with real-time health scores, engagement metrics, and an 84-day visual activity heatmap.',
+            },
+            {
+                icon: RefreshCw,
+                color: 'text-emerald-400 bg-emerald-500/10',
+                title: 'AI Model Auto-Sync',
+                description: 'Pollination.ai integration now automatically syncs your preferred models and API keys across the platform with zero manual configuration.',
+            },
+        ],
+        content: [
+            "v1.6.6 is a significant platform update focusing on closing the loop between users and developers while surfacing deeper personal analytics.",
+            "## New Feedback Loop",
+            "We've added a dedicated **Feedback** portal accessible from the navbar. You can now submit bugs, suggestions, and feature requests directly to the development team. Each submission is tracked in real-time, allowing us to prioritize what matters most to you.",
+            "## Reimagined Profile Dashboard",
+            "Your profile is now a high-fidelity command center. We've introduced a **User Health Score** and **Engagement Rate** analytics suite to help you track your learning progress. The new **Activity Heatmap** provides an 84-day birds-eye view of your mind map creation and study habits, all wrapped in a sleek glassmorphic design.",
+            "## Pollination AI Auto-Sync",
+            "No more manual model setup. Our new **Pollination Auth Handler** automatically synchronizes your API keys and preferred AI models (including the newly added Dirtberry Pro and FLUX.2 Klein 4B). This ensures a consistent generation experience across all your devices and sessions.",
+        ],
+    },
+    {
         version: '1.6.5',
         slug: 'modernization-analytics-reliability',
         date: 'March 29, 2026',
@@ -369,5 +408,5 @@ export const CHANGELOG_DATA: ChangelogVersion[] = [
     },
 ];
 
-export const CURRENT_VERSION = '1.6.5';
+export const CURRENT_VERSION = '1.6.6';
 export const STORAGE_KEY = 'mindscape_changelog_version';

@@ -420,18 +420,26 @@ CRITICAL SAFETY & OUTPUT RULES:
 /**
  * Checks the current pollen balance for a given API key.
  */
-export async function checkPollinationsBalance(apiKey: string): Promise<number | null> {
+export async function checkPollinationsBalance(apiKey: string): Promise<number> {
     try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+
         const response = await fetch('https://gen.pollinations.ai/account/balance', {
-            headers: { 'Authorization': `Bearer ${apiKey}` }
+            headers: { 'Authorization': `Bearer ${apiKey}` },
+            cache: 'no-store',
+            signal: controller.signal
         });
+
+        clearTimeout(timeout);
+
         if (response.ok) {
             const data = await response.json();
-            return typeof data.balance === 'number' ? data.balance : null;
+            return typeof data.balance === 'number' ? data.balance : 0;
         }
-        return null;
+        return 0;
     } catch (e) {
         console.error('⚠️ Failed to check Pollinations balance:', e);
-        return null;
+        return 0;
     }
 }
