@@ -91,6 +91,9 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
     }, [setStoredConfig]);
 
     const refreshBalance = useCallback(async (apiKeyOverride?: string) => {
+        // Skip on server - this can only work client-side with auth
+        if (typeof window === 'undefined') return;
+        
         const apiKey = apiKeyOverride ?? configRef.current.pollinationsApiKey;
         if (!user || !apiKey || isRefreshingRef.current) {
             if (!apiKey) setPollenBalance(null);
@@ -104,9 +107,14 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
             if (!result.error) {
                 setPollenBalance(result.balance);
                 updateConfig({ pollenBalance: result.balance });
+            } else {
+                // Don't treat as critical error - just log and keep app working
+                console.warn('Balance check returned error (non-critical):', result.error);
+                setPollenBalance(null);
             }
         } catch (error) {
-            console.error('Error refreshing pollen balance:', error);
+            // Non-critical - don't break the app
+            console.warn('Error refreshing pollen balance (non-critical):', error);
         } finally {
             isRefreshingRef.current = false;
             setIsBalanceLoading(false);

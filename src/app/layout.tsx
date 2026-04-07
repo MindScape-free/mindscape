@@ -16,6 +16,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { PollinationsAuthHandler } from '@/components/pollinations-auth-handler';
 import { OnboardingWizard } from '@/components/onboarding-wizard';
 import { ChangelogDialog } from '@/components/changelog-dialog';
+import { validateEnvironment } from '@/firebase/config';
 
 const spaceGrotesk = localFont({
   src: [
@@ -86,6 +87,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Validate environment variables on the server 
+  // This will throw and trigger the error boundary if critical config is missing
+  if (typeof window === 'undefined') {
+    validateEnvironment();
+  }
+
   return (
     <html lang="en" className={cn('dark', spaceGrotesk.variable, orbitron.variable)} suppressHydrationWarning>
       <head>

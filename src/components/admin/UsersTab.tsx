@@ -154,7 +154,7 @@ export const UsersTab: React.FC<UsersTabProps> = memo(({
             className="grid grid-cols-1 xl:grid-cols-2 gap-4 overflow-y-auto"
             style={{ 
               maxHeight: 'calc(100vh - 350px)',
-              contain: 'strict',
+              contain: 'content',
             }}
           >
             {filteredUsers.length > VIRTUALIZATION_THRESHOLD ? (
