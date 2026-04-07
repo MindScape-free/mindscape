@@ -3,6 +3,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { LogIn, Search, Share2, Trash2, Eye, Loader2, Clock, Rocket, Info, ExternalLink, Download, ChevronRight, Sparkles, Copy, Check, Database, Plus, LayoutGrid, Globe, BarChart3, Binary, Layers, Image as ImageIcon } from 'lucide-react';
 import {
@@ -93,7 +94,7 @@ export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const { config } = useAIConfig();
+  const { config, refreshBalance } = useAIConfig();
   const persistenceOptions = useMemo(() => ({
     userApiKey: config.pollinationsApiKey,
     preferredModel: config.pollinationsModel,
@@ -173,7 +174,10 @@ export default function DashboardPage() {
         userId: user?.uid
       }).then(res => {
         if (isMounted && res.topics) setSuggestedTopics(res.topics);
-        if (isMounted) setIsSuggestingTopics(false);
+        if (isMounted) {
+          setIsSuggestingTopics(false);
+          refreshBalance();
+        }
       }).catch(() => {
         if (isMounted) setIsSuggestingTopics(false);
       });
@@ -191,7 +195,10 @@ export default function DashboardPage() {
           userId: user?.uid
         }).then(res => {
           if (isMounted && res.data?.questions) setSuggestedQuestions(res.data.questions.slice(0, 3));
-          if (isMounted) setIsSuggestingQuestions(false);
+          if (isMounted) {
+            setIsSuggestingQuestions(false);
+            refreshBalance();
+          }
         }).catch(() => {
           if (isMounted) setIsSuggestingQuestions(false);
         });
@@ -237,13 +244,13 @@ export default function DashboardPage() {
       return count;
     };
 
-    const isMultiMode = selectedMapFullData.mode === 'multi' || 
+    const isMultiMode = (selectedMapFullData.mode as any) === 'multi' || 
                        (selectedMapFullData as any).sourceFileType === 'multi' ||
                        (selectedMapFullData as any).sourceType === 'multi' ||
                        (selectedMapFullData as any).sourceFileContent?.includes('--- SOURCE:');
 
-    if (isMultiMode || selectedMapFullData.mode === 'single') {
-      const subTopics = selectedMapFullData.subTopics || [];
+    if (isMultiMode || (selectedMapFullData as any).mode === 'single') {
+      const subTopics = (selectedMapFullData as any).subTopics || [];
       concepts = subTopics.length;
       totalNodes += countNodesRecursive(subTopics);
     } else if (selectedMapFullData.mode === 'compare' || (selectedMapFullData as any).compareData) {
@@ -449,6 +456,9 @@ export default function DashboardPage() {
 
         if (error) throw new Error(error);
 
+        // Refresh balance after AI operation
+        refreshBalance();
+
         // Save using unified persistence (handles thumbnails, split schema, etc.)
         if (user && firestore && data) {
           const mindMapToSave = {
@@ -585,6 +595,9 @@ export default function DashboardPage() {
         apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
         userId: user?.uid
       });
+
+      // Refresh balance after AI operation
+      refreshBalance();
 
       if (catError) throw new Error(catError);
 
@@ -834,7 +847,7 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt,
-          model: config.pollinationsModel || 'flux',
+          model: config.imageModel || config.pollinationsModel || 'flux',
           width: 512,
           height: 288,
           userId: user.uid,
@@ -891,7 +904,21 @@ export default function DashboardPage() {
     const docRef = doc(firestore, 'users', user.uid, 'mindmaps', idToRemove);
     try {
       await deleteDoc(docRef);
-      // Successful delete will eventually be reflected by useCollection snapshot
+
+      // Log activity for real-time stats
+      try {
+        const { logAdminActivityAction } = await import('@/app/actions');
+        await logAdminActivityAction({
+          type: 'MAP_DELETED',
+          targetId: idToRemove,
+          targetType: 'mindmap',
+          details: `Mindmap deleted`,
+          performedBy: user.uid,
+          performedByEmail: user.email || 'anonymous'
+        });
+      } catch (logErr) {
+        console.error('Failed to log map deletion:', logErr);
+      }
     } catch (serverError) {
       const permissionError = new FirestorePermissionError({ path: docRef.path, operation: 'delete' });
       errorEmitter.emit('permission-error', permissionError);
@@ -996,7 +1023,8 @@ export default function DashboardPage() {
         lighting
       }, {
         provider: config.provider,
-        apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey
+        apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
+        model: config.textModel || config.pollinationsModel
       });
 
       if (error) throw new Error(error);
@@ -1104,6 +1132,7 @@ export default function DashboardPage() {
           </div>
         ) : filteredAndSortedMaps.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 auto-rows-[300px]">
+            <AnimatePresence mode="popLayout">
             {filteredAndSortedMaps.map((rawMap, idx) => {
               // Sanitize map to prevent Firestore Timestamp serialization errors
               const map = sanitizeMapForState(rawMap);
@@ -1123,10 +1152,17 @@ export default function DashboardPage() {
 
 
               return (
-                <div
+                <motion.div
                   key={mapId}
-                  className="group relative cursor-pointer rounded-2xl bg-white/5 backdrop-blur-xl p-4 flex flex-col h-full w-full overflow-hidden border border-white/10 transition-all duration-500 hover:border-purple-600/50 hover:shadow-[0_0_30px_rgba(168,85,247,0.15)] hover:-translate-y-1"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.4, delay: idx * 0.05 }}
+                  className="h-full w-full"
                 >
+                  <div
+                    className="group relative cursor-pointer rounded-2xl bg-white/5 backdrop-blur-xl p-4 flex flex-col h-full w-full overflow-hidden border border-white/10 transition-all duration-500 hover:border-purple-600/50 hover:shadow-[0_0_30px_rgba(168,85,247,0.15)] hover:-translate-y-1"
+                  >
                   <div className="w-full aspect-video relative mb-4 overflow-hidden rounded-xl bg-[#0A0A0A] group/image shrink-0" onClick={() => handleMindMapClick(mapId)}>
                     <img
                       src={map.thumbnailUrl || `https://gen.pollinations.ai/image/${encodeURIComponent(`${map.topic}, professional photography, high quality, detailed, 8k`)}?width=512&height=288&nologo=true&private=true&model=flux&enhance=true`}
@@ -1324,10 +1360,12 @@ export default function DashboardPage() {
                         </TooltipContent>
                       </Tooltip>
                     </div>
+                    </div>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
+            </AnimatePresence>
           </div>
         ) : (
           <div className="text-center py-16 border-2 border-dashed rounded-lg mt-12">

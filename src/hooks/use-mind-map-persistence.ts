@@ -1,7 +1,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { doc, getDoc, updateDoc, setDoc, collection, addDoc, serverTimestamp, onSnapshot, query, where, limit } from 'firebase/firestore';
-import { useUser, useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { doc, getDoc, updateDoc, setDoc, collection, addDoc, serverTimestamp, onSnapshot, query, where, limit, writeBatch } from 'firebase/firestore';
+import { useUser, useFirestore, useFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { MindMapData } from '@/types/mind-map';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
@@ -20,6 +20,7 @@ interface PersistenceOptions {
  */
 export function useMindMapPersistence(options: PersistenceOptions = {}) {
     const { user } = useUser();
+    const { isAdmin } = useFirebase();
     const firestore = useFirestore();
     const { toast } = useToast();
     const router = useRouter();
@@ -360,11 +361,14 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
 
             let finalId = targetId;
             if (targetId) {
+                // Use writeBatch for atomic metadata + content update
+                const batch = writeBatch(firestore);
                 const metadataRef = doc(firestore, 'users', user.uid, 'mindmaps', targetId);
                 const contentRef = doc(firestore, 'users', user.uid, 'mindmaps', targetId, 'content', 'tree');
 
-                await setDoc(metadataRef, metadataFinal, { merge: true });
-                await setDoc(contentRef, contentFinal);
+                batch.set(metadataRef, metadataFinal, { merge: true });
+                batch.set(contentRef, contentFinal);
+                await batch.commit();
 
                 // Start background task if image missing
                 generateThumbnailInBackground(targetId);
@@ -373,29 +377,72 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
                 const docRef = await addDoc(mindMapsCollection, { ...metadataFinal, createdAt: serverTimestamp() });
                 finalId = docRef.id;
 
-                // Log map creation for admin activity
+                // Log map creation for admin activity (all users) via Server Action
+                // This avoids "Missing or insufficient permissions" for non-admin users
                 try {
-                    const { addDoc: adminAddDoc, collection: adminCollection } = await import('firebase/firestore');
-                    await adminAddDoc(adminCollection(firestore, 'adminActivityLog'), {
-                        timestamp: new Date().toISOString(),
+                    const { logAdminActivityAction } = await import('@/app/actions');
+                    const generationId = `gen_${finalId}_${Date.now()}`;
+                    await logAdminActivityAction({
                         type: 'MAP_CREATED',
                         targetId: finalId,
                         targetType: 'mindmap',
-                        details: `New mindmap created: ${metadataFinal.topic || metadataFinal.title || 'Untitled'}`,
-                        performedBy: user.uid
+                        details: `Mindmap created: ${metadataFinal.topic || metadataFinal.title || 'Untitled'}`,
+                        performedBy: user.uid,
+                        performedByEmail: user.email || 'anonymous',
+                        metadata: {
+                            persona: metadataFinal.aiPersona,
+                            nodeCount: metadataFinal.nodeCount,
+                            mode: metadataFinal.mode,
+                            depth: metadataFinal.depth,
+                            sourceType: metadataFinal.sourceFileType || metadataFinal.sourceType || 'text',
+                            isSubMap: metadataFinal.isSubMap || false,
+                            parentMapId: metadataFinal.parentMapId || null,
+                            generationId,
+                            userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+                        }
                     });
+
+                    // Also log AI generation completion if this is a root map
+                    if (!metadataFinal.isSubMap) {
+                        await logAdminActivityAction({
+                            type: 'AI_GENERATION_COMPLETED',
+                            targetId: finalId,
+                            targetType: 'mindmap',
+                            details: `AI generation completed: ${metadataFinal.nodeCount || 0} nodes`,
+                            performedBy: user.uid,
+                            metadata: {
+                                sourceType: metadataFinal.sourceFileType || metadataFinal.sourceType || 'text',
+                                mode: metadataFinal.mode,
+                                depth: metadataFinal.depth,
+                                persona: metadataFinal.aiPersona,
+                                nodeCount: metadataFinal.nodeCount,
+                            },
+                        });
+                    }
                 } catch (e) {
                     console.error('Failed to log map creation:', e);
                 }
 
+                // Use writeBatch for content save
+                const batch = writeBatch(firestore);
                 const contentRef = doc(firestore, 'users', user.uid, 'mindmaps', finalId, 'content', 'tree');
-                await setDoc(contentRef, contentFinal);
+                batch.set(contentRef, contentFinal);
+                await batch.commit();
 
                 // Start background task
                 generateThumbnailInBackground(finalId);
 
-                // Track creation
-                const mapAchievements = await trackMapCreated(firestore, user.uid);
+                // Track creation with map metadata for aggregate statistics
+                const mapAchievements = await trackMapCreated(firestore, user.uid, {
+                    mode: mapToSave.mode,
+                    sourceFileType: mapToSave.sourceFileType,
+                    sourceType: mapToSave.sourceType,
+                    sourceUrl: mapToSave.sourceUrl,
+                    videoId: mapToSave.videoId,
+                    depth: mapToSave.depth,
+                    nodeCount: calculatedNodeCount,
+                    aiPersona: mapToSave.aiPersona || aiPersona || 'Teacher',
+                });
                 showAchievementToasts(mapAchievements);
 
                 // Track initial nodes

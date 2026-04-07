@@ -94,7 +94,7 @@ export async function removeFromCommunityAction(
         const { firestore } = initializeFirebaseServer();
 
         if (!firestore) {
-            throw new Error('Firestore not initialized');
+            return { success: false, error: 'Firebase Admin not configured. Cannot perform server-side removal.' };
         }
 
         // Get the public map document
@@ -124,6 +124,28 @@ export async function removeFromCommunityAction(
 
         // Delete from publicMindmaps collection
         await publicMapRef.delete();
+
+        // Log activity for removing from community
+        try {
+            const { initializeFirebaseServer } = await import('@/firebase/server');
+            const { firestore: fs } = initializeFirebaseServer();
+            if (fs) {
+                await fs.collection('adminActivityLog').add({
+                    type: 'MAP_REMOVED',
+                    targetId: mapId,
+                    targetType: 'mindmap',
+                    details: `Map "${mapData.topic || 'Untitled'}" removed from community`,
+                    performedBy: userId,
+                    timestamp: new Date().toISOString(),
+                    metadata: {
+                        topic: mapData.topic,
+                        authorId: mapData.originalAuthorId
+                    }
+                });
+            }
+        } catch (logError) {
+            console.warn('Failed to log MAP_REMOVED activity:', logError);
+        }
 
         // Update the original map in user's library to set isPublic = false
         // Only if the user is the author (not admin removing someone else's map)
@@ -184,7 +206,10 @@ export async function publishMindMapAction(
         const { firestore } = initializeFirebaseServer();
 
         if (!firestore) {
-            throw new Error('Firestore not initialized');
+            return { 
+                success: false, 
+                error: 'Firebase Admin not initialized. To publish locally, please add a service-account.json or set the FIREBASE_SERVICE_ACCOUNT_JSON env var.' 
+            };
         }
 
         // Authorization check
@@ -233,6 +258,28 @@ export async function publishMindMapAction(
         };
 
         await publicMapRef.set(finalPublicData, { merge: true });
+
+        // Log activity for publishing to community
+        try {
+            const { initializeFirebaseServer } = await import('@/firebase/server');
+            const { firestore: fs } = initializeFirebaseServer();
+            if (fs) {
+                await fs.collection('adminActivityLog').add({
+                    type: 'MAP_PUBLISHED',
+                    targetId: mapId,
+                    targetType: 'mindmap',
+                    details: `Map "${publicData.topic || 'Untitled'}" published to community`,
+                    performedBy: userId,
+                    timestamp: new Date().toISOString(),
+                    metadata: {
+                        topic: publicData.topic,
+                        authorId: targetAuthorId
+                    }
+                });
+            }
+        } catch (logError) {
+            console.warn('Failed to log MAP_PUBLISHED activity:', logError);
+        }
 
         return { success: true, error: null };
     } catch (error: any) {

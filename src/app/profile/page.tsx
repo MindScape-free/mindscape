@@ -14,9 +14,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import {
-    Loader2, Flame, Map, Brain, LogOut, Settings, Globe, Wand2,
+    Loader2, Flame, Map, Brain, BrainCircuit, LogOut, Settings, Globe, Wand2,
     Pencil, Edit2, Check, X, Trophy, Target, Lock, ChevronRight, Sparkles, Copy, Key, RefreshCw, ShieldCheck, Activity,
-    FastForward, Scale, BookOpen, BarChart3, Zap, Layers, Youtube, Image as ImageIcon, ChevronLeft, ExternalLink, Heart, Library, Clock, FileText
+    FastForward, Scale, BookOpen, BarChart3, Zap, Layers, Youtube, Image as ImageIcon, ChevronLeft, ExternalLink, Heart, Library, Clock, FileText, TrendingUp
 } from 'lucide-react';
 import {
     Sheet,
@@ -86,12 +86,14 @@ interface UserProfile {
         imageProvider?: 'pollinations';
         pollinationsModel?: string;
         pollinationsApiKey?: string;
+        imageModel?: string;
+        textModel?: string;
     };
 }
-export default function ProfilePage() {
+function ProfileContent() {
     const router = useRouter();
     const { user, firestore, auth } = useFirebase();
-    const { pollenBalance, refreshBalance } = useAIConfig();
+    const { pollenBalance, refreshBalance, updateConfig } = useAIConfig();
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -112,6 +114,7 @@ export default function ProfilePage() {
     const [isSyncing, setIsSyncing] = useState(false);
     const [showApiKey, setShowApiKey] = useState(false);
     const [preferredModel, setPreferredModel] = useState('flux');
+    const [preferredTextModel, setPreferredTextModel] = useState('openai');
     const [isSavingKey, setIsSavingKey] = useState(false);
     const [apiKeyInput, setApiKeyInput] = useState('');
     const [isLoadingBalance, setIsLoadingBalance] = useState(false);
@@ -123,6 +126,7 @@ export default function ProfilePage() {
     const [monthlyInput, setMonthlyInput] = useState('');
     const [userHeatmapMonth, setUserHeatmapMonth] = useState<Date>(new Date());
     const [selectedSourceMap, setSelectedSourceMap] = useState<any | null>(null);
+
 
 
     // Load profile data
@@ -170,6 +174,8 @@ export default function ProfilePage() {
                             apiSettings: {
                                 provider: data.apiSettings?.provider || 'pollinations',
                                 imageProvider: data.apiSettings?.imageProvider || 'pollinations',
+                                imageModel: data.apiSettings?.imageModel || data.apiSettings?.pollinationsModel || 'flux',
+                                textModel: data.apiSettings?.textModel || 'openai',
                                 pollinationsModel: data.apiSettings?.pollinationsModel || '',
                                 pollinationsApiKey: data.apiSettings?.pollinationsApiKey || '',
                             },
@@ -179,6 +185,8 @@ export default function ProfilePage() {
                         setProfile(profileData);
                         setEditName(profileData.displayName);
                         setApiKeyInput(profileData.apiSettings?.pollinationsApiKey || '');
+                        setPreferredModel(profileData.apiSettings?.imageModel || 'flux');
+                        setPreferredTextModel(profileData.apiSettings?.textModel || 'openai');
 
                         // Sync active maps count in real-time indirectly? 
                         // Actually, it's better to just fetch it here or use a separate listener.
@@ -406,7 +414,7 @@ export default function ProfilePage() {
             }
 
             // 2. If valid, save the key
-            await saveUserApiKey(firestore, user.uid, apiKeyInput.trim(), preferredModel);
+            await saveUserApiKey(firestore, user.uid, apiKeyInput.trim(), preferredModel, preferredTextModel);
             
             // 3. Update global balance state immediately
             await refreshBalance();
@@ -425,13 +433,29 @@ export default function ProfilePage() {
         }
     };
 
-    const handleSaveModelPreference = async (modelId: string) => {
+    const handleSaveImageModelPreference = async (modelId: string) => {
         if (!user || !firestore) return;
         setIsSavingKey(true);
         try {
             setPreferredModel(modelId);
-            await saveUserApiKey(firestore, user.uid, apiKeyInput, modelId);
-            toast({ title: 'Preference Saved', description: `Default model set to ${modelId}` });
+            updateConfig({ imageModel: modelId });
+            await saveUserApiKey(firestore, user.uid, apiKeyInput, modelId, preferredTextModel);
+            toast({ title: 'Vision Preference Saved', description: `Default image model set to ${modelId}` });
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Error', description: error.message });
+        } finally {
+            setIsSavingKey(false);
+        }
+    };
+
+    const handleSaveTextModelPreference = async (modelId: string) => {
+        if (!user || !firestore) return;
+        setIsSavingKey(true);
+        try {
+            setPreferredTextModel(modelId);
+            updateConfig({ textModel: modelId });
+            await saveUserApiKey(firestore, user.uid, apiKeyInput, preferredModel, modelId);
+            toast({ title: 'Intelligence Preference Saved', description: `Core AI model set to ${modelId}` });
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Error', description: error.message });
         } finally {
@@ -505,11 +529,14 @@ export default function ProfilePage() {
         streak: profile.statistics.currentStreak,
         longestStreak: profile.statistics.longestStreak || 0,
         nodes: profile.statistics.totalNodes || 0,
-        depth: profile.statistics.totalNestedExpansions || 0,
+        expansions: profile.statistics.totalNestedExpansions || 0,
         images: profile.statistics.totalImagesGenerated || 0,
         studyMinutes: profile.statistics.totalStudyTimeMinutes || 0,
         lastActiveDate: profile.statistics.lastActiveDate || '',
         weeklyGoal: profile.goals?.weeklyMapGoal || 5,
+        avgNodesPerMap: userMaps.length > 0 
+            ? Math.round((userMaps.reduce((acc, m) => acc + (m.nodeCount || 0), 0)) / userMaps.length) 
+            : 0,
     };
 
     
@@ -811,30 +838,30 @@ export default function ProfilePage() {
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                         {activeTab === 'overview' && (
                             <div className="space-y-8">
-                                {/* Dashboard Stats Grid - 6 Cards in one row */}
-                                <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
+                                {/* Dashboard Stats Grid - 8 Cards in one row */}
+                                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
                                     {[
-                                        { label: 'Current Mindmap', value: stats.currentMaps, icon: Map, color: 'violet' },
-                                        { label: 'Total Mindmap', value: stats.totalMapsCreated, icon: Library, color: 'purple' },
-                                        { label: 'Nodes', value: stats.nodes || 0, icon: Layers, color: 'blue' },
+                                        { label: 'Current', value: stats.currentMaps, icon: Map, color: 'violet' },
+                                        { label: 'All Time', value: stats.totalMapsCreated, icon: Library, color: 'purple' },
+                                        { label: 'Expansions', value: stats.expansions || 0, icon: Layers, color: 'indigo' },
+                                        { label: 'Nodes', value: stats.nodes || 0, icon: BarChart3, color: 'blue' },
+                                        { label: 'Avg Nodes', value: stats.avgNodesPerMap || 0, icon: TrendingUp, color: 'cyan' },
                                         { label: 'Images', value: stats.images || 0, icon: ImageIcon, color: 'pink' },
                                         { label: 'Streak', value: `${stats.streak || 0}d`, icon: Zap, color: 'yellow' },
-                                        { label: 'Study Time', value: formatDuration(stats.studyMinutes), icon: Clock, color: 'emerald' },
+                                        { label: 'Study', value: formatDuration(stats.studyMinutes), icon: Clock, color: 'emerald' },
                                     ].map((stat, idx) => (
                                         <div 
                                             key={stat.label} 
-                                            className="relative overflow-hidden p-4 rounded-2xl bg-zinc-900/40 border border-white/5 transition-all duration-300 hover:border-white/10 group flex flex-col gap-3"
+                                            className="relative overflow-hidden p-3 rounded-xl bg-zinc-900/40 border border-white/5 transition-all duration-300 hover:border-white/10 group flex flex-col gap-2"
                                         >
-                                            <div className={`absolute top-0 right-0 w-16 h-16 bg-${stat.color}-500/5 rounded-full blur-2xl group-hover:bg-${stat.color}-500/10 transition-colors`} />
-                                            {/* Top row: icon + label */}
+                                            <div className={`absolute top-0 right-0 w-12 h-12 bg-${stat.color}-500/5 rounded-full blur-xl group-hover:bg-${stat.color}-500/10 transition-colors`} />
                                             <div className="relative flex items-center gap-2">
-                                                <div className={`p-2 rounded-xl bg-${stat.color}-500/10 border border-${stat.color}-500/20 transition-transform group-hover:scale-110 duration-500`}>
-                                                    <stat.icon className={`h-3.5 w-3.5 text-${stat.color}-400`} />
+                                                <div className={`p-1.5 rounded-lg bg-${stat.color}-500/10 border border-${stat.color}-500/20 transition-transform group-hover:scale-110 duration-500`}>
+                                                    <stat.icon className={`h-3 w-3 text-${stat.color}-400`} />
                                                 </div>
-                                                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 leading-tight">{stat.label}</p>
+                                                <p className="text-[8px] font-black uppercase tracking-wider text-zinc-500 leading-tight">{stat.label}</p>
                                             </div>
-                                            {/* Bottom: large value */}
-                                            <p className="relative text-2xl font-black text-white tracking-tighter leading-none">
+                                            <p className="relative text-xl font-black text-white tracking-tighter leading-none">
                                                 {stat.value}
                                             </p>
                                         </div>
@@ -1225,6 +1252,29 @@ export default function ProfilePage() {
                                         </div>
                                     </div>
 
+                                    {/* Intelligence Engine */}
+                                    <div className="group relative rounded-[1.5rem] p-6 bg-zinc-900/40 backdrop-blur-xl border border-white/5 transition-all duration-300">
+                                        <div className="flex items-center gap-4 mb-6">
+                                            <div className="p-3 bg-violet-500/10 rounded-xl border border-violet-500/20">
+                                                <BrainCircuit className="h-4 w-4 text-violet-400" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <h3 className="text-sm font-black text-white truncate">Intelligence Engine</h3>
+                                                <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest">Cognitive Core</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4 relative z-10">
+                                            <Label className="text-[8px] font-black uppercase tracking-widest text-zinc-600 px-1">Reasoning Model</Label>
+                                            <ModelSelector
+                                                type="text"
+                                                value={preferredTextModel}
+                                                onChange={handleSaveTextModelPreference}
+                                                className="w-full h-11 bg-black/40 border-white/5 rounded-xl px-4 text-xs font-bold truncate"
+                                            />
+                                        </div>
+                                    </div>
+
                                     {/* Vision Engine */}
                                     <div className="group relative rounded-[1.5rem] p-6 bg-zinc-900/40 backdrop-blur-xl border border-white/5 transition-all duration-300">
                                         <div className="flex items-center gap-4 mb-6">
@@ -1240,8 +1290,9 @@ export default function ProfilePage() {
                                         <div className="space-y-4 relative z-10">
                                             <Label className="text-[8px] font-black uppercase tracking-widest text-zinc-600 px-1">Synthesis Model</Label>
                                             <ModelSelector
+                                                type="image"
                                                 value={preferredModel}
-                                                onChange={handleSaveModelPreference}
+                                                onChange={handleSaveImageModelPreference}
                                                 className="w-full h-11 bg-black/40 border-white/5 rounded-xl px-4 text-xs font-bold truncate"
                                             />
                                         </div>
@@ -1356,8 +1407,13 @@ function ActivityHeatmap({ userActivity, userHeatmapMonth }: { userActivity: any
     return (
         <>
             {days.map(({ date, data, dateObj }) => {
-                const totalActivity = (data?.mapsCreated || 0) + (data?.imagesGenerated || 0) + (data?.studyTimeMinutes || 0);
-                const intensity = totalActivity === 0 ? 'bg-zinc-800' : totalActivity <= 2 ? 'bg-violet-900/60' : totalActivity <= 5 ? 'bg-violet-700/70' : totalActivity <= 10 ? 'bg-violet-500' : 'bg-violet-400';
+                const mapsCreated = data?.mapsCreated || 0;
+                const imagesGenerated = data?.imagesGenerated || 0;
+                const nestedExpansions = data?.nestedExpansions || 0;
+                const nodesCreated = data?.nodesCreated || 0;
+                const studyTimeMinutes = data?.studyTimeMinutes || 0;
+                const totalActivity = mapsCreated + imagesGenerated + nestedExpansions + (nodesCreated > 0 ? 1 : 0) + (studyTimeMinutes > 0 ? 1 : 0);
+                const intensity = totalActivity === 0 ? 'bg-zinc-800' : totalActivity <= 2 ? 'bg-violet-900/60' : totalActivity <= 4 ? 'bg-violet-700/70' : totalActivity <= 7 ? 'bg-violet-500' : 'bg-violet-400';
                 const isToday = format(today, 'yyyy-MM-dd') === date;
                 const isFuture = dateObj > today;
 
@@ -1368,12 +1424,14 @@ function ActivityHeatmap({ userActivity, userHeatmapMonth }: { userActivity: any
                                 <span className="text-[7px] text-white/70 font-bold">{format(new Date(date), 'd')}</span>
                             </div>
                         </TooltipTrigger>
-                        <TooltipContent side="top" className="bg-zinc-900 border-zinc-700 text-[10px] font-bold p-3 min-w-[150px]">
+                        <TooltipContent side="top" className="bg-zinc-900 border-zinc-700 text-[10px] font-bold p-3 min-w-[180px]">
                             <p className="text-zinc-300 font-black mb-2 border-b border-zinc-700 pb-1">{format(new Date(date), 'EEEE, MMM d')}</p>
                             <div className="space-y-1">
-                                <p className="text-blue-400 flex items-center gap-2"><Map className="h-3 w-3" /> {data?.mapsCreated || 0} maps</p>
-                                <p className="text-pink-400 flex items-center gap-2"><ImageIcon className="h-3 w-3" /> {data?.imagesGenerated || 0} images</p>
-                                <p className="text-emerald-400 flex items-center gap-2"><Clock className="h-3 w-3" /> {data?.studyTimeMinutes || 0} min</p>
+                                <p className="text-blue-400 flex items-center gap-2"><Map className="h-3 w-3" /> {mapsCreated} map{mapsCreated !== 1 ? 's' : ''}</p>
+                                <p className="text-purple-400 flex items-center gap-2"><Layers className="h-3 w-3" /> {nestedExpansions} expansion{nestedExpansions !== 1 ? 's' : ''}</p>
+                                <p className="text-pink-400 flex items-center gap-2"><ImageIcon className="h-3 w-3" /> {imagesGenerated} image{imagesGenerated !== 1 ? 's' : ''}</p>
+                                {nodesCreated > 0 && <p className="text-amber-400 flex items-center gap-2"><Activity className="h-3 w-3" /> {nodesCreated} node{nodesCreated !== 1 ? 's' : ''}</p>}
+                                {studyTimeMinutes > 0 && <p className="text-emerald-400 flex items-center gap-2"><Clock className="h-3 w-3" /> {studyTimeMinutes} min</p>}
                             </div>
                         </TooltipContent>
                     </Tooltip>
@@ -1876,6 +1934,21 @@ function SourceViewerDialog({ map: m, onClose }: { map: any; onClose: () => void
                 )}
             </div>
         </div>
+    );
+}
+
+export default function ProfilePage() {
+    return (
+        <React.Suspense fallback={
+            <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+                    <p className="text-zinc-400 animate-pulse">Loading profile...</p>
+                </div>
+            </div>
+        }>
+            <ProfileContent />
+        </React.Suspense>
     );
 }
 

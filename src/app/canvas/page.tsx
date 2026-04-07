@@ -203,8 +203,8 @@ function MindMapPageContent() {
   const persistenceOptions = useMemo(() => ({
     onRemoteUpdate: (data: MindMapData) => handleUpdateRef.current(data),
     userApiKey: config.pollinationsApiKey,
-    preferredModel: config.pollinationsModel,
-  }), [config.pollinationsApiKey, config.pollinationsModel]);
+    preferredModel: config.textModel || config.pollinationsModel,
+  }), [config.pollinationsApiKey, config.textModel, config.pollinationsModel]);
 
   const { aiPersona, updatePersona: handlePersonaChange, subscribeToMap, saveMap: handleSaveMap, setupAutoSave } = useMindMapPersistence(persistenceOptions);
 
@@ -221,7 +221,7 @@ function MindMapPageContent() {
       const aiOptions = {
         provider: config.provider,
         apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-        model: config.pollinationsModel,
+        model: config.textModel || config.pollinationsModel,
       };
       const result = await generateMindMapAction({
         topic,
@@ -231,6 +231,10 @@ function MindMapPageContent() {
         depth: params.depth,
         useSearch: params.useSearch === 'true',
       }, aiOptions);
+      
+      // Refresh balance after successful expansion
+      refreshBalance();
+      
       return result;
     }
   }), [params.persona, aiPersona, params.lang, config.provider, config.apiKey, config.pollinationsModel]);
@@ -398,7 +402,7 @@ function MindMapPageContent() {
             const aiOptions = {
               provider: config.provider,
               apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-              model: config.pollinationsModel,
+              model: config.textModel || config.pollinationsModel,
               strict: true
             };
             result = await generateMindMapAction({

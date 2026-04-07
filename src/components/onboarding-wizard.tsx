@@ -250,7 +250,7 @@ export function OnboardingWizard() {
                                         <div className="space-y-2">
                                             <DialogTitle className="text-3xl font-black text-white tracking-tight">Unlimited High-Fidelity</DialogTitle>
                                             <DialogDescription className="text-zinc-400 text-sm leading-relaxed max-w-[320px] mx-auto">
-                                                Connect <span className="text-purple-400 font-bold">Pollinations.ai</span> to unlock unlimited high-quality maps (Flux, Qwen) for <span className="text-emerald-400 font-bold">FREE</span>.
+                                                Connect <span className="text-purple-400 font-bold">Pollinations.ai</span> to unlock unlimited high-quality <span className="text-primary font-bold">Images & Maps</span> (Flux, Qwen) for <span className="text-emerald-400 font-bold">FREE</span>.
                                             </DialogDescription>
                                         </div>
                                     </div>

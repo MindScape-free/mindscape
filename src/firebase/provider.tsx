@@ -5,10 +5,11 @@ import { FirebaseApp } from 'firebase/app';
 import { Firestore } from 'firebase/firestore';
 import { Auth, User, onAuthStateChanged } from 'firebase/auth';
 import { Functions } from 'firebase/functions';
+import { FirebaseStorage } from 'firebase/storage';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener'
 import { trackLogin } from '@/lib/activity-tracker';
 
-const ADMIN_UID = 'ldTOigUhGqX5x8UAOj1ouTZIyfm1';
+export const ADMIN_UID = 'ldTOigUhGqX5x8UAOj1ouTZIyfm1';
 
 interface FirebaseProviderProps {
   children: ReactNode;
@@ -16,6 +17,7 @@ interface FirebaseProviderProps {
   firestore: Firestore;
   auth: Auth;
   functions?: Functions;
+  storage?: FirebaseStorage;
 }
 
 // Internal state for user authentication
@@ -32,6 +34,7 @@ export interface FirebaseContextState {
   firestore: Firestore | null;
   auth: Auth | null;
   functions: Functions | null;
+  storage: FirebaseStorage | null;
   user: User | null;
   isAdmin: boolean;
   isUserLoading: boolean;
@@ -44,6 +47,7 @@ export interface FirebaseServicesAndUser {
   firestore: Firestore;
   auth: Auth;
   functions: Functions | null;
+  storage: FirebaseStorage | null;
   user: User | null;
   isAdmin: boolean;
   isUserLoading: boolean;
@@ -69,6 +73,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
   firestore,
   auth,
   functions,
+  storage,
 }) => {
   const [userAuthState, setUserAuthState] = useState<UserAuthState>({
     user: null,
@@ -110,12 +115,13 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
       firestore: servicesAvailable ? firestore : null,
       auth: servicesAvailable ? auth : null,
       functions: servicesAvailable ? (functions || null) : null,
+      storage: servicesAvailable ? (storage || null) : null,
       user: userAuthState.user,
       isAdmin: userAuthState.user?.uid === ADMIN_UID,
       isUserLoading: userAuthState.isUserLoading,
       userError: userAuthState.userError,
     };
-  }, [firebaseApp, firestore, auth, functions, userAuthState]);
+  }, [firebaseApp, firestore, auth, functions, storage, userAuthState]);
 
   return (
     <FirebaseContext.Provider value={contextValue}>
@@ -148,6 +154,7 @@ export const useFirebase = (): FirebaseServicesAndUser => {
             firestore: context.firestore as any,
             auth: context.auth as any,
             functions: context.functions,
+            storage: context.storage,
             user: context.user,
             isAdmin: context.isAdmin,
             isUserLoading: context.isUserLoading,
@@ -162,6 +169,7 @@ export const useFirebase = (): FirebaseServicesAndUser => {
     firestore: context.firestore,
     auth: context.auth,
     functions: context.functions,
+    storage: context.storage,
     user: context.user,
     isAdmin: context.isAdmin,
     isUserLoading: context.isUserLoading,
@@ -179,6 +187,15 @@ export const useAuth = (): Auth => {
 export const useFirestore = (): Firestore => {
   const { firestore } = useFirebase();
   return firestore;
+};
+
+/** Hook to access Firebase Storage instance. */
+export const useStorage = (): FirebaseStorage => {
+  const { storage } = useFirebase();
+  if (!storage) {
+    throw new Error('Storage service not available.');
+  }
+  return storage;
 };
 
 /** Hook to access Firebase App instance. */

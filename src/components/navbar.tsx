@@ -75,6 +75,7 @@ export function Navbar() {
     { href: '/about', label: 'About' },
     { href: '/library', label: 'Library' },
     { href: '/community', label: 'Community' },
+    { href: '/feedback', label: 'Feedback' },
     ...(isAdmin ? [{ href: '/admin', label: 'Admin' }] : []),
   ];
 

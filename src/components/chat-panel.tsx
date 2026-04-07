@@ -663,21 +663,40 @@ export function ChatPanel({
    */
   useEffect(() => {
     if (isOpen) {
-      // Find matching session, checking both plain title and Quiz prefix
-      const existingSession = sessions.find(s => s.title === topic);
+      // 1. Maintain active session if it's already relevant
+      if (activeSessionId) {
+        const current = sessions.find(s => s.id === activeSessionId);
+        // If the current session belongs to this map or has the exact matching title, don't switch
+        const isSessionRelevant = current && (
+          (sessionId && current.mapId === sessionId) || 
+          (current.title === topic)
+        );
+        
+        if (isSessionRelevant) {
+          setView('chat');
+          return;
+        }
+      }
+
+      // 2. Find matching session: mapId takes priority over title string
+      const existingSession = sessions.find(s => 
+        (sessionId && s.mapId === sessionId) || 
+        s.title === topic
+      );
 
       if (existingSession) {
         setActiveSessionId(existingSession.id);
       } else if (!isSessionLoading) {
+        // 3. Only start a new chat if no relevant session exists
         startNewChat(topic);
       }
-      setView('chat'); // Always default to chat view on open
+      setView('chat');
     } else {
       // Reset flags when closed
       hasSentInitialMessage.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, topic, sessions, isSessionLoading]);
+  }, [isOpen, topic, sessions, isSessionLoading, sessionId]);
 
   /**
    * Handles sending an initial message if one is provided.
@@ -1834,6 +1853,7 @@ export function ChatPanel({
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
+                      type="button"
                       variant="ghost"
                       size="sm"
                       className="h-8 px-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-primary transition-colors flex items-center gap-1.5"
@@ -1872,7 +1892,7 @@ export function ChatPanel({
                 {/* Persona Selector */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className={personas.find(p => p.id === persona)?.color}>
+                    <Button type="button" variant="ghost" size="icon" className={personas.find(p => p.id === persona)?.color}>
                       {(() => {
                         const p = personas.find(p => p.id === persona);
                         const Icon = p?.icon || Sparkles;
@@ -1910,6 +1930,7 @@ export function ChatPanel({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
+                        type="button"
                         variant="ghost"
                         size="icon"
                         onClick={exportChatToPDF}
@@ -1930,6 +1951,7 @@ export function ChatPanel({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
+                        type="button"
                         variant="ghost"
                         size="icon"
                         onClick={() => {
@@ -1951,19 +1973,19 @@ export function ChatPanel({
                   </Tooltip>
                 </TooltipProvider>
 
-                <Button variant="ghost" size="icon" onClick={() => setView('history')}>
+                <Button type="button" variant="ghost" size="icon" onClick={() => setView('history')}>
                   <History className="h-5 w-5" />
                   <span className="sr-only">Chat History</span>
                 </Button>
 
-                <Button variant="ghost" size="icon" onClick={() => startNewChat(topic)}>
+                <Button type="button" variant="ghost" size="icon" onClick={() => startNewChat(topic)}>
                   <Plus className="h-5 w-5" />
                   <span className="sr-only">New Chat</span>
                 </Button>
               </>
             )}
             <SheetClose asChild>
-              <Button variant="ghost" size="icon">
+              <Button type="button" variant="ghost" size="icon">
                 <X className="h-5 w-5" />
                 <span className="sr-only">Close</span>
               </Button>

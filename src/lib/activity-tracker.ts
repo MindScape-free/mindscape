@@ -3,6 +3,58 @@ import { Firestore } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { format } from 'date-fns';
 import { Achievement, getNewlyUnlockedAchievements, UserStatistics } from './achievements';
+import { ADMIN_UID } from '@/firebase/provider';
+
+/**
+ * Normalize map mode for statistics tracking
+ */
+function normalizeMapMode(mode?: string, sourceFileType?: string, sourceFileContent?: string): string {
+    if (!mode || mode === 'single') {
+        const isMulti = sourceFileType === 'multi' || sourceFileContent?.includes('--- SOURCE:');
+        if (isMulti) return 'multi';
+        return 'single';
+    }
+    if (mode === 'multi' || mode === 'multi-source') return 'multi';
+    if (mode === 'compare') return 'compare';
+    return 'single';
+}
+
+/**
+ * Normalize map depth for statistics tracking
+ */
+function normalizeMapDepth(depth?: string, nodeCount?: number): string {
+    if (!depth || depth === 'auto' || depth === 'unspecified') {
+        if (!nodeCount) return 'low';
+        return nodeCount > 75 ? 'deep' : nodeCount > 35 ? 'medium' : 'low';
+    }
+    if (depth === 'low' || depth === 'medium' || depth === 'deep') return depth;
+    return 'low';
+}
+
+/**
+ * Normalize source type for statistics tracking
+ */
+function normalizeSourceType(sourceFileType?: string, sourceType?: string, sourceUrl?: string, videoId?: string): string {
+    const source = sourceFileType || sourceType;
+    if (source === 'multi') return 'multi';
+    if (source === 'pdf') return 'pdf';
+    if (source === 'image') return 'image';
+    if (source === 'youtube' || videoId) return 'youtube';
+    if (source === 'website' || sourceUrl) return 'website';
+    return 'text';
+}
+
+/**
+ * Normalize persona for statistics tracking
+ */
+function normalizePersona(aiPersona?: string, persona?: string): string {
+    const raw = (aiPersona || persona || '').toLowerCase().trim();
+    if (raw === 'concise') return 'Concise';
+    if (raw === 'creative') return 'Creative';
+    if (raw.includes('sage')) return 'Sage';
+    if (raw === 'teacher' || raw === 'standard' || !raw) return 'Teacher';
+    return 'Teacher';
+}
 
 /**
  * Update user statistics in Firestore and check for newly unlocked achievements
@@ -16,6 +68,16 @@ export async function updateUserStatistics(
         imagesGenerated?: number;
         studyTimeMinutes?: number;
         nodesCreated?: number;
+        mapMetadata?: {
+            mode?: string;
+            sourceFileType?: string;
+            sourceType?: string;
+            sourceUrl?: string;
+            videoId?: string;
+            depth?: string;
+            nodeCount?: number;
+            aiPersona?: string;
+        };
     }
 ): Promise<Achievement[]> {
     const userRef = doc(firestore, 'users', userId);
@@ -39,11 +101,35 @@ export async function updateUserStatistics(
 
         statisticsUpdates['statistics.lastActiveDate'] = today;
 
+        // 3. Update aggregate counters for map creation
+        if (updates.mapMetadata && updates.mapsCreated) {
+            const { mode, sourceFileType, sourceType, sourceUrl, videoId, depth, nodeCount, aiPersona } = updates.mapMetadata;
+            
+            const mapMode = normalizeMapMode(mode, sourceFileType);
+            const mapDepth = normalizeMapDepth(depth, nodeCount);
+            const sourceTypeNorm = normalizeSourceType(sourceFileType, sourceType, sourceUrl, videoId);
+            const persona = normalizePersona(aiPersona);
+            
+            statisticsUpdates['statistics.modeCounts'] = {
+                [mapMode]: increment(1)
+            };
+            statisticsUpdates['statistics.depthCounts'] = {
+                [mapDepth]: increment(1)
+            };
+            statisticsUpdates['statistics.sourceCounts'] = {
+                [sourceTypeNorm]: increment(1)
+            };
+            statisticsUpdates['statistics.personaCounts'] = {
+                [persona]: increment(1)
+            };
+            statisticsUpdates['statistics.version'] = 2;
+        }
+
         if (Object.keys(statisticsUpdates).length > 0) {
             await updateDoc(userRef, statisticsUpdates);
         }
 
-        // 3. Update daily activity
+        // 4. Update daily activity
         const activityUpdates: any = {};
         if (updates.mapsCreated) activityUpdates[`activity.${today}.mapsCreated`] = increment(updates.mapsCreated);
         if (updates.nestedExpansions) activityUpdates[`activity.${today}.nestedExpansions`] = increment(updates.nestedExpansions);
@@ -55,7 +141,7 @@ export async function updateUserStatistics(
             await updateDoc(userRef, activityUpdates);
         }
 
-        // 4. Check for newly unlocked achievements
+        // 5. Check for newly unlocked achievements
         try {
             const freshDoc = await getDoc(userRef);
             const freshData = freshDoc.data();
@@ -113,14 +199,18 @@ export async function trackLogin(firestore: Firestore, userId: string, firebaseU
                     firebaseUser.email || '',
                     firebaseUser.photoURL || undefined
                 );
-                await addDoc(collection(firestore, 'adminActivityLog'), {
-                    timestamp: new Date().toISOString(),
-                    type: 'USER_CREATED',
-                    targetId: userId,
-                    targetType: 'user',
-                    details: `New user registered: ${firebaseUser.email || name}`,
-                    performedBy: 'system'
-                });
+                // Only log to admin activity if the one creating the profile is an admin
+                // (usually this is a new signup, so it's the user themselves and they won't have permission)
+                if (userId === ADMIN_UID) {
+                    await addDoc(collection(firestore, 'adminActivityLog'), {
+                        timestamp: new Date().toISOString(),
+                        type: 'USER_CREATED',
+                        targetId: userId,
+                        targetType: 'user',
+                        details: `New user registered: ${firebaseUser.email || name}`,
+                        performedBy: 'system'
+                    });
+                }
             }
             return;
         }
@@ -203,8 +293,24 @@ async function updateStreak(firestore: Firestore, userId: string, today: string,
 /**
  * Track mind map creation
  */
-export async function trackMapCreated(firestore: Firestore, userId: string): Promise<Achievement[]> {
-    return await updateUserStatistics(firestore, userId, { mapsCreated: 1 });
+export async function trackMapCreated(
+    firestore: Firestore, 
+    userId: string, 
+    mapMetadata?: {
+        mode?: string;
+        sourceFileType?: string;
+        sourceType?: string;
+        sourceUrl?: string;
+        videoId?: string;
+        depth?: string;
+        nodeCount?: number;
+        aiPersona?: string;
+    }
+): Promise<Achievement[]> {
+    return await updateUserStatistics(firestore, userId, { 
+        mapsCreated: 1,
+        mapMetadata 
+    });
 }
 
 /**

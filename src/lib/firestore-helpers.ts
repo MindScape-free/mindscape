@@ -6,7 +6,9 @@ import type { Firestore } from 'firebase/firestore';
  */
 export interface UserImageSettings {
     pollinationsApiKey?: string;
-    preferredModel?: string;
+    preferredModel?: string; // Legacy for image
+    imageModel?: string;
+    textModel?: string;
     apiKeyCreatedAt?: number;
     apiKeyLastUsed?: number;
 }
@@ -46,7 +48,8 @@ export async function saveUserApiKey(
     firestore: Firestore,
     userId: string,
     apiKey: string,
-    preferredModel?: string
+    imageModel?: string,
+    textModel?: string
 ): Promise<void> {
     try {
         const settingsRef = doc(firestore, 'users', userId, 'settings', 'imageGeneration');
@@ -54,7 +57,8 @@ export async function saveUserApiKey(
 
         const settings: UserImageSettings = {
             pollinationsApiKey: apiKey,
-            preferredModel: preferredModel || 'flux',
+            imageModel: imageModel || 'flux',
+            textModel: textModel || 'openai',
             apiKeyCreatedAt: Date.now(),
             apiKeyLastUsed: Date.now()
         };
@@ -66,7 +70,9 @@ export async function saveUserApiKey(
         await setDoc(userRef, {
             apiSettings: {
                 pollinationsApiKey: apiKey,
-                pollinationsModel: preferredModel || 'flux',
+                imageModel: imageModel || 'flux',
+                textModel: textModel || 'openai',
+                pollinationsModel: imageModel || 'flux', // Legacy sync
                 provider: 'pollinations'
             }
         }, { merge: true });

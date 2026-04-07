@@ -2,6 +2,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    /* =========================
+       HELPER FUNCTIONS
+    ========================= */
     function isSignedIn() {
       return request.auth != null;
     }
@@ -11,13 +14,17 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return isSignedIn() && (
+        request.auth.uid == 'ldTOigUhGqX5x8UAOj1ouTZIyfm1' || 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
     }
 
     /* =========================
-       ADMIN CONFIGURATION
-       — Add user UIDs here to grant admin access
-       — Document ID should be the user's UID
+       1. ADMINS COLLECTION
+       — Document ID = user UID
+       — Signed-in users can read (to verify admin status)
+       — Only admins can write/delete
     ========================= */
     match /admins/{adminId} {
       allow read: if isSignedIn();
@@ -26,36 +33,42 @@ service cloud.firestore {
     }
 
     /* =========================
-       USER PRIVATE DATA
+       2. USERS COLLECTION
+       — Users can read/write their own profile
+       — Admins can read/write any user
     ========================= */
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow list: if isAdmin(); // allows admin count() queries
       allow write: if isOwner(userId) || isAdmin();
 
+      /* 2a. User Settings */
       match /settings/{settingId} {
         allow read: if isOwner(userId) || isAdmin();
         allow write: if isOwner(userId) || isAdmin();
       }
 
-      // Chat Sessions — Firestore-persisted (replaces localStorage)
+      /* 2b. User Chat Sessions */
       match /chatSessions/{sessionId} {
         allow read: if isOwner(userId) || isAdmin();
         allow write: if isOwner(userId) || isAdmin();
+        allow delete: if isOwner(userId) || isAdmin();
       }
 
+      /* 2c. User Mind Maps */
       match /mindmaps/{mindmapId} {
         allow create: if (isOwner(userId) && request.resource.data.userId == userId) || isAdmin();
         allow read: if isOwner(userId) || isAdmin() || resource.data.isPublic == true;
         allow update: if isOwner(userId) || isAdmin();
         allow delete: if isOwner(userId) || isAdmin();
 
-        match /nodes/{nodeId} {
+        /* 2c-i. Mind Map Content (tree data) */
+        match /content/{docId} {
           allow read: if isOwner(userId) || isAdmin();
           allow write: if isOwner(userId) || isAdmin();
         }
 
-        match /content/{docId} {
+        /* 2c-ii. Mind Map Nodes */
+        match /nodes/{nodeId} {
           allow read: if isOwner(userId) || isAdmin();
           allow write: if isOwner(userId) || isAdmin();
         }
@@ -63,7 +76,12 @@ service cloud.firestore {
     }
 
     /* =========================
-       PUBLIC MIND MAPS
+       3. PUBLIC MIND MAPS
+       — Anyone can read (community browsing)
+       — Signed-in users can publish their own maps
+       — Authors can update their own maps
+       — Anyone can increment views (used by canvas page)
+       — Admins have full control
     ========================= */
     match /publicMindmaps/{mindmapId} {
       allow read: if true;
@@ -72,21 +90,23 @@ service cloud.firestore {
         && (request.resource.data.originalAuthorId == request.auth.uid || isAdmin());
 
       allow update: if isSignedIn() && (
-        (resource.data.originalAuthorId == request.auth.uid)
-        ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views']))
-        ||
-        isAdmin()
+        resource.data.originalAuthorId == request.auth.uid
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views', 'publicViews'])
+        || isAdmin()
       );
 
       allow delete: if isSignedIn() && (
         resource.data.originalAuthorId == request.auth.uid
+        || resource.data.userId == request.auth.uid
         || isAdmin()
       );
     }
 
     /* =========================
-       SHARED MIND MAPS (UNLISTED)
+       4. SHARED MIND MAPS (Unlisted)
+       — Anyone can read (via share link)
+       — Signed-in users can create shares
+       — Authors and admins can update/delete
     ========================= */
     match /sharedMindmaps/{mindmapId} {
       allow read: if true;
@@ -104,17 +124,33 @@ service cloud.firestore {
     }
 
     /* =========================
-       ADMIN STATS
-       — read and written by admin client directly (no Cloud Functions needed)
+       5. FEEDBACK
+       — Anyone can submit (supports anonymous users)
+       — Anyone can read (public feedback feed)
+       — Only admins can update (status, priority, notes, activity logs)
+       — Only admins can delete
     ========================= */
-    match /adminStats/{docId} {
-      allow read: if isAdmin();
-      allow write: if isAdmin(); // admin syncs stats directly from the dashboard
+    match /feedback/{feedbackId} {
+      allow create: if true;
+      allow read: if true;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     /* =========================
-       MONTHLY STATS
-       — heatmap data caching for admin dashboard
+       6. ADMIN STATS
+       — Only admins can read/write/delete
+    ========================= */
+    match /adminStats/{docId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* =========================
+       7. MONTHLY STATS
+       — Cached heatmap data for admin dashboard
+       — Only admins can read/write
     ========================= */
     match /monthlyStats/{docId} {
       allow read: if isAdmin();
@@ -122,8 +158,9 @@ service cloud.firestore {
     }
 
     /* =========================
-       ADMIN ACTIVITY LOG
-       — activity log entries for admin dashboard
+       8. ADMIN ACTIVITY LOG
+       — System and admin activity entries
+       — Only admins can read/write/delete
     ========================= */
     match /adminActivityLog/{docId} {
       allow read: if isAdmin();
@@ -133,10 +170,63 @@ service cloud.firestore {
     }
 
     /* =========================
-       CHAT SESSIONS (collectionGroup for admin count)
+       9. ADMIN CACHE
+       — Dashboard cache document
+       — Only admins can read/write
     ========================= */
+    match /adminCache/{docId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    /* =========================
+       10. MIND MAPS (Legacy Top-Level)
+       — Legacy collection, admin SDK only
+       — Allow admin read access
+    ========================= */
+    match /mindMaps/{mapId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    /* =========================
+       11. COLLECTION GROUP RULES
+       — Required for cross-collection queries used by admin dashboard
+    ========================= */
+
+    /* 11a. Chat Sessions Collection Group
+       — Admin can count/query all chat sessions across users
+    */
     match /{path=**}/chatSessions/{sessionId} {
-      allow read: if isAdmin(); // allows admin collectionGroup count() queries
+      allow read: if isAdmin();
+    }
+
+    /* 11b. Mind Maps Collection Group
+       — Admin can count/query all mind maps across users for analytics
+    */
+    match /{path=**}/mindmaps/{mindmapId} {
+      allow read: if isAdmin();
+    }
+
+    /* 11c. Content Collection Group
+       — Admin can read mind map content for analytics
+    */
+    match /{path=**}/content/{docId} {
+      allow read: if isAdmin();
+    }
+
+    /* 11d. Nodes Collection Group
+       — Admin can read mind map nodes for analytics
+    */
+    match /{path=**}/nodes/{nodeId} {
+      allow read: if isAdmin();
+    }
+
+    /* 11e. Settings Collection Group
+       — Admin can read user settings for analytics
+    */
+    match /{path=**}/settings/{settingId} {
+      allow read: if isAdmin();
     }
   }
 }

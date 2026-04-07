@@ -1,8 +1,12 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, Zap, Crown, Palette, Monitor, Cloud, Brain } from 'lucide-react';
+import { Sparkles, Zap, Crown, Palette, Monitor, Cloud, Brain, BrainCircuit, List } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-export const POLLINATIONS_MODELS = [
+export const FALLBACK_MODELS = [
     {
         value: 'flux',
         label: 'Flux Schnell',
@@ -12,80 +16,70 @@ export const POLLINATIONS_MODELS = [
         description: 'Flux Schnell - High Quality & Rapid Speed (Instant)',
         isNew: false,
         pollenApprox: '1K'
-    },
-    {
-        value: 'flux-2-dev',
-        label: 'FLUX.2 Dev',
-        cost: 0.001,
-        badge: 'Alpha',
-        icon: Palette,
-        description: 'FLUX.2 Dev (api.airforce) - High detail research model',
-        isNew: true,
-        pollenApprox: '1K'
-    },
-    {
-        value: 'dirtberry',
-        label: 'Dirtberry',
-        cost: 0.001,
-        badge: 'Alpha',
-        icon: Palette,
-        description: 'Dirtberry (api.airforce) - Stylized high-detail model',
-        isNew: true,
-        pollenApprox: '1K'
-    },
-    {
-        value: 'dirtberry-pro',
-        label: 'Dirtberry Pro',
-        cost: 0.0015,
-        badge: 'Alpha',
-        icon: Palette,
-        description: 'Dirtberry Pro (api.airforce) - Enhanced high-detail model',
-        isNew: true,
-        pollenApprox: '650'
-    },
-    {
-        value: 'zimage',
-        label: 'Z-Image Turbo',
-        cost: 0.002,
-        badge: 'Turbo',
-        icon: Sparkles,
-        description: 'Z-Image Turbo - Accelerated generation for dynamic workflows',
-        isNew: false,
-        pollenApprox: '500'
-    },
-    {
-        value: 'imagen-4',
-        label: 'Imagen 4',
-        cost: 0.0025,
-        badge: 'Alpha',
-        icon: Crown,
-        description: 'Google Imagen 4 (api.airforce) - State-of-the-art fidelity',
-        isNew: true,
-        pollenApprox: '400'
-    },
-    {
-        value: 'grok-imagine',
-        label: 'Grok Imagine',
-        cost: 0.0025,
-        badge: 'Alpha',
-        icon: Brain,
-        description: 'xAI Grok Imagine (api.airforce) - Creative and expressive',
-        isNew: true,
-        pollenApprox: '400'
-    },
-    {
-        value: 'klein',
-        label: 'FLUX.2 Klein 4B',
-        cost: 0.01,
-        badge: 'Alpha',
-        icon: Monitor,
-        description: 'FLUX.2 Klein 4B - Compact high-quality model',
-        isNew: true,
-        pollenApprox: '100'
     }
 ] as const;
 
-export type ModelValue = typeof POLLINATIONS_MODELS[number]['value'];
+export type ModelItem = {
+    value: string;
+    label: string;
+    cost: number;
+    badge: string;
+    icon: any;
+    description: string;
+    isNew: boolean;
+    pollenApprox: string;
+    type: 'text' | 'image';
+};
+
+/**
+ * Mapping helper to transform API JSON to UI-friendly model items
+ */
+function mapModelsToUI(apiModels: any[], type: 'text' | 'image'): ModelItem[] {
+    return apiModels.map(m => {
+        const name = m.id || m.name || 'unknown';
+        const cost = m.cost || 0.04;
+        
+        // Dynamic Labeling
+        const label = name
+            .split('-')
+            .map((s: string) => s.charAt(0).toUpperCase() + s.slice(1))
+            .join(' ')
+            .replace('Gptimage', 'GPT Image')
+            .replace('Zimage', 'Z-Image')
+            .replace('Qwen', 'Qwen')
+            .replace('Deepseek', 'DeepSeek')
+            .replace('Gemini', 'Gemini')
+            .replace('Mistral', 'Mistral');
+
+        // Icon Assignment
+        let Icon = Cloud;
+        if (type === 'image') {
+            if (name.includes('flux')) Icon = Zap;
+            else if (name.includes('turbo') || name.includes('zimage')) Icon = Sparkles;
+            else if (name.includes('gpt') || name.includes('brain')) Icon = Brain;
+            else if (name.includes('qwen')) Icon = Cloud;
+            else if (name.includes('klein')) Icon = Monitor;
+        } else {
+            if (name.includes('gpt') || name.includes('openai')) Icon = Brain;
+            else if (name.includes('deepseek')) Icon = BrainCircuit;
+            else if (name.includes('gemini')) Icon = Sparkles;
+            else if (name.includes('mistral')) Icon = List;
+            else if (name.includes('qwen')) Icon = Cloud;
+        }
+
+        return {
+            value: name,
+            label,
+            cost,
+            badge: type === 'text' ? (m.feature || 'Pro') : (cost < 0.005 ? 'Fast' : cost < 0.02 ? 'HD' : 'Pro'),
+            icon: Icon,
+            description: m.description || `${label} - Pollinations AI Model`,
+            isNew: m.isNew ?? false,
+            pollenApprox: type === 'text' ? 'Free' : (cost > 0 ? `${Math.round(1 / cost)}K`.replace('0K', '1K') : 'Free'),
+            type
+        };
+    });
+}
 
 interface ModelSelectorProps {
     value: string;
@@ -93,6 +87,7 @@ interface ModelSelectorProps {
     className?: string;
     showCost?: boolean;
     freeOnly?: boolean;
+    type?: 'text' | 'image';
 }
 
 export function ModelSelector({
@@ -100,49 +95,72 @@ export function ModelSelector({
     onChange,
     className,
     showCost = true,
-    freeOnly = false
+    freeOnly = false,
+    type = 'image'
 }: ModelSelectorProps) {
-    const models = freeOnly ? POLLINATIONS_MODELS.filter(m => m.cost < 0.005) : POLLINATIONS_MODELS;
+    const [availableModels, setAvailableModels] = useState<ModelItem[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const loadModels = async () => {
+            setIsLoading(true);
+            try {
+                const res = await fetch(`/api/models?type=${type}`);
+                if (!res.ok) throw new Error('API Error');
+                const data = await res.json();
+                if (data.models) {
+                    setAvailableModels(mapModelsToUI(data.models, type));
+                }
+            } catch (err) {
+                console.error("Failed to fetch models, using fallbacks:", err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        loadModels();
+    }, [type]);
+
+    const models = freeOnly ? availableModels.filter(m => m.cost < 0.005) : availableModels;
+    
+    // If loading or no models, show placeholder
+    if (isLoading && models.length === 0) {
+        return (
+            <div className={cn("h-11 bg-black/20 animate-pulse rounded-xl border border-white/5", className)} />
+        );
+    }
+
     const selectedModel = models.find(m => m.value === value) || models[0];
+    if (!selectedModel) return null;
 
     return (
         <Select value={selectedModel.value} onValueChange={onChange}>
             <SelectTrigger className={className}>
                 <SelectValue>
                     <div className="flex items-center gap-2">
-                        {selectedModel && (
-                            <>
-                                <selectedModel.icon className="w-4 h-4" />
-                                <span>{selectedModel.label}</span>
-                            </>
-                        )}
+                        <selectedModel.icon className="w-4 h-4 text-violet-400" />
+                        <span>{selectedModel.label}</span>
                     </div>
                 </SelectValue>
             </SelectTrigger>
-            <SelectContent className="min-w-[450px] z-[250]">
+            <SelectContent className="min-w-[450px] z-[250] bg-zinc-950 border-white/10">
                 {models.map(model => {
                     const Icon = model.icon;
                     return (
                         <SelectItem
                             key={model.value}
                             value={model.value}
-                            className="focus:bg-zinc-800/80 focus:text-white transition-all duration-200 border-l-2 border-l-transparent focus:border-l-violet-500 rounded-none cursor-pointer"
+                            className="focus:bg-zinc-900 focus:text-white transition-all duration-200 border-l-2 border-l-transparent focus:border-l-violet-500 rounded-none cursor-pointer"
                         >
                             <div className="grid grid-cols-[24px_180px_100px_80px] items-center gap-4 py-2 px-1 w-full">
                                 <Icon className="w-4 h-4 text-zinc-400 shrink-0 group-hover:text-violet-400 transition-colors" />
 
-                                <div className="flex flex-col min-w-0">
+                                <div className="flex flex-col min-w-0 text-left">
                                     <div className="flex items-center gap-1.5 whitespace-nowrap overflow-visible">
                                         <span className="font-semibold text-zinc-200 text-[13px]">{model.label}</span>
                                         <div className="flex gap-1 shrink-0">
                                             {model.isNew && (
                                                 <Badge className="text-[9px] h-3.5 px-1 bg-emerald-500/10 text-emerald-400 border-emerald-500/20 leading-none font-bold uppercase tracking-widest">
                                                     NEW
-                                                </Badge>
-                                            )}
-                                            {model.badge === 'Alpha' && (
-                                                <Badge className="text-[9px] h-3.5 px-1 bg-amber-500/10 text-amber-500 border-amber-500/20 leading-none font-bold uppercase tracking-widest flex items-center gap-0.5">
-                                                    ⚠️ ALPHA
                                                 </Badge>
                                             )}
                                         </div>
@@ -153,16 +171,20 @@ export function ModelSelector({
                                 </div>
 
                                 <div className="flex flex-col items-center justify-center gap-0.5">
-                                    <span className="text-[10px] font-bold text-zinc-400">{model.pollenApprox}</span>
-                                    <span className="text-[8px] text-zinc-600 font-black uppercase tracking-tighter">Images</span>
+                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">
+                                        {type === 'text' ? model.badge : model.pollenApprox}
+                                    </span>
+                                    <span className="text-[8px] text-zinc-600 font-black uppercase tracking-tighter">
+                                        {type === 'text' ? 'Engine' : 'Images'}
+                                    </span>
                                 </div>
 
                                 <div className="flex justify-end pr-1">
                                     <div className="nm-inset-glow px-2 py-0.5 rounded-lg bg-zinc-900/50 border border-white/5">
                                         <span className="text-[11px] font-mono text-violet-400 font-bold whitespace-nowrap">
-                                            ${model.cost < 0.01 ? model.cost.toFixed(4) : model.cost.toFixed(2)}
+                                            {model.type === 'text' ? 'FREE' : `$${model.cost < 0.01 ? model.cost.toFixed(4) : model.cost.toFixed(2)}`}
                                         </span>
-                                        <span className="text-[8px] text-zinc-600 ml-0.5 uppercase tracking-tighter">/img</span>
+                                        {model.type === 'image' && <span className="text-[8px] text-zinc-600 ml-0.5 uppercase tracking-tighter">/img</span>}
                                     </div>
                                 </div>
                             </div>
@@ -174,21 +196,43 @@ export function ModelSelector({
     );
 }
 
-
-
 /**
  * Compact model selector for inline use
  */
-export function CompactModelSelector({ value, onChange, className, freeOnly = false }: ModelSelectorProps) {
-    const models = freeOnly ? POLLINATIONS_MODELS.filter(m => m.cost < 0.005) : POLLINATIONS_MODELS;
+export function CompactModelSelector({ value, onChange, className, freeOnly = false, type = 'image' }: ModelSelectorProps) {
+    const [availableModels, setAvailableModels] = useState<ModelItem[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const loadModels = async () => {
+            try {
+                const res = await fetch(`/api/models?type=${type}`);
+                if (!res.ok) throw new Error('API Error');
+                const data = await res.json();
+                if (data.models) {
+                    setAvailableModels(mapModelsToUI(data.models, type));
+                }
+            } catch (err) {
+                console.error("Failed to fetch models:", err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        loadModels();
+    }, [type]);
+
+    const models = freeOnly ? availableModels.filter(m => m.cost < 0.005) : availableModels;
+    if (isLoading && models.length === 0) return <div className={cn("h-9 w-24 bg-white/5 animate-pulse rounded-lg", className)} />;
+    
     const selectedModel = models.find(m => m.value === value) || models[0];
+    if (!selectedModel) return null;
 
     return (
         <Select value={selectedModel.value} onValueChange={onChange}>
-            <SelectTrigger className={className}>
+            <SelectTrigger className={cn("h-9 bg-zinc-900/50 border-white/10", className)}>
                 <SelectValue />
             </SelectTrigger>
-            <SelectContent className="z-[250]">
+            <SelectContent className="z-[250] bg-zinc-950 border-white/10">
                 {models.map(model => (
                     <SelectItem
                         key={model.value}
@@ -198,10 +242,8 @@ export function CompactModelSelector({ value, onChange, className, freeOnly = fa
                         <div className="grid grid-cols-[16px_1fr_60px] items-center w-full gap-2 py-1">
                             <model.icon className="w-3 h-3 text-zinc-400 group-hover:text-violet-400" />
                             <span className="text-xs truncate">{model.label}</span>
-                            <div className="flex justify-end pr-1">
-                                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-zinc-900 border-zinc-800 text-zinc-500 font-bold opacity-80">
-                                    {model.cost < 0.01 ? model.cost.toFixed(4) : model.cost}
-                                </Badge>
+                            <div className="flex justify-end pr-1 text-[9px] font-mono text-zinc-500 uppercase">
+                                {type === 'text' ? 'Free' : model.cost.toFixed(4)}
                             </div>
                         </div>
                     </SelectItem>

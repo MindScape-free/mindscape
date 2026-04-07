@@ -1,6 +1,8 @@
 
 import type { Metadata } from 'next';
 import './globals.css';
+
+export const runtime = 'nodejs';
 import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
 import { Navbar } from '@/components/navbar';

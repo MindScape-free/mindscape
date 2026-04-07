@@ -2,13 +2,9 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { toast} from '@/hooks/use-toast';
 import { MindMapData, NestedExpansionItem, GeneratedImage } from '@/types/mind-map';
 import { toPlainObject } from '@/lib/serialize';
-import {
-  summarizeTopicAction,
-  mapToMindMapData,
-} from '@/app/actions';
+import { summarizeTopicAction } from '@/app/actions';
 
 interface UseMindMapSyncOptions {
   data: MindMapData;
@@ -108,32 +104,8 @@ export function useMindMapSync(options: UseMindMapSyncOptions) {
     }
   }, [data, providerOptions, onUpdate, toast, isSummarizing]);
 
-  useEffect(() => {
-    const isReady = status === 'idle' && data && data.mode === 'single' && (data.subTopics?.length || 0) > 0;
-    const isNewMap = !data.summary && !summaryContent && !isSummarizing;
-
-    if (isReady && isNewMap) {
-      const triggerAutoSummary = async () => {
-        setIsSummarizing(true);
-        try {
-          const { summary } = await summarizeTopicAction({
-            mindMapData: toPlainObject(data)
-          }, providerOptions);
-
-          if (summary) {
-            setSummaryContent(summary);
-            if (onUpdate) onUpdate({ summary });
-          }
-        } catch (err) {
-          console.error('Silent auto-summarization failed:', err);
-        } finally {
-          setIsSummarizing(false);
-        }
-      };
-
-      triggerAutoSummary();
-    }
-  }, [status, data, summaryContent, isSummarizing, providerOptions, onUpdate]);
+  // Auto-summarize is handled at the component level (mind-map.tsx)
+  // Removed duplicate useEffect to prevent double LLM calls
 
   useEffect(() => {
     if (onUpdate) {

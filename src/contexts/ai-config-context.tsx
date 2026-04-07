@@ -13,7 +13,9 @@ interface AIConfig {
     pollinationsApiKey: string;
     temperature: number;
     topP: number;
-    pollinationsModel?: string;
+    textModel?: string;
+    imageModel?: string;
+    pollinationsModel?: string; // Legacy
     pollenBalance?: number | null;
 }
 
@@ -46,6 +48,16 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
     const [pollenBalance, setPollenBalance] = useState<number | null>(null);
     const [isBalanceLoading, setIsBalanceLoading] = useState(false);
     const isRefreshingRef = React.useRef(false);
+
+    // SSE balance stream — provides real-time updates, replaces old 60s polling
+    const handleSSEBalanceUpdate = useCallback((balance: number) => {
+        setPollenBalance(balance);
+        setConfig(current => {
+            const updated = { ...current, pollenBalance: balance };
+            setStoredConfig(updated);
+            return updated;
+        });
+    }, [setStoredConfig]);
 
     // Track if we're currently syncing from Firestore to prevent loops
     const isSyncingFromFirestore = React.useRef(false);
@@ -100,6 +112,9 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
             setIsBalanceLoading(false);
         }
     }, [user, updateConfig]);
+
+    // Balance updates are now event-driven (triggered after AI actions)
+    // No more background SSE/Polling stream needed
 
     // Refresh balance when API key changes in state (e.g. new key saved)
     useEffect(() => {
@@ -173,7 +188,19 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
                 if (settings.provider) remoteConfig.provider = settings.provider;
                 if (settings.apiKey) remoteConfig.apiKey = settings.apiKey;
                 if (settings.pollinationsApiKey) remoteConfig.pollinationsApiKey = settings.pollinationsApiKey;
-                if (settings.pollinationsModel) remoteConfig.pollinationsModel = settings.pollinationsModel;
+                
+                // Intelligent Migration for legacy settings
+                if (settings.pollinationsModel) {
+                    remoteConfig.pollinationsModel = settings.pollinationsModel;
+                    const isImageModel = ['flux', 'qwen-vl', 'turbo', 'vision'].some(m => settings.pollinationsModel.toLowerCase().includes(m));
+                    if (isImageModel) {
+                        remoteConfig.imageModel = settings.pollinationsModel;
+                    } else {
+                        remoteConfig.textModel = settings.pollinationsModel;
+                    }
+                }
+                if (settings.textModel) remoteConfig.textModel = settings.textModel;
+                if (settings.imageModel) remoteConfig.imageModel = settings.imageModel;
             } else {
                 // If snap exists but no apiSettings, clear any stale keys
                 remoteConfig.apiKey = '';
@@ -197,7 +224,9 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
 
             if (data) {
                 if (data.pollinationsApiKey) remoteConfig.pollinationsApiKey = data.pollinationsApiKey;
-                if (data.preferredModel) remoteConfig.pollinationsModel = data.preferredModel;
+                if (data.preferredModel) remoteConfig.imageModel = data.preferredModel;
+                if (data.imageModel) remoteConfig.imageModel = data.imageModel;
+                if (data.textModel) remoteConfig.textModel = data.textModel;
             }
 
             remoteFromSettingsRef.current = remoteConfig;
@@ -208,18 +237,13 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
             setHydrated(true);
         });
 
-    // Auto-refresh balance every 60 seconds while user is active
-    const intervalId = setInterval(() => {
-        if (configRef.current.pollinationsApiKey) {
-            refreshBalance();
-        }
-    }, 60_000);
+    // Balance updates are now event-driven (triggered after AI actions)
+    // No more background SSE/Polling stream needed
 
     return () => {
         console.log('🔄 Cleaning up AI config listener');
         unsubscribeUserDoc();
         unsubscribeSettings();
-        clearInterval(intervalId);
     };
     }, [user, firestore, setStoredConfig, refreshBalance]);
 

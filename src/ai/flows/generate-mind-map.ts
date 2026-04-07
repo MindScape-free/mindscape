@@ -11,6 +11,7 @@ const GenerateMindMapInputSchema = z.object({
   targetLang: z.string().optional(),
   persona: z.string().optional(),
   depth: z.enum(['low', 'medium', 'deep']).default('low'),
+  capability: z.enum(['fast', 'creative', 'reasoning', 'coding']).optional(),
 });
 export type GenerateMindMapInput = z.infer<typeof GenerateMindMapInputSchema>;
 export type GenerateMindMapOutput = z.infer<typeof AIGeneratedMindMapSchema>;
@@ -123,10 +124,10 @@ RULES:
 - NEVER truncate — close all { and [ before stopping
 - ${searchContext ? 'Ground facts in search results.' : ''}`;
 
-  let capability: any = depth === 'deep' ? 'fast' : 'creative';
+  let capability: any = input.capability || (depth === 'deep' ? 'fast' : 'fast');
 
   const TEMPLATE_MARKERS = ['Subtopic Name', 'Category Name', 'Subcategory Name', 'One sentence explanation', 'Specific Dimension Name', 'Reasoning about this'];
-  const MAX_RETRIES = 3;
+  const MAX_RETRIES = 2;
   let lastError: any = null;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {

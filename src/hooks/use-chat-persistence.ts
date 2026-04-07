@@ -130,6 +130,25 @@ export function useChatPersistence() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+
+      // Log activity for real-time stats - use dynamic import for server action
+      try {
+        const { logAdminActivityAction } = await import('@/app/actions');
+        await logAdminActivityAction({
+          type: 'CHAT_CREATED',
+          targetId: newId,
+          targetType: 'chat',
+          details: `Chat session started: ${topic}`,
+          performedBy: user.uid,
+          performedByEmail: user.email || 'anonymous',
+          metadata: {
+            mapId,
+            mapTitle
+          }
+        });
+      } catch (logLogErr) {
+        console.error('Failed to log chat creation:', logLogErr);
+      }
     } catch (error) {
       console.error("Error creating session:", error);
     }

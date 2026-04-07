@@ -3,6 +3,7 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Rocket, Filter, SortAsc, Users, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -182,9 +183,19 @@ export default function CommunityPage() {
                     </div>
                 ) : filteredMaps.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                        {filteredMaps.map(map => (
-                            <CommunityCard key={map.id} map={map} onClick={handleMapClick} />
-                        ))}
+                        <AnimatePresence mode="popLayout">
+                            {filteredMaps.map((map, index) => (
+                                <motion.div
+                                    key={map.id}
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.95 }}
+                                    transition={{ duration: 0.4, delay: index * 0.05 }}
+                                >
+                                    <CommunityCard map={map} onClick={handleMapClick} />
+                                </motion.div>
+                            ))}
+                        </AnimatePresence>
                     </div>
                 ) : (
                     <div className="text-center py-20 bg-white/5 rounded-3xl border border-dashed border-white/10">

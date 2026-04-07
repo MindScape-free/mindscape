@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { useFirestore, useUser } from '@/firebase';
-import { doc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, deleteDoc, updateDoc, getDoc, addDoc, collection } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { DepthBadge } from '@/components/mind-map/depth-badge';
@@ -97,6 +97,24 @@ export const CommunityCard = ({ map, onClick }: CommunityCardProps) => {
 
             // Delete from publicMindmaps collection
             await deleteDoc(publicMapRef);
+
+            // Log activity for removing from community
+            try {
+                await addDoc(collection(firestore, 'adminActivityLog'), {
+                    type: 'MAP_REMOVED',
+                    targetId: map.id!,
+                    targetType: 'mindmap',
+                    details: `Map "${map.topic || 'Untitled'}" removed from community`,
+                    performedBy: user.uid,
+                    timestamp: new Date().toISOString(),
+                    metadata: {
+                        topic: map.topic,
+                        authorId: map.originalAuthorId
+                    }
+                });
+            } catch (logError) {
+                console.warn('Failed to log MAP_REMOVED activity:', logError);
+            }
 
             // Update the original map in user's library to set isPublic = false
             try {
@@ -187,17 +205,6 @@ export const CommunityCard = ({ map, onClick }: CommunityCardProps) => {
                 </div>
 
                 <h3 className="font-bold text-lg text-white mb-2 line-clamp-2 group-hover:text-purple-400 transition-colors font-orbitron tracking-tight pb-1 leading-snug">{map.shortTitle || map.topic}</h3>
-
-                <div className="flex flex-wrap gap-2 mb-4 min-h-[40px] items-center">
-                    {map.publicCategories?.map(cat => (
-                        <span
-                            key={cat}
-                            className="px-2 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/20 text-[9px] text-purple-300 font-semibold uppercase tracking-widest font-orbitron shadow-[0_0_10px_rgba(168,85,247,0.05)]"
-                        >
-                            {cat}
-                        </span>
-                    ))}
-                </div>
 
                 <div className="mt-auto pt-4 border-t border-white/5 flex items-center justify-between">
                     <div className="flex items-center gap-2">

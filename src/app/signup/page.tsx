@@ -10,6 +10,7 @@ import { Loader2, Mail, User, Lock, ArrowRight, Eye, EyeOff, Check } from 'lucid
 import { useAuth } from '@/firebase';
 import { Icons } from '@/components/icons';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { useAdminActivityLog } from '@/lib/admin-utils';
 
 function SignupForm() {
   const [email, setEmail] = useState('');
@@ -24,6 +25,7 @@ function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { logAdminActivity } = useAdminActivityLog();
 
   useEffect(() => {
     const emailParam = searchParams.get('email');
@@ -60,6 +62,17 @@ function SignupForm() {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(userCredential.user, { displayName: username.trim() });
+      
+      // Log for admin activity
+      await logAdminActivity({
+        type: 'USER_CREATED',
+        targetId: userCredential.user.uid,
+        targetType: 'user',
+        performedBy: userCredential.user.uid,
+        performedByEmail: email,
+        details: `New user registered: ${username.trim()} (${email})`
+      });
+
       toast({ title: 'Account created successfully!' });
       router.push('/');
     } catch (error: any) {

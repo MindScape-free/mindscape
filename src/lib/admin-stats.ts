@@ -73,6 +73,8 @@ interface DashboardMetrics {
   mapsLastWeek: number;
   avgMapsPerUser: number;
   avgChatsPerUser: number;
+  totalMindmapsEver: number;
+  healthScore: number;
   latestUsers: any[];
   latestMaps: any[];
   usersLast7Days: { date: string; count: number }[];
@@ -174,12 +176,16 @@ export async function fetchDashboardMetricsOptimized(
   }));
 
   let totalMindmaps = 0;
+  let totalMindmapsEver = 0;
   const userActivity: Map<string, { mapsCreated: number; lastActive: Date | null }> = new Map();
 
   for (const userDoc of allUsers) {
     const userData = userDoc.data();
     const createdAt = userData.createdAt;
     
+    // Add to totalMindmapsEver - this is the aggregate of all maps ever created
+    totalMindmapsEver += userData.statistics?.totalMapsCreated || 0;
+
     if (createdAt) {
       let userDate: Date | null = null;
       if (createdAt instanceof Timestamp) {
@@ -337,13 +343,17 @@ export async function fetchDashboardMetricsOptimized(
   liveActivities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
   const totalMaps = allMaps.length;
-  const avgMapsPerUser = totalUsers > 0 ? (totalMindmaps / totalUsers).toFixed(1) : '0';
+  const avgMapsPerUser = totalUsers > 0 ? (totalMindmapsEver / totalUsers) : 0;
   const avgChatsPerUser = totalChatsSnap.data().count && totalUsers > 0 
-    ? (totalChatsSnap.data().count / totalUsers).toFixed(1) 
-    : '0';
+    ? (totalChatsSnap.data().count / totalUsers) 
+    : 0;
   const engagementRate = totalUsers > 0 
-    ? ((activeUsers24h / totalUsers) * 100).toFixed(1) 
-    : '0';
+    ? ((activeUsers24h / totalUsers) * 100) 
+    : 0;
+
+  const engagementScore = Math.min(50, (engagementRate / 20) * 50);
+  const activityScore = Math.min(50, (avgMapsPerUser / 1.5) * 50);
+  const healthScore = Math.round(engagementScore + activityScore);
 
   const mapAnalytics = await computeMapAnalytics(mindmapsByUser, allUsers);
 
@@ -354,13 +364,15 @@ export async function fetchDashboardMetricsOptimized(
     newMapsYesterday: heatmapDays.find(d => d.date === yesterdayStr)?.newMaps || 0,
     activeUsers24h,
     activeUsers48h,
-    engagementRate: parseFloat(engagementRate as string),
+    engagementRate: Math.round(engagementRate * 10) / 10,
+    totalMindmapsEver,
+    healthScore,
     usersThisWeek,
     usersLastWeek: 0,
     mapsThisWeek,
     mapsLastWeek: 0,
-    avgMapsPerUser: parseFloat(avgMapsPerUser as string),
-    avgChatsPerUser: parseFloat(avgChatsPerUser as string),
+    avgMapsPerUser: Math.round(avgMapsPerUser * 10) / 10,
+    avgChatsPerUser: Math.round(avgChatsPerUser * 10) / 10,
     latestUsers,
     latestMaps,
     usersLast7Days: last7Days.map(d => ({ 
@@ -430,12 +442,17 @@ async function computeMapAnalytics(
       mapCount++;
       userStatsMap[userId].totalMaps++;
 
-      const isMulti = mapData.mode === 'multi' || mapData.sourceFileType === 'multi' || mapData.sourceType === 'multi' || mapData.sourceFileContent?.includes('--- SOURCE:');
+      // Multi-source detection
+      const isMulti = mapData.mode === 'multi' || mapData.mode === 'multi-source' || 
+                     mapData.sourceFileType === 'multi' || mapData.sourceType === 'multi' || 
+                     (mapData.sourceFileContent && mapData.sourceFileContent.includes('--- SOURCE:'));
+
+      const isCompare = mapData.mode === 'compare';
 
       if (isMulti) {
         modeCounts.multi++;
         userStatsMap[userId].multiMaps++;
-      } else if (mapData.mode === 'compare') {
+      } else if (isCompare) {
         modeCounts.compare++;
         userStatsMap[userId].compareMaps++;
       } else {
@@ -443,13 +460,19 @@ async function computeMapAnalytics(
         userStatsMap[userId].singleMaps++;
       }
 
-      if (mapData.depth === 'low') {
+      // Depth classification
+      let depth = mapData.depth;
+      if (!depth || depth === 'auto' || depth === 'unspecified') {
+          depth = (mapData.nodeCount || 0) > 75 ? 'deep' : (mapData.nodeCount || 0) > 35 ? 'medium' : 'low';
+      }
+
+      if (depth === 'low') {
         depthCounts.low++;
         userStatsMap[userId].lowDepthMaps++;
-      } else if (mapData.depth === 'medium') {
+      } else if (depth === 'medium') {
         depthCounts.medium++;
         userStatsMap[userId].mediumDepthMaps++;
-      } else if (mapData.depth === 'deep') {
+      } else if (depth === 'deep') {
         depthCounts.deep++;
         userStatsMap[userId].deepDepthMaps++;
       } else {
@@ -459,6 +482,7 @@ async function computeMapAnalytics(
       const sourceType = mapData.sourceFileType || mapData.sourceType || 'text';
       sourceCounts[sourceType] = (sourceCounts[sourceType] || 0) + 1;
 
+      // Source-specific stats
       if (sourceType === 'text' || sourceType === 'document') {
         userStatsMap[userId].textSourceMaps++;
       } else if (sourceType === 'pdf') {
@@ -471,23 +495,32 @@ async function computeMapAnalytics(
         userStatsMap[userId].imageSourceMaps++;
       }
 
-      const rawPersona = mapData.aiPersona;
+      const personaRaw = mapData.aiPersona || mapData.persona;
       let persona = 'Teacher';
-      const normalizedRaw = (rawPersona || '').toLowerCase().trim();
-      if (normalizedRaw === 'teacher' || normalizedRaw === 'standard' || normalizedRaw === '' || !rawPersona) {
+      const normalizedRaw = (personaRaw || '').toLowerCase().trim();
+      if (normalizedRaw === 'teacher' || normalizedRaw === 'standard' || normalizedRaw === '' || !personaRaw) {
         persona = 'Teacher';
       } else if (normalizedRaw === 'concise') {
         persona = 'Concise';
       } else if (normalizedRaw === 'creative') {
         persona = 'Creative';
-      } else if (normalizedRaw === 'sage' || normalizedRaw === 'cognitive sage' || normalizedRaw === 'cognitive' || normalizedRaw.includes('sage')) {
+      } else if (normalizedRaw.includes('sage')) {
         persona = 'Sage';
       }
       personaCounts[persona] = (personaCounts[persona] || 0) + 1;
 
-      if (mapData.isSubMap) {
+      // Deep Sub-map/Nested Logic
+      const isChild = !!(mapData.isSubMap || mapData.parentMapId || mapData.parentId);
+      const isParent = !!((mapData.nestedExpansions && mapData.nestedExpansions.length > 0) || mapData.hasSubMaps);
+
+      if (isChild) {
         totalSubMaps++;
-        if (mapData.parentMapId) parentMapIds.add(mapData.parentMapId);
+        const pId = mapData.parentMapId || mapData.parentId;
+        if (pId) parentMapIds.add(pId);
+      }
+      
+      if (isParent) {
+        parentMapIds.add(mapData.id || 'unknown-parent');
       }
 
       if (mapData.isPublic) {

@@ -799,7 +799,7 @@ export default function Home() {
       const timestamp = Date.now();
       const sessionId = `web-${timestamp}`;
       safeSetItem(`session-type-${sessionId}`, 'website');
-      safeSetItem(`session-content-${sessionId}`, trimmedTopic);
+      safeSetItem(`session-content-${sessionId}`, { file: trimmedTopic, text: '' });
       safeSetItem(`session-persona-${sessionId}`, persona);
       router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${depth}&persona=${persona}`);
       return;
@@ -810,7 +810,7 @@ export default function Home() {
       const timestamp = Date.now();
       const sessionId = `yt-${timestamp}`;
       safeSetItem(`session-type-${sessionId}`, 'youtube');
-      safeSetItem(`session-content-${sessionId}`, trimmedTopic);
+      safeSetItem(`session-content-${sessionId}`, { file: trimmedTopic, text: '' });
       safeSetItem(`session-persona-${sessionId}`, persona);
       router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${depth}&persona=${persona}`);
       return;

@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useFirebase } from '@/firebase';
 import { useAdminActivityLog } from '@/lib/admin-utils';
-import { getAuth } from 'firebase/auth';
 import { doc, deleteDoc, collection, getCountFromServer, getDocs, query, orderBy } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { formatDistanceToNow } from 'date-fns';
@@ -47,6 +46,7 @@ import {
   Flame,
   Library,
   Bot,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface UserDetailDialogProps {
@@ -58,9 +58,8 @@ interface UserDetailDialogProps {
 }
 
 export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted, rank }: UserDetailDialogProps) {
-  const { firestore } = useFirebase();
+  const { firestore, user: adminUser } = useFirebase();
   const { logAdminActivity } = useAdminActivityLog();
-  const auth = getAuth();
   const [chatCount, setChatCount] = useState<number | null>(null);
   const [userMaps, setUserMaps] = useState<any[]>([]);
   const [isLoadingMaps, setIsLoadingMaps] = useState(false);
@@ -68,6 +67,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [userHeatmapMonth, setUserHeatmapMonth] = useState(new Date());
+  const [analyticsView, setAnalyticsView] = useState<'current' | 'allTime'>('current');
 
   const handleDeleteUser = useCallback(async () => {
     if (!firestore || !user) return;
@@ -80,7 +80,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
         targetId: user.id,
         targetType: 'user',
         details: `User deleted: ${userEmail}`,
-        performedBy: auth?.currentUser?.uid,
+        performedBy: adminUser?.uid,
       });
       onUserDeleted?.();
       onClose();
@@ -90,9 +90,10 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
       setIsDeleting(false);
       setShowDeleteConfirm(false);
     }
-  }, [firestore, user, auth, logAdminActivity, onClose, onUserDeleted]);
+  }, [firestore, user, adminUser, logAdminActivity, onClose, onUserDeleted]);
 
   const handleCopyId = useCallback(() => {
+    if (!user?.id) return;
     navigator.clipboard.writeText(user.id);
     setCopiedId(true);
     setTimeout(() => setCopiedId(false), 2000);
@@ -126,24 +127,35 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
   if (!user) return null;
 
   const stats = user.statistics || {};
-  const userCreatedAt = user.createdAt ? (user.createdAt.toMillis ? new Date(user.createdAt.toMillis()) : new Date(user.createdAt)) : null;
+  const userCreatedAt = (() => {
+    if (!user.createdAt) return null;
+    try {
+      const d = user.createdAt.toDate ? user.createdAt.toDate() : new Date(user.createdAt);
+      return isNaN(d.getTime()) ? null : d;
+    } catch (e) {
+      return null;
+    }
+  })();
 
   // Compute Dashboard Metrics for this user
   const userHealthScore = Math.min(100, Math.round(
-    ((stats.currentStreak || 0) * 10) + 
-    (Math.min((stats.totalMapsCreated || 0) / 2, 40)) + 
-    (chatCount ? Math.min(chatCount * 2, 20) : 0) +
-    (stats.lastActiveDate ? 10 : 0)
+    ((stats.currentStreak || 0) * 8) + 
+    (Math.min((stats.totalMapsCreated || 0) * 1.5, 40)) + 
+    (chatCount ? Math.min(chatCount * 1.5, 20) : 0) +
+    (stats.lastActiveDate ? 15 : 0)
   ));
 
-  const totalMapsCount = userMaps.length || 1;
   const engagementRate = stats.totalMapsCreated && stats.totalStudyTimeMinutes 
-    ? Math.min(100, Math.round((stats.totalMapsCreated / (stats.totalStudyTimeMinutes / 60 || 1)) * 10))
+    ? Math.min(100, Math.round((stats.totalMapsCreated / (stats.totalStudyTimeMinutes / 60 || 1)) * 12))
     : 0;
 
   const avgNodesPerMap = userMaps.length > 0 
     ? (userMaps.reduce((acc, m) => acc + (m.nodeCount || 0), 0) / userMaps.length).toFixed(1)
     : '0';
+  
+  const currentTotalNodes = userMaps.length > 0
+    ? userMaps.reduce((acc, m) => acc + (m.nodeCount || 0), 0)
+    : 0;
 
   return (
     <div 
@@ -215,6 +227,40 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <div className="flex flex-col items-end mr-2">
+              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Health Score</span>
+              <div className="flex items-center gap-3">
+                <div className="relative h-12 w-12">
+                  <svg className="h-12 w-12 -rotate-90">
+                    <circle
+                      cx="24"
+                      cy="24"
+                      r="20"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="transparent"
+                      className="text-white/5"
+                    />
+                    <circle
+                      cx="24"
+                      cy="24"
+                      r="20"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="transparent"
+                      strokeDasharray={2 * Math.PI * 20}
+                      strokeDashoffset={2 * Math.PI * 20 * (1 - userHealthScore / 100)}
+                      strokeLinecap="round"
+                      className={`${userHealthScore > 80 ? 'text-emerald-500' : userHealthScore > 50 ? 'text-amber-500' : 'text-red-500'} transition-all duration-1000 ease-out`}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-[10px] font-black">{userHealthScore}</span>
+                  </div>
+                </div>
+                <div className="h-8 w-px bg-white/10" />
+              </div>
+            </div>
             {!showDeleteConfirm ? (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
@@ -254,10 +300,10 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
           {/* Stats Grid - High Fidelity Cards */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             {[
-              { label: 'Total Mindmap', value: stats.totalMapsCreated || 0, icon: MapIcon, color: 'violet' },
-              { label: 'Current Mindmap', value: userMaps.length, icon: MapIcon, color: 'indigo' },
-              { label: 'Avg Nodes', value: avgNodesPerMap, icon: Layers, color: 'blue' },
-              { label: 'Total Nodes', value: stats.totalNodes || 0, icon: Layers, color: 'cyan' },
+              { label: 'Total Created', value: stats.totalMapsCreated || 0, icon: MapIcon, color: 'violet', tooltip: 'All-time total including deleted' },
+              { label: 'Current Maps', value: userMaps.length, icon: MapIcon, color: 'indigo', tooltip: 'Maps currently in system' },
+              { label: 'Avg Nodes', value: avgNodesPerMap, icon: Layers, color: 'blue', tooltip: 'Average nodes per current map' },
+              { label: 'Total Nodes', value: currentTotalNodes, icon: Layers, color: 'cyan', tooltip: 'Total nodes in current maps' },
               { label: 'Images', value: stats.totalImagesGenerated || 0, icon: ImageIcon, color: 'emerald' },
               { label: 'Chats', value: chatCount ?? '-', icon: BarChart3, color: 'yellow' },
               { label: 'Streak', value: `${stats.currentStreak || 0}d`, icon: Zap, color: 'orange' },
@@ -497,73 +543,63 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
 
           {/* Map Analytics */}
           {userMaps.length > 0 && (
-            <div className="space-y-6">
-              {/* Premium Header with Overview Stats */}
-              <div className="flex items-center justify-between">
+            <div className="space-y-6 border border-violet-500/30 rounded-2xl p-6 bg-violet-500/5">
+              {/* Premium Header with Overview Stats & Toggle */}
+              <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-3">
                   <div className="p-3 bg-gradient-to-br from-violet-500/20 to-indigo-500/20 rounded-2xl border border-violet-500/30 shadow-lg shadow-violet-500/10">
                     <BarChart3 className="h-6 w-6 text-violet-400" />
                   </div>
                   <div>
                     <h2 className="text-xl font-black text-white tracking-tight">Mindmap Analytics</h2>
-                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">User's map insights and metrics</p>
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
+                      Viewing: {analyticsView === 'current' 
+                        ? `${userMaps.length} Current Maps`
+                        : `${stats.totalMapsCreated || 0} Total Created`}
+                    </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 px-4 py-2 bg-gradient-to-r from-violet-500/10 to-indigo-500/10 rounded-xl border border-violet-500/20">
-                  <div className="text-center">
-                    <p className="text-lg font-black text-white">{stats.totalMapsCreated || 0}</p>
-                    <p className="text-[8px] text-violet-400/70 font-bold uppercase">Total Mindmap</p>
+                
+                <div className="flex items-center gap-4">
+                  <div className="flex gap-1 p-1 bg-zinc-800/50 rounded-xl border border-white/10">
+                    <button
+                      onClick={() => setAnalyticsView('current')}
+                      className={`px-5 py-2.5 text-xs font-bold rounded-lg transition-all ${
+                        analyticsView === 'current'
+                          ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/20'
+                          : 'text-zinc-400 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      Current
+                    </button>
+                    <button
+                      onClick={() => setAnalyticsView('allTime')}
+                      className={`px-5 py-2.5 text-xs font-bold rounded-lg transition-all ${
+                        analyticsView === 'allTime'
+                          ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/20'
+                          : 'text-zinc-400 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      All Time
+                    </button>
                   </div>
-                  <div className="w-px h-8 bg-violet-500/20" />
-                  <div className="text-center">
-                    <p className="text-lg font-black text-emerald-400">{userMaps.length}</p>
-                    <p className="text-[8px] text-emerald-400/70 font-bold uppercase">Current Mindmap</p>
-                  </div>
-                  <div className="w-px h-8 bg-violet-500/20" />
-                  <div className="text-center">
-                    <p className="text-lg font-black text-blue-400">
-                      {(() => {
-                        const personaCounts = userMaps.reduce((acc, m) => {
-                          const rawPersona = m.aiPersona;
-                          let persona = 'Teacher';
-                          const normalizedRaw = (rawPersona || '').toLowerCase().trim();
-                          if (normalizedRaw === 'teacher' || normalizedRaw === 'standard' || normalizedRaw === '' || !rawPersona) {
-                            persona = 'Teacher';
-                          } else if (normalizedRaw === 'concise') {
-                            persona = 'Concise';
-                          } else if (normalizedRaw === 'creative') {
-                            persona = 'Creative';
-                          } else if (normalizedRaw.includes('sage')) {
-                            persona = 'Sage';
-                          }
-                          acc[persona] = (acc[persona] || 0) + 1;
-                          return acc;
-                        }, {} as Record<string, number>);
-
-                        return Object.entries(personaCounts)
-                          .sort((a, b) => (b[1] as number) - (a[1] as number))[0]?.[0] || 'Teacher';
-                      })()}
-                    </p>
-                    <p className="text-[8px] text-blue-400/70 font-bold uppercase">Top Persona</p>
-                  </div>
+                  
                   {rank && (
-                    <>
-                      <div className="w-px h-8 bg-violet-500/20" />
-                      <div className="text-center px-2">
-                        <div className="flex items-center gap-1 justify-center">
-                          <Trophy className="h-4 w-4 text-amber-400" />
-                          <p className="text-lg font-black text-amber-400">#{rank}</p>
-                        </div>
-                        <p className="text-[8px] text-amber-500/70 font-bold uppercase">Global Rank</p>
-                      </div>
-                    </>
+                    <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500/10 to-orange-500/10 rounded-xl border border-amber-500/20">
+                      <Trophy className="h-4 w-4 text-amber-400" />
+                      <span className="text-lg font-black text-amber-400">#{rank}</span>
+                    </div>
                   )}
                 </div>
               </div>
 
 
 
-              <UserMapAnalytics userMaps={userMaps} />
+              {analyticsView === 'current' ? (
+                <UserMapAnalytics userMaps={userMaps} />
+              ) : (
+                <AllTimeAnalytics stats={stats} />
+              )}
             </div>
           )}
         </div>
@@ -639,7 +675,7 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
   const publicPrivate = { public: 0, private: 0 };
 
   userMaps.forEach(m => {
-    // Mode
+    // Mode Detection
     const isMulti = m.mode === 'multi' || m.sourceFileType === 'multi' || m.sourceType === 'multi' || m.sourceFileContent?.includes('--- SOURCE:');
 
     if (isMulti) modeCounts.multi++;
@@ -655,41 +691,38 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
     if (resolvedDepth === 'low') depthCounts.low++;
     else if (resolvedDepth === 'medium') depthCounts.medium++;
     else if (resolvedDepth === 'deep') depthCounts.deep++;
-    else depthCounts.low++; // Fallback to low/Quick for any edge cases
+    else depthCounts.low++;
 
     // Source Type detection
     let sourceType = m.sourceFileType || m.sourceType;
-    
-    // Check for explicit multi-source or merged source content markers
-    const hasMultiMarkers = m.sourceFileContent?.includes('--- SOURCE:');
-    
-    if (sourceType === 'multi' || hasMultiMarkers) {
+    if (sourceType === 'multi' || m.sourceFileContent?.includes('--- SOURCE:')) {
       sourceType = 'multi';
     } else {
       sourceType = sourceType || (m.sourceUrl ? 'website' : m.videoId ? 'youtube' : 'text');
     }
-    
     sourceCounts[sourceType] = (sourceCounts[sourceType] || 0) + 1;
 
-    // Persona normalization
+    // Persona
     const rawPersona = m.aiPersona;
     let persona = 'Teacher';
     const normalizedRaw = (rawPersona || '').toLowerCase().trim();
-    if (normalizedRaw === 'teacher' || normalizedRaw === 'standard' || normalizedRaw === '' || !rawPersona) {
-      persona = 'Teacher';
-    } else if (normalizedRaw === 'concise') {
-      persona = 'Concise';
-    } else if (normalizedRaw === 'creative') {
-      persona = 'Creative';
-    } else if (normalizedRaw.includes('sage')) {
-      persona = 'Sage';
-    }
+    if (normalizedRaw === 'teacher' || normalizedRaw === 'standard' || !rawPersona) persona = 'Teacher';
+    else if (normalizedRaw === 'concise') persona = 'Concise';
+    else if (normalizedRaw === 'creative') persona = 'Creative';
+    else if (normalizedRaw.includes('sage')) persona = 'Sage';
     personaCounts[persona] = (personaCounts[persona] || 0) + 1;
 
-    // Sub-map stats
-    if (m.isSubMap) {
+    // Advanced Nested/Sub-map logic
+    const isChild = !!(m.isSubMap || m.parentMapId || m.parentId);
+    const isParent = !!((m.nestedExpansions && m.nestedExpansions.length > 0) || m.hasSubMaps);
+
+    if (isChild) {
       totalSubMaps++;
-      if (m.parentMapId) parentMapIds.add(m.parentMapId);
+      if (m.parentMapId || m.parentId) parentMapIds.add(m.parentMapId || m.parentId);
+    }
+    
+    if (isParent) {
+      parentMapIds.add(m.id);
     }
 
     // Public/Private
@@ -914,6 +947,271 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
                 </div>
               );
             })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface AllTimeAnalyticsProps {
+  stats: {
+    totalMapsCreated?: number;
+    totalNodes?: number;
+    modeCounts?: Record<string, number>;
+    depthCounts?: Record<string, number>;
+    sourceCounts?: Record<string, number>;
+    personaCounts?: Record<string, number>;
+    version?: number;
+    isBackfilledPartial?: boolean;
+  };
+}
+
+function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
+  const total = stats.totalMapsCreated || 1;
+  const hasAggregates = stats.version === 2;
+  const isPartial = stats.isBackfilledPartial;
+
+  const modeCounts = stats.modeCounts || { single: 0, compare: 0, multi: 0 };
+  const depthCounts = stats.depthCounts || { low: 0, medium: 0, deep: 0 };
+  const sourceCounts = stats.sourceCounts || { text: 0, website: 0, youtube: 0, pdf: 0, image: 0, multi: 0 };
+  const personaCounts = stats.personaCounts || { Teacher: 0, Concise: 0, Creative: 0, Sage: 0 };
+
+  const getPercentage = (count: number) => Math.round((count / total) * 100);
+
+  if (!hasAggregates) {
+    return (
+      <div className="space-y-6">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-amber-500/20 p-8">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl" />
+          <div className="relative flex items-center gap-4">
+            <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/20">
+              <AlertTriangle className="h-6 w-6 text-amber-400" />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-white">Historical Data Not Available</h3>
+              <p className="text-sm text-zinc-400">
+                All-time analytics breakdown requires a schema upgrade. Run the backfill script to enable.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 p-4 bg-zinc-800/50 rounded-xl border border-white/5">
+            <p className="text-xs font-bold text-zinc-500 mb-2">Summary (from available data)</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-2xl font-black text-white">{stats.totalMapsCreated || 0}</p>
+                <p className="text-[9px] text-zinc-500 uppercase">Total Maps</p>
+              </div>
+              <div>
+                <p className="text-2xl font-black text-white">{stats.totalNodes || 0}</p>
+                <p className="text-[9px] text-zinc-500 uppercase">Total Nodes</p>
+              </div>
+              <div>
+                <p className="text-2xl font-black text-white">
+                  {stats.totalMapsCreated ? Math.round((stats.totalNodes || 0) / stats.totalMapsCreated) : 0}
+                </p>
+                <p className="text-[9px] text-zinc-500 uppercase">Avg Nodes</p>
+              </div>
+              <div>
+                <p className="text-2xl font-black text-white">
+                  {isPartial ? 'Partial' : 'N/A'}
+                </p>
+                <p className="text-[9px] text-zinc-500 uppercase">Data Status</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {isPartial && (
+        <div className="relative overflow-hidden rounded-xl bg-amber-500/5 border border-amber-500/20 p-4">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+            <p className="text-xs text-amber-400">
+              Partial data: Some deleted maps are not included in breakdowns.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Row 1: Mode & Depth */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-6">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full blur-3xl" />
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-2 bg-violet-500/10 rounded-xl border border-violet-500/20">
+                <MapIcon className="h-4 w-4 text-violet-400" />
+              </div>
+              <p className="text-sm font-bold text-white">Maps by Mode</p>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {([
+                { key: 'single', label: 'Single', value: modeCounts.single || 0, color: 'violet' as const, icon: FileText },
+                { key: 'compare', label: 'Compare', value: modeCounts.compare || 0, color: 'indigo' as const, icon: Copy },
+                { key: 'multi', label: 'Multi', value: modeCounts.multi || 0, color: 'blue' as const, icon: Layers },
+              ] as const).map(({ key, label, value, color, icon: Icon }) => (
+                <div key={key} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={`p-1.5 bg-${color}-500/10 rounded-lg`}>
+                      <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
+                    </div>
+                    <span className={`text-[8px] font-bold uppercase tracking-wider text-${color}-400/70`}>{label}</span>
+                  </div>
+                  <div className="flex items-end justify-between">
+                    <p className="text-2xl font-black text-white tracking-tight">{value}</p>
+                    <span className={`px-1.5 py-0.5 rounded-lg bg-${color}-500/10 text-[9px] font-bold text-${color}-400`}>{getPercentage(value)}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-6">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl" />
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-2 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
+                <Layers className="h-4 w-4 text-indigo-400" />
+              </div>
+              <p className="text-sm font-bold text-white">Maps by Depth</p>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {([
+                { key: 'low', label: 'Quick', value: depthCounts.low || 0, color: 'emerald' as const, icon: Zap },
+                { key: 'medium', label: 'Balanced', value: depthCounts.medium || 0, color: 'yellow' as const, icon: Layers },
+                { key: 'deep', label: 'Detailed', value: depthCounts.deep || 0, color: 'orange' as const, icon: Layers },
+              ] as const).map(({ key, label, value, color, icon: Icon }) => (
+                <div key={key} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={`p-1.5 bg-${color}-500/10 rounded-lg`}>
+                      <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
+                    </div>
+                    <span className={`text-[8px] font-bold uppercase tracking-wider text-${color}-400/70`}>{label}</span>
+                  </div>
+                  <div className="flex items-end justify-between">
+                    <p className="text-2xl font-black text-white tracking-tight">{value}</p>
+                    <span className={`px-1.5 py-0.5 rounded-lg bg-${color}-500/10 text-[9px] font-black text-${color}-400`}>{getPercentage(value)}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Row 2: Source Types */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-6">
+        <div className="absolute top-0 left-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl" />
+        <div className="relative">
+          <div className="flex items-center gap-2 mb-6">
+            <div className="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20">
+              <Globe className="h-4 w-4 text-blue-400" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white">Maps by Source Type</p>
+              <p className="text-[9px] text-zinc-500 font-medium font-bold uppercase tracking-widest">Content source breakdown</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {[
+              { type: 'text', icon: FileText, color: 'violet' as const, label: 'Text' },
+              { type: 'pdf', icon: FileText, color: 'indigo' as const, label: 'PDF' },
+              { type: 'website', icon: Globe, color: 'blue' as const, label: 'Website' },
+              { type: 'image', icon: ImageIcon, color: 'emerald' as const, label: 'Image' },
+              { type: 'youtube', icon: Youtube, color: 'yellow' as const, label: 'YouTube' },
+              { type: 'multi', icon: Library, color: 'orange' as const, label: 'Multi' }
+            ].map(({ type, icon: Icon, color, label }) => {
+              const count = sourceCounts[type] || 0;
+              return (
+                <div key={type} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10 ${count === 0 ? 'opacity-20' : ''}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={`p-1.5 bg-${color}-500/10 rounded-lg`}>
+                      <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
+                    </div>
+                    <span className={`text-[8px] font-bold uppercase tracking-wider text-${color}-400/70`}>{label}</span>
+                  </div>
+                  <div className="flex items-end justify-between">
+                    <p className="text-2xl font-black text-white tracking-tight">{count}</p>
+                    <span className={`px-1.5 py-0.5 rounded-lg bg-${color}-500/10 text-[9px] font-bold text-${color}-400`}>{getPercentage(count)}%</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3: Sub-Maps & Persona */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-6">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-violet-500/5 rounded-full blur-3xl" />
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-2 bg-violet-500/10 rounded-xl border border-violet-500/20">
+                <Brain className="h-4 w-4 text-violet-400" />
+              </div>
+              <p className="text-sm font-bold text-white">Maps by Persona</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {([
+                { key: 'Teacher', label: 'Teacher', color: 'violet' },
+                { key: 'Concise', label: 'Concise', color: 'indigo' },
+                { key: 'Creative', label: 'Creative', color: 'blue' },
+                { key: 'Sage', label: 'Cognitive Sage', color: 'emerald' },
+              ] as const).map(({ key, label, color }) => {
+                const count = personaCounts[key] || 0;
+                return (
+                  <div key={key} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-[8px] font-bold uppercase tracking-wider text-${color}-400/70`}>{label}</span>
+                      <span className={`px-1.5 py-0.5 rounded-lg bg-${color}-500/10 text-[9px] font-bold text-${color}-400`}>{getPercentage(count)}%</span>
+                    </div>
+                    <p className="text-2xl font-black text-white tracking-tight">{count}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-6">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-cyan-500/5 rounded-full blur-3xl" />
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-2 bg-cyan-500/10 rounded-xl border border-cyan-500/20">
+                <Layers className="h-4 w-4 text-cyan-400" />
+              </div>
+              <p className="text-sm font-bold text-white">All-Time Summary</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="rounded-xl bg-white/5 p-4">
+                <p className="text-3xl font-black text-white">{stats.totalMapsCreated || 0}</p>
+                <p className="text-[9px] text-zinc-500 uppercase tracking-wider mt-1">Total Maps</p>
+              </div>
+              <div className="rounded-xl bg-white/5 p-4">
+                <p className="text-3xl font-black text-cyan-400">{stats.totalNodes || 0}</p>
+                <p className="text-[9px] text-zinc-500 uppercase tracking-wider mt-1">Total Nodes</p>
+              </div>
+              <div className="rounded-xl bg-white/5 p-4">
+                <p className="text-3xl font-black text-emerald-400">
+                  {stats.totalMapsCreated ? Math.round((stats.totalNodes || 0) / stats.totalMapsCreated) : 0}
+                </p>
+                <p className="text-[9px] text-zinc-500 uppercase tracking-wider mt-1">Avg Nodes</p>
+              </div>
+              <div className="rounded-xl bg-white/5 p-4">
+                <div className="flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full ${hasAggregates ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                  <p className="text-lg font-black text-white">{hasAggregates ? 'Complete' : 'Partial'}</p>
+                </div>
+                <p className="text-[9px] text-zinc-500 uppercase tracking-wider mt-1">Data Status</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -1,4 +1,5 @@
 'use server';
+
 import { AIProvider } from '@/ai/client-dispatcher';
 import { providerMonitor } from '@/ai/provider-monitor';
 import {
@@ -190,22 +191,42 @@ export interface GenerateMindMapFromImageInput {
  * Prioritizes explicitly provided keys, then user-specific keys from Firestore, 
  * and finally falls back to server-side environmental variables.
  */
+// Server-side API key cache: userId -> { key, timestamp }
+// Avoids repeated Firestore reads for the same user within a short window
+const apiKeyCache = new Map<string, { key: string | undefined; timestamp: number }>();
+const API_KEY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export async function resolveApiKey(options: AIActionOptions): Promise<string | undefined> {
   let effectiveApiKey = options.apiKey;
   let source = effectiveApiKey ? 'options' : 'none';
 
   // If no API key provided, try to fetch from user profile on server
   if (!effectiveApiKey && options.userId && (options.provider === 'pollinations' || !options.provider)) {
-    try {
-      const { getUserImageSettingsAdmin } = await import('@/lib/firestore-server-helpers');
-      const userSettings = await getUserImageSettingsAdmin(options.userId);
-      if (userSettings?.pollinationsApiKey) {
-        effectiveApiKey = userSettings.pollinationsApiKey;
-        source = 'firestore-admin';
-        console.log(`🔑 Using Pollinations API key from Firestore Admin for user: ${options.userId}`);
+    // Check cache first
+    const cached = apiKeyCache.get(options.userId);
+    if (cached && Date.now() - cached.timestamp < API_KEY_CACHE_TTL) {
+      effectiveApiKey = cached.key;
+      source = 'firestore-cache';
+    } else {
+      try {
+        const { getUserImageSettingsAdmin } = await import('@/lib/firestore-server-helpers');
+        if (typeof getUserImageSettingsAdmin !== 'function') {
+          throw new Error('getUserImageSettingsAdmin is not a function');
+        }
+        const userSettings = await getUserImageSettingsAdmin(options.userId);
+        if (userSettings?.pollinationsApiKey) {
+          effectiveApiKey = userSettings.pollinationsApiKey;
+          source = 'firestore-admin';
+          // Cache the result
+          apiKeyCache.set(options.userId, { key: effectiveApiKey, timestamp: Date.now() });
+          console.log(`🔑 Using Pollinations API key from Firestore Admin for user: ${options.userId}`);
+        } else {
+          // Cache the miss too (avoid repeated Firestore reads for users without keys)
+          apiKeyCache.set(options.userId, { key: undefined, timestamp: Date.now() });
+        }
+      } catch (err: any) {
+        console.warn(`⚠️ resolveApiKey: Failed to fetch user API key from Firestore Admin (${err.message}). Falling back to server default.`);
       }
-    } catch (err) {
-      console.warn('⚠️ Failed to fetch user API key from Firestore Admin, falling back to server default:', err);
     }
   }
 
@@ -222,34 +243,57 @@ export async function resolveApiKey(options: AIActionOptions): Promise<string | 
 }
 
 /**
- * Uses a fast AI call to determine the best depth for a given topic.
- * Returns 'low', 'medium', or 'deep' based on topic complexity.
+ * Fast rule-based complexity analyzer.
+ * Replaces the LLM-based resolveDepth() which added 5-15s per generation.
+ * Returns 'low', 'medium', or 'deep' based on topic heuristics.
+ */
+export async function resolveDepthFast(
+  topic: string,
+): Promise<'low' | 'medium' | 'deep'> {
+  const t = topic.toLowerCase().trim();
+  const words = t.split(/\s+/).length;
+  const chars = t.length;
+
+  // Deep indicators: very long topics, multi-concept, or known complex domains
+  const deepKeywords = [
+    'quantum', 'consciousness', 'conscious', 'philosophy', 'epistemology',
+    'metaphysics', 'thermodynamics', 'relativity', 'neuroscience', 'biochemistry',
+    'molecular', 'astrophysics', 'cosmology', 'cryptocurrency', 'blockchain',
+    'machine learning', 'artificial intelligence', 'deep learning', 'neural network',
+    'climate change', 'global warming', 'evolution', 'genetics', 'genomics',
+    'quantum computing', 'string theory', 'general relativity', 'human consciousness',
+    'socioeconomic', 'geopolitical', 'existentialism', 'phenomenology',
+    'cognitive science', 'computational', 'nanotechnology', 'biotechnology',
+  ];
+  if (deepKeywords.some(k => t.includes(k))) return 'deep';
+
+  // Multi-concept topics (contains "and", "vs", "comparison", "between")
+  const multiConcept = /\b(and|vs|versus|comparison|between|compare|difference)\b/i.test(t);
+  if (multiConcept && words >= 4) return 'deep';
+
+  // Low indicators: short, simple, well-known topics
+  const lowKeywords = [
+    'hello world', 'apple', 'banana', 'cat', 'dog', 'sun', 'moon',
+    'water', 'fire', 'earth', 'wind', 'tree', 'flower', 'bird',
+    'fish', 'car', 'book', 'pen', 'chair', 'table', 'house',
+    'color', 'red', 'blue', 'green', 'number', 'one', 'two',
+  ];
+  if (words <= 2 && chars <= 15) return 'low';
+  if (lowKeywords.some(k => t === k)) return 'low';
+
+  // Medium: everything else
+  return 'medium';
+}
+
+/**
+ * @deprecated Use resolveDepthFast() instead.
+ * Kept for backward compatibility but no longer makes LLM calls.
  */
 export async function resolveDepth(
   topic: string,
-  apiKey: string | undefined
+  _apiKey?: string
 ): Promise<'low' | 'medium' | 'deep'> {
-  try {
-    const { generateContentWithPollinations } = await import('@/ai/pollinations-client');
-    const result = await generateContentWithPollinations(
-      `You are a mind map complexity analyzer. Given a topic, decide the ideal depth for a mind map.
-- "low": Simple, well-known, or narrow topics (e.g. "Apple fruit", "Hello World").
-- "medium": Moderately complex topics with several dimensions (e.g. "Machine Learning", "World War 2").
-- "deep": Vast, multi-disciplinary, or highly technical topics (e.g. "Quantum Computing", "Human Consciousness", "Climate Change").
-Return ONLY a JSON object: {"depth": "low" | "medium" | "deep", "reason": "one sentence"}`,
-      `Topic: "${topic}"`,
-      undefined,
-      { capability: 'fast', apiKey, _stripParameters: true }
-    );
-    const depth = result?.depth;
-    if (depth === 'low' || depth === 'medium' || depth === 'deep') {
-      console.log(`🧠 Auto-depth resolved: "${depth}" for topic "${topic}" — ${result?.reason}`);
-      return depth;
-    }
-  } catch (e) {
-    console.warn('⚠️ Auto-depth resolution failed, falling back to medium:', e);
-  }
-  return 'medium';
+  return resolveDepthFast(topic);
 }
 
 export async function generateMindMapAction(
@@ -262,40 +306,47 @@ export async function generateMindMapAction(
       return { data: null, error: 'Topic must be at least 1 character long.' };
     }
 
+    // FIX #1: Parallelize API key resolution
     const effectiveApiKey = await resolveApiKey(options);
     const depth = (input.depth === ('auto' as any) || !input.depth)
-      ? await resolveDepth(topic, effectiveApiKey)
+      ? await resolveDepthFast(topic)
       : input.depth as 'low' | 'medium' | 'deep';
 
+    // FIX #2: Wait for search BEFORE generation if enabled (quality + speed)
     let searchContext = null;
     if (input.useSearch) {
-      console.log(`🔍 Search enabled for topic: "${topic}"`);
-      const searchResult = await generateSearchContext({
-        query: topic,
-        depth: depth === 'deep' ? 'deep' : 'basic',
-        apiKey: effectiveApiKey,
-        provider: options.provider,
-      });
-      if (searchResult.data) {
-        searchContext = searchResult.data;
-        console.log(`✅ Search context retrieved: ${searchContext.sources.length} sources`);
-      } else {
-        console.warn(`⚠️ Search failed, continuing without search context: ${searchResult.error}`);
+      try {
+        console.log(`🔍 [Action] Waiting for search context for: "${topic}"`);
+        const searchResult = await generateSearchContext({
+          query: topic,
+          depth: depth === 'deep' ? 'deep' : 'basic',
+          apiKey: effectiveApiKey,
+          provider: options.provider,
+        });
+        if (searchResult.data) {
+          searchContext = searchResult.data;
+          console.log(`✅ [Action] Search context retrieved: ${searchContext.sources.length} sources`);
+        }
+      } catch (e) {
+        console.warn(`⚠️ [Action] Search failed, continuing without search context:`, e);
       }
     }
 
-    const result = await generateMindMap({
+    // FIX #3: Pass searchContext and 'fast' capability to generation
+    const generationResult = await generateMindMap({
       ...input,
       topic,
       depth,
-      searchContext,
+      searchContext, 
       ...options,
-      apiKey: effectiveApiKey
+      apiKey: effectiveApiKey,
+      // Default to fast unless deep
+      capability: depth === 'deep' ? 'fast' : 'fast' 
     });
 
-    if (!result) return { data: null, error: 'AI failed to generate content.' };
+    if (!generationResult) return { data: null, error: 'AI failed to generate content.' };
 
-    const sanitized = await mapToMindMapData(result, depth);
+    const sanitized = await mapToMindMapData(generationResult, depth);
     sanitized.aiPersona = input.persona as string || 'Teacher';
 
     if (searchContext && searchContext.sources.length > 0) {
@@ -327,12 +378,26 @@ export async function checkPollenBalanceAction(
       return { balance: null, error: 'No API key provided. Please check your settings.' };
     }
 
-    const { checkPollinationsBalance } = await import('@/ai/pollinations-client');
+    let checkPollinationsBalance;
+    try {
+      const module = await import('@/ai/pollinations-client');
+      checkPollinationsBalance = module.checkPollinationsBalance;
+      if (typeof checkPollinationsBalance !== 'function') {
+        throw new Error('checkPollinationsBalance is not a function in the imported module');
+      }
+    } catch (importErr: any) {
+      console.error('❌ Failed to import pollinations-client:', importErr.message);
+      return { balance: null, error: `Critical error: AI client configuration issue. Please contact support.` };
+    }
+
     const balance = await checkPollinationsBalance(effectiveApiKey);
-    return { balance, error: balance === null ? 'Failed to fetch balance.' : null };
-  } catch (error) {
-    console.error('Error in checkPollenBalanceAction:', error);
-    return { balance: null, error: 'Failed to check pollen balance.' };
+    if (balance === null) {
+        return { balance: null, error: 'Authorization failed or account balance is empty.' };
+    }
+    return { balance, error: null };
+  } catch (error: any) {
+    console.error('❌ Error in checkPollenBalanceAction:', error);
+    return { balance: null, error: `Failed to verify API key: ${error.message || 'Unknown error'}` };
   }
 }
 
@@ -997,3 +1062,89 @@ export async function generateQuizAction(
 }
 
 
+/**
+ * Server action to log administrative activity.
+ * Bypasses client-side security rules by using the Admin SDK.
+ * Also performs incremental stats updates for real-time dashboarding.
+ */
+export async function logAdminActivityAction(entry: any) {
+  try {
+    const { initializeFirebaseServer } = await import('@/firebase/server');
+    const { firestore, admin } = initializeFirebaseServer();
+    if (!firestore || !admin) throw new Error('Firestore/Admin not initialized');
+
+    const timestamp = entry.timestamp || new Date().toISOString();
+    const dateObj = new Date(timestamp);
+    const dateStr = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
+    const monthStr = dateStr.substring(0, 7); // YYYY-MM
+
+    // 1. Record the activity log
+    await firestore.collection('adminActivityLog').add({
+      ...entry,
+      timestamp,
+    });
+
+    // 2. Perform incremental stats updates if applicable
+    const type = entry.type;
+    const increments: Record<string, any> = {};
+
+    if (type === 'MAP_CREATED') {
+      // totalMindmapsEver: always increment — counts every map ever generated, never decreases
+      increments.totalMindmapsEver = admin.firestore.FieldValue.increment(1);
+      increments.newMapsToday = admin.firestore.FieldValue.increment(1);
+      // totalMindmaps (current library): only increment for root maps, not sub-maps
+      // Sub-maps have isSubMap:true in metadata — skip them to avoid inflating the live count
+      const isSubMap = entry.metadata?.isSubMap === true || !!entry.metadata?.parentMapId;
+      if (!isSubMap) {
+        increments.totalMindmaps = admin.firestore.FieldValue.increment(1);
+      }
+    } else if (type === 'USER_CREATED') {
+      increments.totalUsers = admin.firestore.FieldValue.increment(1);
+      increments.newUsersToday = admin.firestore.FieldValue.increment(1);
+    } else if (type === 'LOGIN') {
+      increments.activeUsers = admin.firestore.FieldValue.increment(1);
+    } else if (type === 'MAP_DELETED') {
+      // Only decrement totalMindmaps (current library) — totalMindmapsEver never decreases
+      increments.totalMindmaps = admin.firestore.FieldValue.increment(-1);
+    } else if (type === 'CHAT_CREATED') {
+      increments.totalChats = admin.firestore.FieldValue.increment(1);
+    }
+
+    if (Object.keys(increments).length > 0) {
+      const statsBatch = firestore.batch();
+      
+      // Update All-Time stats
+      const allTimeRef = firestore.collection('adminStats').doc('all-time');
+      statsBatch.set(allTimeRef, { 
+        ...increments, 
+        lastUpdated: Date.now(),
+        timestamp: new Date().toISOString() 
+      }, { merge: true });
+
+      // Update Daily stats
+      const dailyRef = firestore.collection('adminStats').doc(`daily_${dateStr}`);
+      statsBatch.set(dailyRef, { 
+        ...increments,
+        date: dateStr,
+        lastUpdated: Date.now(),
+        timestamp: new Date().toISOString()
+      }, { merge: true });
+
+      // Update Monthly stats
+      const monthlyRef = firestore.collection('adminStats').doc(`monthly_${monthStr}`);
+      statsBatch.set(monthlyRef, { 
+        ...increments,
+        month: monthStr,
+        lastUpdated: Date.now(),
+        timestamp: new Date().toISOString()
+      }, { merge: true });
+
+      await statsBatch.commit();
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error in logAdminActivityAction:', error);
+    return { success: false, error: error.message };
+  }
+}

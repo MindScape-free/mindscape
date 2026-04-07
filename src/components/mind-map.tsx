@@ -148,6 +148,7 @@ import {
 import { categorizeMindMapAction, publishMindMapAction } from '@/app/actions/community';
 import { MindMapStatus } from '@/hooks/use-mind-map-stack';
 import { LeafNodeCard } from './mind-map/leaf-node-card';
+import { useAIConfig } from '@/contexts/ai-config-context';
 import { ExplanationDialog } from './mind-map/explanation-dialog';
 import { SummaryDialog } from './summary-dialog';
 import { MindMapToolbar } from './mind-map/mind-map-toolbar';
@@ -163,7 +164,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
-import { useAIConfig } from '@/contexts/ai-config-context';
 import { ImageGenerationDialog, ImageSettings } from './mind-map/image-generation-dialog';
 import {
   Tooltip,
@@ -707,13 +707,16 @@ export const MindMap = ({
 
     setIsExplanationLoading(true);
     const { explanation, error } = await explainNodeAction({
+      subCategoryName: activeSubCategory!.name,
       mainTopic: data.topic,
-      subCategoryName: activeSubCategory.name,
-      subCategoryDescription: activeSubCategory.description,
       explanationMode: explanationMode,
+      targetLanguage: selectedLanguage,
       usePdfContext: useFileAware,
-      pdfContext: useFileAware && (data as any).pdfContext ? JSON.stringify((data as any).pdfContext) : undefined,
+      pdfContext: (data as any).pdfContext ? JSON.stringify((data as any).pdfContext) : undefined
     }, providerOptions);
+
+    // Refresh balance after AI operation
+    refreshBalance();
 
     if (error) {
       toast({
@@ -753,6 +756,9 @@ export const MindMap = ({
     }, providerOptions);
     setIsExampleLoading(false);
 
+    // Refresh balance after AI operation
+    refreshBalance();
+
     if (error) {
       toast({
         variant: 'destructive',
@@ -787,6 +793,9 @@ export const MindMap = ({
         usePdfContext: useFileAware,
         pdfContext: useFileAware && (data as any).pdfContext ? JSON.stringify((data as any).pdfContext) : undefined,
       }, providerOptions);
+
+      // Refresh balance after AI operation
+      refreshBalance();
 
       if (error) {
         toast({ title: "Failed to generate questions", description: error, variant: "destructive" });
@@ -864,6 +873,9 @@ export const MindMap = ({
         colorPalette,
         lighting
       }, providerOptions);
+
+      // Refresh balance after AI completion
+      refreshBalance();
 
       if (error) throw new Error(error);
       return enhancedPrompt?.enhancedPrompt || prompt;
@@ -1184,6 +1196,9 @@ export const MindMap = ({
         summary: data.summary,
       }, providerOptions);
 
+      // Refresh balance after AI operation
+      refreshBalance();
+
       if (catError) throw new Error(catError);
 
       update({ id: toastId, title: 'Uploading Data...', description: 'Saving your mind map to the community repository.' });
@@ -1253,6 +1268,9 @@ export const MindMap = ({
       const { summary, error } = await summarizeTopicAction({
         mindMapData: toPlainObject(data)
       }, providerOptions);
+
+      // Refresh balance after AI operation
+      refreshBalance();
 
       if (error || !summary) {
         throw new Error(error || 'Failed to generate summary');

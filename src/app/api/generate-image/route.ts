@@ -1,18 +1,68 @@
 import { NextResponse } from 'next/server';
 
-// Available Pollinations models with pricing (free only)
-const POLLINATIONS_MODELS = {
-  'flux': { cost: 0.001, quality: 'high', description: 'Flux Schnell - High Quality & Rapid Speed' },
-  'flux-2-dev': { cost: 0.001, quality: 'alpha', description: 'FLUX.2 Dev (api.airforce) - High Detail' },
-  'dirtberry': { cost: 0.001, quality: 'alpha', description: 'Dirtberry (api.airforce) - Stylized' },
-  'dirtberry-pro': { cost: 0.0015, quality: 'alpha', description: 'Dirtberry Pro (api.airforce) - High Detail' },
-  'zimage': { cost: 0.002, quality: 'ultra-fast', description: 'Z-Image Turbo - Accelerated Generation' },
-  'imagen-4': { cost: 0.0025, quality: 'alpha', description: 'Google Imagen 4 (api.airforce) - High Fidelity' },
-  'grok-imagine': { cost: 0.0025, quality: 'alpha', description: 'xAI Grok Imagine (api.airforce) - Creative' },
-  'klein': { cost: 0.01, quality: 'alpha', description: 'FLUX.2 Klein 4B - Compact High Quality' },
+// Hardcoded Fallback Models (Verified Stable)
+const FALLBACK_MODELS = {
+  'flux': { cost: 0.001, quality: 'high', description: 'Flux Schnell - Fast high-quality image generation', paid_only: false },
+  'zimage': { cost: 0.002, quality: 'high', description: 'Z-Image Turbo - Fast 6B Flux with 2x upscaling', paid_only: false },
+  'klein': { cost: 0.01, quality: 'high', description: 'FLUX.2 Klein 4B - Compact high-quality model', paid_only: false },
+  'gptimage': { cost: 0.0105, quality: 'high', description: 'GPT Image 1 Mini - OpenAI lightweight gen', paid_only: false },
+  'qwen-image': { cost: 0.03, quality: 'high', description: 'Qwen Image Plus - Alibaba High-fidelity', paid_only: false },
 } as const;
 
-type ModelName = keyof typeof POLLINATIONS_MODELS | string;
+// In-memory cache for dynamic models
+let cachedModels: any = null;
+let lastFetchTime = 0;
+const CACHE_EXPIRY = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Fetch and map models from Pollinations.ai live registry
+ */
+async function getDynamicModels() {
+  const now = Date.now();
+  console.log("🔍 [DynamicModels] Checking cache...");
+  if (cachedModels && (now - lastFetchTime < CACHE_EXPIRY)) {
+    console.log("✅ [DynamicModels] Using cached list.");
+    return cachedModels;
+  }
+
+  console.log("🌐 [DynamicModels] Fetching from Pollinations...");
+  try {
+    const response = await fetch('https://gen.pollinations.ai/image/models', { next: { revalidate: 3600 } });
+    if (!response.ok) throw new Error(`Pollinations Status: ${response.status}`);
+    
+    const rawModels = await response.json();
+    console.log(`📦 [DynamicModels] Received ${rawModels.length} models.`);
+    const mapped: Record<string, any> = {};
+
+    rawModels.forEach((m: any) => {
+      // Filter for FREE IMAGE models only
+      const isFree = m.paid_only !== true;
+      const isImage = m.output_modalities?.includes('image');
+      
+      if (!m.name || !isFree || !isImage) return;
+
+      const cost = parseFloat(m.pricing?.completionImageTokens || "0.04");
+      
+      mapped[m.name] = {
+        cost,
+        quality: cost < 0.005 ? 'rapid' : cost < 0.02 ? 'high' : 'ultra',
+        description: m.description || `${m.name} Image Generation`,
+        paid_only: false
+      };
+    });
+
+    // Merge with fallback to ensure our core set always exists
+    cachedModels = { ...FALLBACK_MODELS, ...mapped };
+    lastFetchTime = now;
+    console.log("✅ [DynamicModels] Successfully refreshed.");
+    return cachedModels;
+  } catch (err: any) {
+    console.error("❌ Failed to fetch dynamic models, using fallbacks:", err.message);
+    return FALLBACK_MODELS;
+  }
+}
+
+type ModelName = keyof typeof FALLBACK_MODELS | string;
 
 interface GenerateImageRequest {
   prompt: string;
@@ -148,7 +198,7 @@ function applyStyleToPrompt(prompt: string, style?: string, composition?: string
 /**
  * Model registry for rotation
  */
-const MODEL_ROTATION_ORDER = ['flux', 'flux-2-dev', 'dirtberry', 'dirtberry-pro', 'zimage', 'imagen-4', 'grok-imagine', 'klein'];
+const DEFAULT_ROTATION = ['qwen-image', 'flux', 'zimage', 'klein', 'gptimage'];
 
 
 /**
@@ -184,9 +234,27 @@ export async function POST(req: Request) {
       userApiKey
     } = body;
 
-    // Map legacy or incorrect model names
+    // Map legacy or incorrect model names to current valid models
     let model = requestedModel;
-    if (model === 'flux-pro' || model === 'klein-large') model = 'klein';
+    const modelMapping: Record<string, string> = {
+      // Old deprecated models
+      'flux-realism': 'flux',
+      'flux-cablyai': 'flux',
+      'flux-anime': 'flux',
+      'flux-3d': 'flux',
+      'any-dark': 'flux',
+      'flux-pro': 'flux',
+      'turbo': 'flux',
+      'flux-2-dev': 'flux',
+      'klein-large': 'klein',
+      'klein': 'klein',
+      'dirtberry': 'flux',
+      'dirtberry-pro': 'flux',
+      'zimage': 'zimage',
+      'imagen-4': 'flux',
+      'grok-imagine': 'grok-imagine',
+    };
+    if (modelMapping[model]) model = modelMapping[model];
 
     // Validate inputs
     if (!prompt || prompt.trim().length === 0) {
@@ -196,23 +264,17 @@ export async function POST(req: Request) {
       );
     }
 
-    // Relaxed model validation
-    const isValidModel = !!(POLLINATIONS_MODELS as any)[model];
+    const POLLINATIONS_MODELS = await getDynamicModels();
 
-    // If not a known model and no user API key, block it
-    if (!isValidModel && !userApiKey) {
-      return NextResponse.json(
-        { error: `Invalid model for guest generation. Available models: ${Object.keys(POLLINATIONS_MODELS).join(', ')}` },
-        { status: 400 }
-      );
-    }
+    // Validate inputs
 
     console.log(`🎨 Generating image with model: ${model} (${userApiKey ? 'User Key' : 'Server Key'})`);
 
-    // Determine which API key to use (STRICT: user key only, No server-side fallback)
-    const apiKey = userApiKey;
+    // Determine which API key to use (User Key Priority, Fallback to Server Key)
+    let apiKey = (userApiKey && userApiKey.trim() !== "") ? userApiKey : process.env.POLLINATIONS_API_KEY;
 
     if (!apiKey) {
+      console.warn("⚠️ No API key found (User or Server). Image generation may fail or be restricted.");
       return NextResponse.json(
         { error: 'No API key available. Please add your Pollinations API key in your profile settings.' },
         { status: 401 }
@@ -224,8 +286,13 @@ export async function POST(req: Request) {
 
     // Implement model rotation for higher success rate
     let currentModel = model;
-    let rotationIndex = MODEL_ROTATION_ORDER.indexOf(currentModel as any);
+    
+    // For guest users (no API key), only use free models
+    const rotationPool = userApiKey ? Object.keys(POLLINATIONS_MODELS) : DEFAULT_ROTATION;
+    
+    let rotationIndex = rotationPool.indexOf(currentModel as any);
     if (rotationIndex === -1) rotationIndex = 0;
+    currentModel = rotationPool[rotationIndex];
 
     const maxRetries = 3;
 
@@ -241,8 +308,7 @@ export async function POST(req: Request) {
           height: height.toString(),
           seed: Math.floor(Math.random() * 1000000).toString(),
           nologo: 'true',
-          private: 'true',
-          enhance: 'false' // We handle enhancement manually for better control
+          enhance: 'false'
         });
 
         const imageUrl = `${baseUrl}?${params}`;
@@ -259,16 +325,15 @@ export async function POST(req: Request) {
           const errorText = await response.text();
           const isModeration = errorText.includes('moderation_blocked') || errorText.includes('safety system');
           const isRetryable = response.status >= 500 || response.status === 429 || response.status === 530;
+          const isRotationCandidate = isRetryable || isModeration || response.status === 401 || response.status === 403;
 
           console.error(`❌ Pollinations API error [Model: ${currentModel}]: ${response.status} - ${errorText.substring(0, 100)}...`);
 
           if (attempt < maxRetries - 1) {
-            // Always rotate on server errors (5xx/530) or rate limits (429)
-            // If it's moderation, definitely rotate to try a different model filter
-            if (isRetryable || isModeration) {
-              rotationIndex = (rotationIndex + 1) % MODEL_ROTATION_ORDER.length;
-              currentModel = MODEL_ROTATION_ORDER[rotationIndex];
-              console.warn(`🔄 Rotating to next model: ${currentModel} due to ${isModeration ? 'moderation' : 'server error (' + response.status + ')'}...`);
+            if (isRotationCandidate) {
+              rotationIndex = (rotationIndex + 1) % rotationPool.length;
+              currentModel = rotationPool[rotationIndex];
+              console.warn(`🔄 Rotating to next model: ${currentModel} due to ${response.status}...`);
             } else {
               console.warn(`⏳ Retrying same model: ${currentModel} due to transient error...`);
             }
@@ -283,8 +348,8 @@ export async function POST(req: Request) {
             {
               error: `Image generation failed: ${response.status}`,
               details: errorText,
-              suggestion: response.status === 401
-                ? 'Invalid API key or insufficient balance.'
+              suggestion: response.status === 401 || response.status === 403
+                ? (userApiKey ? 'Your API key may be invalid or restricted. Try clearing it in settings or check your balance.' : 'Server API key error. Please try again later.')
                 : 'Moderation or capacity error. Please try a more general prompt.'
             },
             { status: response.status }
@@ -333,10 +398,11 @@ export async function POST(req: Request) {
  * Get list of available models
  */
 export async function GET() {
+  const models = await getDynamicModels();
   return NextResponse.json({
-    models: Object.entries(POLLINATIONS_MODELS).map(([name, info]) => ({
+    models: Object.entries(models).map(([name, info]) => ({
       name,
-      ...info
+      ...(info as any)
     }))
   });
 }

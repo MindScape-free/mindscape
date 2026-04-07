@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Loader2, Mail, User, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/firebase';
 import { Icons } from '@/components/icons';
+import { useAdminActivityLog } from '@/lib/admin-utils';
 
 const AUTH_ERRORS: Record<string, string> = {
   'auth/invalid-email': 'Please enter a valid email address',
@@ -69,6 +70,7 @@ export function AuthForm({ onSuccess }: { onSuccess?: () => void }) {
   const auth = useAuth();
   const router = useRouter();
   const { toast } = useToast();
+  const { logAdminActivity } = useAdminActivityLog();
 
   const switchMode = (toSignUp: boolean) => {
     setIsSignUp(toSignUp);
@@ -95,9 +97,31 @@ export function AuthForm({ onSuccess }: { onSuccess?: () => void }) {
         if (username.trim()) {
           await updateProfile(userCredential.user, { displayName: username.trim() });
         }
+        
+        // Log for admin activity
+        await logAdminActivity({
+          type: 'USER_CREATED',
+          targetId: userCredential.user.uid,
+          targetType: 'user',
+          performedBy: userCredential.user.uid,
+          performedByEmail: email,
+          details: `New user registered: ${username.trim() || email}`
+        });
+
         toast({ title: 'Account created successfully!' });
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        
+        // Log login activity
+        await logAdminActivity({
+          type: 'LOGIN',
+          targetId: userCredential.user.uid,
+          targetType: 'user',
+          performedBy: userCredential.user.uid,
+          performedByEmail: email,
+          details: `Admin/User login: ${email}`
+        });
+
         toast({ title: 'Welcome back!' });
       }
       onSuccess ? onSuccess() : router.back();
@@ -126,9 +150,27 @@ export function AuthForm({ onSuccess }: { onSuccess?: () => void }) {
       const isNewUser = tokenResponse?.isNewUser;
 
       if (isNewUser || !result.user.displayName) {
+        // Log new user via Google
+        await logAdminActivity({
+          type: 'USER_CREATED',
+          targetId: result.user.uid,
+          targetType: 'user',
+          performedBy: result.user.uid,
+          performedByEmail: result.user.email || 'google-user',
+          details: `New user registered via Google: ${result.user.email}`
+        });
         toast({ title: 'Welcome to MindScape!' });
         onSuccess ? onSuccess() : router.push('/profile?setup=true');
       } else {
+        // Log Google login
+        await logAdminActivity({
+          type: 'LOGIN',
+          targetId: result.user.uid,
+          targetType: 'user',
+          performedBy: result.user.uid,
+          performedByEmail: result.user.email || 'google-user',
+          details: `Google login: ${result.user.email}`
+        });
         toast({ title: 'Welcome back!' });
         onSuccess ? onSuccess() : router.back();
       }
