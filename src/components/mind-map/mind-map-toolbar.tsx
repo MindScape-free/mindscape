@@ -33,7 +33,8 @@ import {
     HelpCircle,
     Search,
     FileText,
-    Pin
+    Pin,
+    Trash2
 } from 'lucide-react';
 import {
     Select,
@@ -93,6 +94,7 @@ interface MindMapToolbarProps {
     onViewSource?: () => void;
     pinnedMessagesCount?: number;
     onOpenPinnedMessages?: () => void;
+    onOpenChat?: () => void;
 }
 
 export const MindMapToolbar = ({
@@ -135,15 +137,15 @@ export const MindMapToolbar = ({
     onViewSource,
     pinnedMessagesCount = 0,
     onOpenPinnedMessages,
+    onOpenChat,
 }: MindMapToolbarProps) => {
     // Helper to determine if interaction should be disabled
     const isBusy = status !== 'idle' || isTranslating || isPublishing;
     const isSyncing = status === 'syncing';
 
     return (
-        <div className="fixed top-[70px] left-0 right-0 z-50 transition-all duration-300 px-4">
-            <div className="mx-auto max-w-3xl">
-                <div className="glass-panel p-1.5 rounded-2xl flex items-center justify-center gap-1 sm:gap-2 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl bg-black/40 overflow-x-auto no-scrollbar">
+        <div className="fixed top-[70px] left-0 right-0 z-50 transition-all duration-300 px-4 flex justify-center">
+            <div className="glass-panel p-1.5 rounded-2xl inline-flex items-center justify-center gap-1 sm:gap-2 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl bg-black/40">
 
                 {/* 1. LEFT SECTION: View & Navigation */}
                 <div className="flex items-center gap-1 pr-2 sm:pr-3 border-r border-white/10">
@@ -468,7 +470,6 @@ export const MindMapToolbar = ({
                         )}
                     </div>
 
-                </div>
                 </div>
             </div>
         </div>

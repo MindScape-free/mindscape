@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { MindMap } from '@/components/mind-map';
 import { MindMapData, NestedExpansionItem, MindMapWithId } from '@/types/mind-map';
+import { PinnedMessage } from '@/types/chat';
 import { NeuralLoader } from '@/components/loading/neural-loader';
 import { safeGetItem, safeRemoveItem } from '@/lib/storage';
 import dynamic from 'next/dynamic';
@@ -63,6 +64,7 @@ import { useMindMapStack } from '@/hooks/use-mind-map-stack';
 import { useAIConfig } from '@/contexts/ai-config-context';
 import { useMindMapRouter } from '@/hooks/use-mind-map-router';
 import { useMindMapPersistence } from '@/hooks/use-mind-map-persistence';
+import { useMindMapPinnedMessages } from '@/hooks/use-mind-map-pinned-messages';
 import { useAIHealth } from '@/hooks/use-ai-health';
 import { useActivity } from '@/contexts/activity-context';
 
@@ -78,6 +80,7 @@ function MindMapPageContent() {
   const [mode, setMode] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatInitialMessage, setChatInitialMessage] = useState<string | undefined>(undefined);
+  const [chatInitialView, setChatInitialView] = useState<'chat' | 'history' | 'pins' | 'canvas-pins' | undefined>(undefined);
   const [chatMode, setChatMode] = useState<'chat' | 'quiz'>('chat');
   const [chatTopic, setChatTopic] = useState<string | undefined>(undefined);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -86,6 +89,8 @@ function MindMapPageContent() {
   const [tempDepth, setTempDepth] = useState<'low' | 'medium' | 'deep'>('low');
   const [showReferences, setShowReferences] = useState(false);
   const [useFileAwareContext, setUseFileAwareContext] = useState(false);
+  const [pinnedMessagesCount, setPinnedMessagesCount] = useState(0);
+  const [pinnedMessagesDialogOpen, setPinnedMessagesDialogOpen] = useState(false);
 
   // Universal Nested Maps Dialog state
   const [mapHierarchy, setMapHierarchy] = useState<{
@@ -176,6 +181,21 @@ function MindMapPageContent() {
     handleUpdateRef.current = handleUpdateCurrentMap;
   }, [handleUpdateCurrentMap]);
 
+  // PINNED MESSAGES
+  const { pinnedMessages, addPinnedMessage, addSoloPinnedMessage, removePinnedMessage, getPinnedMessagesCount } = useMindMapPinnedMessages({
+    mindMapId: mindMap?.id,
+    pinnedMessages: mindMap?.pinnedMessages || [],
+    onPinsUpdate: (updatedPins) => {
+      handleUpdateCurrentMap({ pinnedMessages: updatedPins });
+      setPinnedMessagesCount(updatedPins.length);
+    },
+  });
+
+  // Update pinned count when mindMap changes
+  useEffect(() => {
+    setPinnedMessagesCount(mindMap?.pinnedMessages?.length || 0);
+  }, [mindMap?.pinnedMessages]);
+
   // Local state for initial fetch/regenerate only
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [initialError, setInitialError] = useState<string | null>(null);
@@ -193,10 +213,10 @@ function MindMapPageContent() {
   // Pinned Messages Dialog State
   const [isPinnedDialogOpen, setIsPinnedDialogOpen] = useState(false);
 
-  // Handler to open pinned messages dialog
+  // Toolbar pin button → open chat panel at canvas-pins view
   const handleOpenPinnedMessages = useCallback(() => {
-    setIsChatOpen(true); // Open chat panel if not already open
-    setIsPinnedDialogOpen(true);
+    setChatInitialView('canvas-pins');
+    setIsChatOpen(true);
   }, []);
 
 
@@ -850,12 +870,12 @@ function MindMapPageContent() {
   }, [handleSaveMapFromHook]);
 
   const handleExplainInChat = useCallback((message: string) => {
-    // If we have PDF context in the current map, auto-enable PDF-aware responses
     if (mindMapRef.current?.pdfContext || mindMapRef.current?.sourceFileContent) {
       setUseFileAwareContext(true);
     }
     setChatInitialMessage(message);
     setChatMode('chat');
+    setChatInitialView(undefined);
     setIsChatOpen(true);
   }, []);
 
@@ -1156,6 +1176,7 @@ function MindMapPageContent() {
             onShare={handleShare}
             isSharing={isSharing}
             onOpenPinnedMessages={handleOpenPinnedMessages}
+            pinnedMessagesCount={pinnedMessagesCount}
           />
 
           {/* Search References Panel */}
@@ -1301,8 +1322,12 @@ function MindMapPageContent() {
         isOpen={isChatOpen}
         onClose={() => {
           setIsChatOpen(false);
-          setChatInitialMessage(undefined); // Clear initial message to prevent auto-resend on reopen
+          setChatInitialMessage(undefined);
+          setChatInitialView(undefined);
         }}
+        initialView={chatInitialView}
+        canvasPinnedMessages={pinnedMessages}
+        onCanvasUnpin={removePinnedMessage}
         topic={chatTopic || (mindMap?.topic) || 'General Conversation'}
         initialMode={chatMode}
         initialMessage={chatInitialMessage}
@@ -1315,11 +1340,42 @@ function MindMapPageContent() {
         onMindMapGenerated={async (data) => {
           handleReplaceCurrentMap(data);
           setHasUnsavedChanges(true);
-          await handleSaveMapFromHook(true);
+          await handleSaveMap(data, data.id, true);
         }}
-        pinnedMessagesCount={0}
-        onOpenPinnedMessages={() => setIsPinnedDialogOpen(true)}
-        openPinnedDialog={isPinnedDialogOpen}
+        onOpenPinnedMessages={handleOpenPinnedMessages}
+        onAddMindMapPin={(question, response) => {
+          addPinnedMessage(question, response, params.mapId || params.sessionId || undefined);
+        }}
+        onRemoveMindMapPin={(messageId) => {
+          const pinToRemove = pinnedMessages.find(p => 
+            p.question.messageId === messageId || p.soloMessage?.messageId === messageId
+          );
+          if (pinToRemove) {
+            removePinnedMessage(pinToRemove.id);
+          }
+        }}
+      />
+
+      {/* GlobalPinnedMessagesDialog - opens from toolbar pin button */}
+      <GlobalPinnedMessagesDialog
+        isOpen={pinnedMessagesDialogOpen}
+        onClose={() => setPinnedMessagesDialogOpen(false)}
+        pinnedMessages={pinnedMessages}
+        onUnpin={removePinnedMessage}
+        onCopy={(content) => {
+          navigator.clipboard.writeText(content);
+        }}
+        currentMap={mindMap || null}
+        onMindMapGenerated={async (mapData) => {
+          handleReplaceCurrentMap(mapData);
+          setHasUnsavedChanges(true);
+          await handleSaveMap(mapData, mapData.id, true);
+        }}
+        onOpenChat={(initialView) => {
+          setChatInitialView(initialView || 'pins');
+          setPinnedMessagesDialogOpen(false);
+          setIsChatOpen(true);
+        }}
       />
     </>
   );

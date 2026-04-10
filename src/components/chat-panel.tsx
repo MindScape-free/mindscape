@@ -49,7 +49,9 @@ import {
   Image as ImageIcon,
   FileDigit,
   FileText,
-  Pin
+  Pin,
+  PinOff,
+  Brain
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -70,9 +72,10 @@ import { MindMapData } from '@/types/mind-map';
 import { Quiz, QuizResult } from '@/ai/schemas/quiz-schema';
 import { QuizCard } from './chat/quiz-card';
 import { QuizResultCard } from './chat/quiz-result';
-import { PinnedMessagesDialog } from './chat/PinnedMessagesDialog';
+import { CreateMindmapDialog } from './chat/CreateMindmapDialog';
 
-import { doc, getDoc, collection, getDocs, query, where, limit, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, where, limit, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { ChatSession, ChatMessage, ChatAttachment, PinnedMessage, toDate } from '@/types/chat';
 
 import { toPlainObject } from '@/lib/serialize';
 import {
@@ -96,7 +99,7 @@ import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useChatPersistence } from '@/hooks/use-chat-persistence';
 import { useChatMigration } from '@/hooks/use-chat-migration';
 import { useStreamingChat } from '@/hooks/use-streaming-chat';
-import { ChatSession, ChatMessage, ChatAttachment, toDate } from '@/types/chat';
+
 
 export interface Attachment {
   type: 'text' | 'pdf' | 'image';
@@ -129,9 +132,14 @@ interface ChatPanelProps {
   sourceFileContent?: string | null;
   sourceFileType?: 'text' | 'pdf' | 'image' | null;
   onMindMapGenerated?: (data: MindMapData) => void;
-  pinnedMessagesCount?: number;
   onOpenPinnedMessages?: () => void;
-  openPinnedDialog?: boolean;
+  onAddMindMapPin?: (question: ChatMessage, response?: ChatMessage) => void;
+  onRemoveMindMapPin?: (messageId: string) => void;
+  canvasPinnedMessages?: import('@/types/chat').PinnedMessage[];
+  onCanvasUnpin?: (pinId: string) => void;
+  onAllPinsUnpin?: (pinId: string, mapId?: string) => void;
+  initialView?: 'chat' | 'history' | 'pins' | 'canvas-pins';
+  rememberLastView?: boolean;
 }
 
 const allSuggestionPrompts = [
@@ -174,9 +182,13 @@ export function ChatPanel({
   sourceFileContent,
   sourceFileType,
   onMindMapGenerated,
-  pinnedMessagesCount = 0,
   onOpenPinnedMessages,
-  openPinnedDialog = false,
+  onAddMindMapPin,
+  onRemoveMindMapPin,
+  canvasPinnedMessages = [],
+  onCanvasUnpin,
+  onAllPinsUnpin,
+  initialView,
 }: ChatPanelProps) {
   const { toast } = useToast();
   const { user, firestore } = useFirebase();
@@ -204,10 +216,23 @@ export function ChatPanel({
   // 1. STATE MANAGEMENT
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [view, setView] = useState<'chat' | 'history'>('chat');
+  const [view, setView] = useState<'chat' | 'history' | 'pins' | 'pin-chat' | 'canvas-pins'>('chat');
+  const [allUserPins, setAllUserPins] = useState<PinnedMessage[]>([]);
+  const [isLoadingPins, setIsLoadingPins] = useState(false);
+  const [activeChatPin, setActiveChatPin] = useState<PinnedMessage | null>(null);
+  const [pinChatMessages, setPinChatMessages] = useState<{ role: 'user' | 'ai'; content: string }[]>([]);
+  const [pinChatInput, setPinChatInput] = useState('');
+  const [isPinChatLoading, setIsPinChatLoading] = useState(false);
+  const pinChatTopRef = useRef<HTMLDivElement>(null);
+  const pinChatEndRef = useRef<HTMLDivElement>(null);
+  const pinChatInitializedRef = useRef(false);
   const [persona, setPersona] = useState<Persona>('Teacher');
   const [displayedPrompts, setDisplayedPrompts] = useState<any[]>([]);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [createMindmapOpen, setCreateMindmapOpen] = useState(false);
+  const [createMindmapContent, setCreateMindmapContent] = useState('');
+  const [createMindmapUserMessage, setCreateMindmapUserMessage] = useState('');
+  const [unpinConfirmId, setUnpinConfirmId] = useState<string | null>(null);
 
   // ATTACHMENTS STATE
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -217,6 +242,9 @@ export function ChatPanel({
   // RESIZE STATE
   const [panelWidth, setPanelWidth] = useLocalStorage('mindscape-chat-panel-width', 500);
   const [isResizing, setIsResizing] = useState(false);
+
+  // REMEMBER LAST VIEW
+  const [lastView, setLastView] = useLocalStorage<'chat' | 'history' | 'pins' | 'canvas-pins'>('mindscape-chat-last-view', 'chat');
 
 
 
@@ -258,16 +286,6 @@ export function ChatPanel({
   // STREAMING STATE
   const [streamingMessages, setStreamingMessages] = useState<Record<string, string>>({});
   const [streamingIds, setStreamingIds] = useState<Set<string>>(new Set());
-
-  // PINNED MESSAGES STATE
-  const [isPinnedDialogOpen, setIsPinnedDialogOpen] = useState(false);
-
-  // Effect to handle external trigger for opening pinned dialog
-  useEffect(() => {
-    if (openPinnedDialog) {
-      setIsPinnedDialogOpen(true);
-    }
-  }, [openPinnedDialog]);
 
   const { startStream, stopStream, reset: resetStream, text: streamText, isStreaming, error: streamError } = useStreamingChat({
     onChunk: (chunk) => {
@@ -395,6 +413,25 @@ export function ChatPanel({
   /**
    * Starts a new chat session.
    */
+  const loadAllUserPins = useCallback(async () => {
+    if (!user || !firestore) return;
+    setIsLoadingPins(true);
+    try {
+      const mapsSnap = await getDocs(collection(firestore, 'users', user.uid, 'mindmaps'));
+      const pins: PinnedMessage[] = [];
+      mapsSnap.forEach(d => {
+        const data = d.data();
+        if (Array.isArray(data.pinnedMessages)) pins.push(...data.pinnedMessages);
+      });
+      pins.sort((a, b) => b.createdAt - a.createdAt);
+      setAllUserPins(pins);
+    } catch (e) {
+      console.error('Failed to load user pins:', e);
+    } finally {
+      setIsLoadingPins(false);
+    }
+  }, [user, firestore]);
+
   const startNewChat = useCallback(async (newTopic: string = 'General Conversation') => {
     const mapId = mindMapData?.id || null;
     const mapTitle = topic || 'General';
@@ -439,6 +476,8 @@ export function ChatPanel({
   const activeSession = useMemo(() => {
     return sessions.find(s => s.id === activeSessionId) || null;
   }, [sessions, activeSessionId]);
+
+  const messages = activeSession?.messages ?? [];
 
   /**
    * Sends a message to the AI assistant and updates the current session.
@@ -722,8 +761,6 @@ export function ChatPanel({
     }
   }, [isOpen, user, firestore]);
 
-  const messages = activeSession?.messages ?? [];
-
   // Shuffle prompts when starting a fresh 'General Conversation' chat
   useEffect(() => {
     if (activeSessionId && activeSession?.title === 'General Conversation' && activeSession.messages.length === 0) {
@@ -791,18 +828,17 @@ export function ChatPanel({
       if (activeSessionId) {
         const current = sessions.find(s => s.id === activeSessionId);
         const isSessionRelevant = current && (
-          (sessionId && current.mapId === sessionId) || 
+          (sessionId && current.mapId === sessionId) ||
           (current.title === topic)
         );
-        
         if (isSessionRelevant) {
-          setView('chat');
+          if (!initialView) setView('chat');
           return;
         }
       }
 
-      const existingSession = sessions.find(s => 
-        (sessionId && s.mapId === sessionId) || 
+      const existingSession = sessions.find(s =>
+        (sessionId && s.mapId === sessionId) ||
         s.title === topic
       );
 
@@ -811,12 +847,26 @@ export function ChatPanel({
       } else if (!isSessionLoading) {
         startNewChat(topic);
       }
-      setView('chat');
+      // Only reset to chat if no specific view was requested
+      if (!initialView) setView('chat');
     } else {
       hasSentInitialMessage.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, topic, isSessionLoading, sessionId]);
+
+  // Apply initialView — runs after session effect so it wins
+  useEffect(() => {
+    if (isOpen) {
+      const viewToSet = initialView || lastView;
+      setView(viewToSet);
+      setLastView(viewToSet);
+      // Pre-load all pins when opening a pin view
+      if (viewToSet === 'pins' || viewToSet === 'canvas-pins') {
+        loadAllUserPins();
+      }
+    }
+  }, [isOpen, initialView, lastView]);
 
   /**
    * Handles sending an initial message if one is provided.
@@ -1036,8 +1086,18 @@ export function ChatPanel({
   const togglePinMessage = (messageId: string) => {
     if (!activeSessionId || !activeSession) return;
 
-    const message = messages.find(m => m.id === messageId);
-    if (!message) return;
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1) return;
+
+    const message = messages[messageIndex];
+    if (message.type !== 'text') {
+      toast({
+        variant: 'destructive',
+        title: 'Cannot pin',
+        description: 'Only text messages can be pinned.',
+      });
+      return;
+    }
 
     const updatedMessages = messages.map(m => 
       m.id === messageId ? { ...m, isPinned: !m.isPinned } : m
@@ -1045,34 +1105,19 @@ export function ChatPanel({
     updateSession(activeSessionId, { messages: updatedMessages });
     
     if (!message.isPinned) {
-      toast({
-        title: 'Message pinned',
-        description: 'You can find it in your pinned messages.',
-      });
+      if (message.role === 'ai') {
+        const userMessageIndex = messageIndex - 1;
+        if (userMessageIndex >= 0 && messages[userMessageIndex].role === 'user' && messages[userMessageIndex].type === 'text') {
+          onAddMindMapPin?.(messages[userMessageIndex], message);
+        } else {
+          onAddMindMapPin?.(message);
+        }
+      } else {
+        onAddMindMapPin?.(message);
+      }
     } else {
-      toast({
-        title: 'Message unpinned',
-        description: 'Message removed from pinned messages.',
-      });
+      onRemoveMindMapPin?.(messageId);
     }
-  };
-
-  /**
-   * Handles unpin from the dialog.
-   */
-  const handleUnpinFromDialog = (messageId: string) => {
-    togglePinMessage(messageId);
-  };
-
-  /**
-   * Handles copy from the dialog.
-   */
-  const handleCopyFromDialog = (content: string) => {
-    navigator.clipboard.writeText(content);
-    toast({
-      title: 'Copied!',
-      description: 'Message copied to clipboard.',
-    });
   };
 
   /**
@@ -1426,6 +1471,7 @@ export function ChatPanel({
                   if (message.type === 'quiz-selector' && hiddenSelectorMessages.has(index)) {
                     return null;
                   }
+                  const isTextMessage = message.type === 'text';
                   return (
                     <motion.div
                       key={`${activeSessionId}-${index}`}
@@ -1465,6 +1511,12 @@ export function ChatPanel({
                               : 'bg-secondary/40 backdrop-blur-sm border border-white/5 rounded-bl-none'
                           )}
                         >
+                          {message.isPinned && (
+                            <div className="px-3 pt-2 flex items-center gap-1.5">
+                              <Pin className="h-3 w-3 text-amber-400 fill-amber-400" />
+                              <span className="text-[10px] font-bold text-amber-400/80 uppercase tracking-widest">Pinned</span>
+                            </div>
+                          )}
                           <div className="p-4">
                             {message.type === 'quiz' && message.quiz ? (
                               <QuizCard
@@ -1538,95 +1590,59 @@ export function ChatPanel({
                               </div>
                             )}
                           </div>
-                          {message.role === 'ai' && (
+                          {isTextMessage && !streamingIds.has(message.id) && (
                             <div className="flex items-center gap-1 px-3 pb-2 pt-0">
-                              {/* Show buttons only when there's content or not streaming */}
-                              {(streamingMessages[message.id] || message.content || !streamingIds.has(message.id)) && (
-                                <>
-                                  {/* Stop streaming button */}
-                                  {streamingIds.has(message.id) && streamingMessages[message.id] && (
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6 text-muted-foreground hover:text-red-400"
-                                            onClick={stopStream}
-                                          >
-                                            <X className="h-3 w-3" />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Stop</TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  )}
-                                  
-                                  {/* Copy button */}
-                                  {!streamingIds.has(message.id) && (
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6 text-muted-foreground hover:text-primary"
-                                            onClick={() => handleCopyMessage(streamingMessages[message.id] || message.content, index)}
-                                          >
-                                            {copiedIndex === index ? (
-                                              <Check className="h-3 w-3 text-green-500" />
-                                            ) : (
-                                              <Copy className="h-3 w-3" />
-                                            )}
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Copy</TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  )}
-
-                                  {/* Regenerate button */}
-                                  {!streamingIds.has(message.id) && (
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6 text-muted-foreground hover:text-primary"
-                                            onClick={() => handleRegenerate(index)}
-                                          >
-                                            <RefreshCw className={cn("h-3 w-3", isLoading && index === messages.length - 1 && "animate-spin")} />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Regenerate</TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  )}
-
-                                  {/* Pin button */}
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className={cn(
-                                            "h-6 w-6 transition-all",
-                                            message.isPinned 
-                                              ? "text-amber-400 hover:text-amber-300" 
-                                              : "text-muted-foreground hover:text-amber-400"
-                                          )}
-                                          onClick={() => togglePinMessage(message.id)}
-                                        >
-                                          <Pin className={cn("h-3 w-3", message.isPinned && "fill-current")} />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>{message.isPinned ? 'Unpin' : 'Pin message'}</TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                </>
+                              {streamingIds.has(message.id) && streamingMessages[message.id] && (
+                                <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-400" onClick={stopStream}>
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger><TooltipContent>Stop</TooltipContent></Tooltip></TooltipProvider>
                               )}
+                              {message.role === 'ai' && (
+                                <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => handleCopyMessage(streamingMessages[message.id] || message.content, index)}>
+                                    {copiedIndex === index ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                                  </Button>
+                                </TooltipTrigger><TooltipContent>Copy</TooltipContent></Tooltip></TooltipProvider>
+                              )}
+{message.role === 'ai' && (
+                                <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => handleRegenerate(index)}>
+                                    <RefreshCw className={cn("h-3 w-3", isLoading && index === messages.length - 1 && "animate-spin")} />
+                                  </Button>
+                                </TooltipTrigger><TooltipContent>Regenerate</TooltipContent></Tooltip></TooltipProvider>
+                              )}
+                              {message.role === 'ai' && !streamingIds.has(message.id) && (
+                                <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-6 w-6 text-muted-foreground hover:text-primary"
+                                    onClick={() => {
+                                      const userMsg = index > 0 && messages[index - 1]?.role === 'user'
+                                        ? messages[index - 1].content
+                                        : undefined;
+                                      setCreateMindmapUserMessage(userMsg || '');
+                                      setCreateMindmapContent(streamingMessages[message.id] || message.content);
+                                      setCreateMindmapOpen(true);
+                                    }}
+                                  >
+                                    <Brain className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger><TooltipContent>Create Mind Map</TooltipContent></Tooltip></TooltipProvider>
+                              )}
+                              <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost" size="icon"
+                                  className={cn("h-6 w-6 transition-all", message.isPinned ? "text-amber-400 hover:text-amber-300" : "text-muted-foreground hover:text-amber-400")}
+                                  onClick={() => togglePinMessage(message.id)}
+                                >
+                                  <motion.div animate={message.isPinned ? { scale: [1, 1.3, 1] } : { scale: 1 }} transition={{ duration: 0.3 }}>
+                                    <Pin className={cn("h-3 w-3", message.isPinned && "fill-current")} />
+                                  </motion.div>
+                                </Button>
+                              </TooltipTrigger><TooltipContent>{message.isPinned ? 'Unpin' : 'Pin'}</TooltipContent></Tooltip></TooltipProvider>
                             </div>
                           )}
                         </div>
@@ -1929,6 +1945,407 @@ export function ChatPanel({
     );
   };
 
+  const handlePinChatSend = useCallback(async (messageToSend?: string) => {
+    const content = (messageToSend || pinChatInput).trim();
+    if (!content || isPinChatLoading || !activeChatPin) return;
+
+    setPinChatInput('');
+    const userMsg = { role: 'user' as const, content };
+    const updatedMessages = [...pinChatMessages, userMsg];
+    setPinChatMessages(updatedMessages);
+    setIsPinChatLoading(true);
+
+    // Build history from all messages so far (pinned Q&A is already in pinChatMessages)
+    const history: { role: 'user' | 'assistant'; content: string }[] = updatedMessages.map(m => ({
+      role: m.role === 'ai' ? 'assistant' : 'user',
+      content: m.content,
+    }));
+
+    const { response, error } = await chatAction(
+      { question: content, topic: activeChatPin.question?.content?.substring(0, 100) || 'Pinned Message', history, persona: 'Teacher' },
+      providerOptions
+    );
+
+    setIsPinChatLoading(false);
+    const aiContent = error ? `Sorry, I encountered an error: ${error}` : response?.answer || 'No response received.';
+    setPinChatMessages(prev => [...prev, { role: 'ai', content: aiContent }]);
+  }, [pinChatInput, isPinChatLoading, activeChatPin, pinChatMessages, providerOptions]);
+
+  useEffect(() => {
+    if (view !== 'pin-chat') return;
+    if (!pinChatInitializedRef.current) {
+      pinChatInitializedRef.current = true;
+      setTimeout(() => pinChatTopRef.current?.scrollIntoView({ behavior: 'auto' }), 30);
+    } else {
+      pinChatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [pinChatMessages, isPinChatLoading, view]);
+
+  const renderPinChatView = () => {
+    if (!activeChatPin) return null;
+    return (
+      <>
+        <ScrollArea className="flex-grow px-4">
+          <div className="flex flex-col gap-4 py-4">
+            <div ref={pinChatTopRef} />
+            {/* Pinned origin label */}
+            <div className="flex items-center gap-2 px-1">
+              <Pin className="h-3 w-3 text-amber-400 fill-amber-400 shrink-0" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">Pinned Conversation</span>
+              <div className="flex-1 h-[1px] bg-amber-500/20" />
+            </div>
+
+            {/* All messages (pinned Q&A + follow-ups) using identical markup to renderChatView */}
+            <div className="flex flex-col gap-6">
+              <AnimatePresence initial={false} mode="popLayout">
+                {pinChatMessages.map((msg, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
+                    className="flex flex-col gap-3"
+                  >
+                    <div className={cn('flex items-start gap-3', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+                      {msg.role === 'ai' ? (
+                        <Avatar className="h-8 w-8 border">
+                          <AvatarFallback className="bg-primary text-primary-foreground">
+                            <Bot className="h-5 w-5" />
+                          </AvatarFallback>
+                        </Avatar>
+                      ) : (
+                        <div className="order-2">
+                          <Avatar className="h-8 w-8 border shadow-sm">
+                            <AvatarFallback className="bg-secondary text-secondary-foreground">
+                              <User className="h-5 w-5 text-muted-foreground" />
+                            </AvatarFallback>
+                          </Avatar>
+                        </div>
+                      )}
+                      <div className={cn(
+                        'rounded-3xl max-w-[85%] overflow-hidden transition-all duration-300 break-words overflow-wrap-anywhere',
+                        msg.role === 'user'
+                          ? 'bg-primary text-primary-foreground rounded-br-none order-1'
+                          : 'bg-secondary/40 backdrop-blur-sm border border-white/5 rounded-bl-none'
+                      )}>
+                        <div className="p-4">
+                          {msg.role === 'ai' ? (
+                            <div
+                              className="text-sm prose prose-sm max-w-none leading-relaxed prose-invert break-words whitespace-pre-wrap"
+                              style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}
+                            >
+                              <span dangerouslySetInnerHTML={{ __html: formatText(msg.content) }} />
+                            </div>
+                          ) : (
+                            <p className="text-sm leading-relaxed">{msg.content}</p>
+                          )}
+                        </div>
+                        {msg.role === 'ai' && (
+                          <div className="flex items-center gap-1 px-3 pb-2 pt-0">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-muted-foreground hover:text-primary"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(msg.content);
+                                      toast({ title: 'Copied!', description: 'Response copied to clipboard.' });
+                                    }}
+                                  >
+                                    <Copy className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Copy</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+
+            {isPinChatLoading && (
+              <div className="flex items-start gap-3">
+                <Avatar className="h-8 w-8 border shrink-0">
+                  <AvatarFallback className="bg-primary text-primary-foreground"><Bot className="h-5 w-5" /></AvatarFallback>
+                </Avatar>
+                <div className="bg-secondary/40 border border-white/5 rounded-3xl rounded-bl-none px-4 py-3">
+                  <div className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={pinChatEndRef} />
+          </div>
+        </ScrollArea>
+        <div className="px-4 pb-4 pt-2 border-t border-white/10">
+          <form onSubmit={(e) => { e.preventDefault(); handlePinChatSend(); }} className="flex items-end gap-2">
+            <div className="relative flex-grow rounded-2xl bg-zinc-900/60 backdrop-blur-3xl shadow-2xl overflow-hidden">
+              <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <Input
+                autoFocus
+                value={pinChatInput}
+                onChange={(e) => setPinChatInput(e.target.value)}
+                placeholder="Ask a follow-up question..."
+                disabled={isPinChatLoading}
+                className="bg-transparent border-white/10 focus:border-primary/50 min-h-[48px] rounded-2xl focus-visible:ring-0 focus-visible:ring-offset-0"
+              />
+            </div>
+            <Button
+              type="submit"
+              disabled={isPinChatLoading || !pinChatInput.trim()}
+              className="h-11 w-11 rounded-2xl shadow-lg bg-primary text-white flex-shrink-0"
+            >
+              {isPinChatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
+          </form>
+        </div>
+      </>
+    );
+  };
+
+  const PinCard = ({ pin, onUnpinFn }: { pin: import('@/types/chat').PinnedMessage; onUnpinFn?: (id: string) => void }) => {
+    const aiContent = pin.response?.content || pin.soloMessage?.content || '';
+    const userContent = pin.question?.content || '';
+    const isConfirming = unpinConfirmId === pin.id;
+
+    const openPinChat = () => {
+      setActiveChatPin(pin);
+      setPinChatInput('');
+      const initial: { role: 'user' | 'ai'; content: string }[] = [];
+      if (userContent) initial.push({ role: 'user', content: userContent });
+      if (aiContent) initial.push({ role: 'ai', content: aiContent });
+      setPinChatMessages(initial);
+      pinChatInitializedRef.current = false;
+      setView('pin-chat');
+    };
+
+    return (
+      <div className="relative rounded-2xl border border-white/8 bg-white/[0.03] hover:bg-white/[0.05] hover:border-white/15 overflow-hidden transition-all duration-200">
+        {/* Role accent bar */}
+        <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-2xl bg-gradient-to-b from-blue-400 to-cyan-500" />
+
+        {/* Unpin confirmation overlay */}
+        <AnimatePresence>
+          {isConfirming && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="absolute inset-0 z-10 bg-zinc-950/90 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center gap-3 px-5"
+            >
+              <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center">
+                <PinOff className="h-4 w-4 text-amber-400" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-semibold text-white">Remove this pin?</p>
+                <p className="text-xs text-zinc-500 mt-0.5">This can't be undone.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost" size="sm"
+                  onClick={() => setUnpinConfirmId(null)}
+                  className="h-8 px-4 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-white/8 rounded-xl"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="ghost" size="sm"
+                  onClick={() => { setUnpinConfirmId(null); onUnpinFn?.(pin.id); }}
+                  className="h-8 px-4 text-xs font-bold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 rounded-xl"
+                >
+                  Unpin
+                </Button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Header */}
+        <div className="pl-5 pr-3 py-2.5 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="w-5 h-5 rounded-md bg-blue-500/20 flex items-center justify-center shrink-0">
+              <User className="h-3 w-3 text-blue-400" />
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-widest font-orbitron text-blue-400 shrink-0">You</span>
+            <span className="text-[10px] text-zinc-500 truncate">
+              {(userContent || aiContent).substring(0, 60)}
+              {(userContent || aiContent).length > 60 ? '...' : ''}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-0.5 shrink-0">
+            {/* Copy */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon"
+                    className="h-7 w-7 text-zinc-600 hover:text-zinc-200 hover:bg-white/8 rounded-lg"
+                    onClick={() => {
+                      navigator.clipboard.writeText(userContent || aiContent);
+                      toast({ title: 'Copied!', description: 'Copied to clipboard.' });
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Copy</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Create Mind Map from AI response */}
+            {aiContent && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon"
+                      className="h-7 w-7 text-zinc-600 hover:text-violet-400 hover:bg-violet-500/10 rounded-lg"
+                      onClick={() => {
+                        setCreateMindmapUserMessage(userContent);
+                        setCreateMindmapContent(aiContent);
+                        setCreateMindmapOpen(true);
+                      }}
+                    >
+                      <Brain className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Create Mind Map</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
+            {/* Chat */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon"
+                    className="h-7 w-7 text-zinc-600 hover:text-primary hover:bg-primary/10 rounded-lg"
+                    onClick={openPinChat}
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Chat about this</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Unpin — triggers inline confirmation */}
+            {onUnpinFn && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon"
+                      className="h-7 w-7 text-zinc-600 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg"
+                      onClick={() => setUnpinConfirmId(pin.id)}
+                    >
+                      <PinOff className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Unpin</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="ml-5 h-px bg-white/5" />
+
+        {/* Content */}
+        <div className="pl-5 pr-4 py-3">
+          <p className="text-sm text-zinc-300 leading-relaxed line-clamp-2">
+            {userContent || aiContent}
+          </p>
+          {pin.response && (
+            <p className="text-xs text-zinc-500 line-clamp-1 mt-1.5">
+              <span className="text-violet-400/70 font-semibold">AI:</span> {pin.response.content}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderCanvasPinsView = () => (
+    <ScrollArea className="flex-grow p-4">
+      {canvasPinnedMessages.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/8 flex items-center justify-center">
+            <Pin className="h-6 w-6 text-zinc-600" />
+          </div>
+          <p className="text-sm font-semibold text-zinc-400">No Pinned Messages</p>
+          <p className="text-xs text-zinc-600 text-center max-w-xs">Pin messages from this map's chat to see them here.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {canvasPinnedMessages.map(pin => (
+            <PinCard key={pin.id} pin={pin} onUnpinFn={onCanvasUnpin} />
+          ))}
+        </div>
+      )}
+    </ScrollArea>
+  );
+
+  const renderPinsView = () => {
+    const handleUnpinFromAll = async (pinId: string) => {
+      // Optimistically remove from local state
+      setAllUserPins(prev => prev.filter(p => p.id !== pinId));
+
+      // Find and update the Firestore doc that owns this pin
+      if (user && firestore) {
+        try {
+          const mapsSnap = await getDocs(collection(firestore, 'users', user.uid, 'mindmaps'));
+          for (const d of mapsSnap.docs) {
+            const data = d.data();
+            if (Array.isArray(data.pinnedMessages) && data.pinnedMessages.some((p: any) => p.id === pinId)) {
+              const updated = data.pinnedMessages.filter((p: any) => p.id !== pinId);
+              await updateDoc(doc(firestore, 'users', user.uid, 'mindmaps', d.id), { pinnedMessages: updated });
+              break;
+            }
+          }
+        } catch (e) {
+          console.error('Failed to unpin from all maps:', e);
+          toast({ variant: 'destructive', title: 'Unpin failed', description: 'Could not remove the pin.' });
+        }
+      }
+
+      onAllPinsUnpin?.(pinId);
+    };
+
+    return (
+      <ScrollArea className="flex-grow p-4">
+        {isLoadingPins ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        ) : allUserPins.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/8 flex items-center justify-center">
+              <Pin className="h-6 w-6 text-zinc-600" />
+            </div>
+            <p className="text-sm font-semibold text-zinc-400">No Pinned Messages</p>
+            <p className="text-xs text-zinc-600 text-center max-w-xs">Pin messages from any mind map chat to see them here.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {allUserPins.map(pin => (
+              <PinCard key={pin.id} pin={pin} onUnpinFn={handleUnpinFromAll} />
+            ))}
+          </div>
+        )}
+      </ScrollArea>
+    );
+  };
+
   const renderHistoryView = () => {
     const filteredSessions = sessions.filter((s: ChatSession) => s.title !== 'General Conversation');
 
@@ -2008,45 +2425,99 @@ export function ChatPanel({
         </div>
         <div className="flex items-center gap-2 p-2 border-b">
           <div className="flex items-center gap-1 min-w-0 flex-1">
-            {view === 'history' && activeSession && (
+            {(view === 'history' || view === 'pin-chat') && (
+              <Button variant="ghost" size="icon" onClick={() => {
+                if (view === 'pin-chat') setView('pins');
+                else setView('chat');
+              }} className="flex-shrink-0">
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            )}
+            {(view === 'canvas-pins' || view === 'pins') && (
               <Button variant="ghost" size="icon" onClick={() => setView('chat')} className="flex-shrink-0">
                 <ArrowLeft className="h-5 w-5" />
               </Button>
             )}
             <div className="min-w-0 flex-1 flex items-center gap-2">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex flex-col min-w-0">
-                      <SheetTitle className="text-sm sm:text-base font-bold truncate cursor-help flex items-center gap-2">
-                        {view === 'history'
-                          ? 'Chat History'
-                          : activeSession?.title ?? 'AI Chat'}
-                        {isSyncing && (
-                          <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="flex items-center gap-1 text-[10px] font-medium text-primary animate-pulse"
-                          >
-                            <RefreshCw className="h-2.5 w-2.5 animate-spin" />
-                            <span>Syncing</span>
-                          </motion.div>
-                        )}
-                      </SheetTitle>
-                      <SheetDescription className="sr-only">
-                        Assistant for {topic}
-                      </SheetDescription>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" align="start" className="max-w-[300px]">
-                    <p className="text-xs break-words">
-                      {view === 'history'
-                        ? 'Chat History'
-                        : activeSession?.title ?? 'AI Chat'}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              {/* Pin view tab switcher */}
+              {(view === 'canvas-pins' || view === 'pins') ? (
+                <>
+                  <SheetTitle className="sr-only">Pinned Messages</SheetTitle>
+                  <SheetDescription className="sr-only">Pinned messages panel</SheetDescription>
+                  <div className="flex items-center bg-white/5 rounded-xl p-0.5 border border-white/8 gap-0.5">
+                  <button
+                    onClick={() => setView('canvas-pins')}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all',
+                      view === 'canvas-pins'
+                        ? 'bg-amber-500/20 text-amber-300 shadow-sm'
+                        : 'text-zinc-500 hover:text-zinc-300'
+                    )}
+                  >
+                    <Pin className="h-3 w-3" />
+                    This Map
+                    {canvasPinnedMessages.length > 0 && (
+                      <span className={cn(
+                        'text-[9px] font-black px-1.5 py-0.5 rounded-full',
+                        view === 'canvas-pins' ? 'bg-amber-500/30 text-amber-300' : 'bg-white/10 text-zinc-500'
+                      )}>
+                        {canvasPinnedMessages.length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => { setView('pins'); loadAllUserPins(); }}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all',
+                      view === 'pins'
+                        ? 'bg-amber-500/20 text-amber-300 shadow-sm'
+                        : 'text-zinc-500 hover:text-zinc-300'
+                    )}
+                  >
+                    <Pin className="h-3 w-3" />
+                    All Pins
+                    {allUserPins.length > 0 && (
+                      <span className={cn(
+                        'text-[9px] font-black px-1.5 py-0.5 rounded-full',
+                        view === 'pins' ? 'bg-amber-500/30 text-amber-300' : 'bg-white/10 text-zinc-500'
+                      )}>
+                        {allUserPins.length}
+                      </span>
+                    )}
+                  </button>
+                </div>
+                </>
+              ) : (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex flex-col min-w-0">
+                        <SheetTitle className="text-sm sm:text-base font-bold truncate cursor-help flex items-center gap-2">
+                          {view === 'history' ? 'Chat History' : view === 'pin-chat' ? (activeChatPin?.question?.content?.substring(0, 40) || 'Pinned Chat') : activeSession?.title ?? 'AI Chat'}
+                          {isSyncing && (
+                            <motion.div
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              className="flex items-center gap-1 text-[10px] font-medium text-primary animate-pulse"
+                            >
+                              <RefreshCw className="h-2.5 w-2.5 animate-spin" />
+                              <span>Syncing</span>
+                            </motion.div>
+                          )}
+                        </SheetTitle>
+                        <SheetDescription className="sr-only">
+                          Assistant for {topic}
+                        </SheetDescription>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" align="start" className="max-w-[300px]">
+                      <p className="text-xs break-words">
+                        {view === 'history' ? 'Chat History' : activeSession?.title ?? 'AI Chat'}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
 
               {/* Source File Icon & Toggle in Header */}
               {view === 'chat' && sourceFileContent && (
@@ -2206,6 +2677,32 @@ export function ChatPanel({
                   </Tooltip>
                 </TooltipProvider>
 
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setView('canvas-pins');
+                          loadAllUserPins();
+                        }}
+                        className={cn('relative', (view === 'pins' || view === 'canvas-pins') && 'text-amber-400')}
+                      >
+                        <Pin className="h-5 w-5" />
+                        {canvasPinnedMessages.length > 0 && (
+                          <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white">
+                            {canvasPinnedMessages.length}
+                          </span>
+                        )}
+                        <span className="sr-only">Pinned Messages</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom"><p>Pinned Messages</p></TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
                 <Button type="button" variant="ghost" size="icon" onClick={() => setView('history')}>
                   <History className="h-5 w-5" />
                   <span className="sr-only">Chat History</span>
@@ -2226,17 +2723,22 @@ export function ChatPanel({
           </div>
         </div>
 
-        {view === 'chat' ? renderChatView() : renderHistoryView()}
+        {view === 'chat' ? renderChatView() : view === 'history' ? renderHistoryView() : view === 'pins' ? renderPinsView() : view === 'canvas-pins' ? renderCanvasPinsView() : renderPinChatView()}
 
         </SheetContent>
       </Sheet>
 
-      <PinnedMessagesDialog
-        isOpen={isPinnedDialogOpen}
-        onClose={() => setIsPinnedDialogOpen(false)}
-        pinnedMessages={messages.filter(m => m.isPinned)}
-        onUnpin={handleUnpinFromDialog}
-        onCopy={handleCopyFromDialog}
+      <CreateMindmapDialog
+        open={createMindmapOpen}
+        onOpenChange={setCreateMindmapOpen}
+        content={createMindmapContent}
+        userMessage={createMindmapUserMessage}
+        currentMap={mindMapData}
+        onMindmapCreated={(mapData) => {
+          if (onMindMapGenerated) {
+            onMindMapGenerated(mapData);
+          }
+        }}
       />
     </>
   );

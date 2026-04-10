@@ -22,6 +22,22 @@ export interface ChatMessage {
   isPinned?: boolean;
 }
 
+export interface PinnedMessageContent {
+  messageId: string;
+  role: 'user' | 'ai';
+  content: string;
+  timestamp: Timestamp | number;
+}
+
+export interface PinnedMessage {
+  id: string;
+  sessionId: string;
+  createdAt: number;
+  question: PinnedMessageContent;
+  response?: PinnedMessageContent;
+  soloMessage?: PinnedMessageContent;
+}
+
 export interface ChatSession {
   id: string;
   mapId: string | null;

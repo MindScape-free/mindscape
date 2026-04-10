@@ -1,5 +1,6 @@
 
 import { Timestamp } from 'firebase/firestore';
+import { PinnedMessage } from './chat';
 
 export interface SubCategory {
   id?: string;
@@ -151,6 +152,7 @@ export interface BaseMindMapData {
   sourcesCount?: number;
   mode?: 'single' | 'compare' | 'multi';
   compareData?: CompareData;
+  pinnedMessages?: PinnedMessage[];
 }
 
 export interface PdfContextData {

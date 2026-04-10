@@ -237,6 +237,7 @@ interface MindMapProps {
   useFileAware?: boolean;
   onToggleFileAware?: () => void;
   onOpenPinnedMessages?: () => void;
+  pinnedMessagesCount?: number;
 }
 
 /**
@@ -292,6 +293,7 @@ export const MindMap = ({
   onToggleFileAware,
   onViewSource,
   onOpenPinnedMessages,
+  pinnedMessagesCount = 0,
 }: MindMapProps) => {
   const [viewMode, setViewMode] = useState<'accordion' | 'map' | 'roadmap'>('accordion');
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
@@ -1330,6 +1332,7 @@ export const MindMap = ({
         hasSourceFile={!!data.sourceFileContent}
         onViewSource={onViewSource}
         onOpenPinnedMessages={onOpenPinnedMessages}
+        pinnedMessagesCount={pinnedMessagesCount}
       />
 
       <div className="container max-w-6xl mx-auto px-4 space-y-12 pt-12">
