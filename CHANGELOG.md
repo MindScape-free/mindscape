@@ -1,3 +1,45 @@
+## [v1.6.7] - 2026-04-09
+
+### ⚡ Real-Time Streaming Chat
+- **Streaming API**: New `/api/chat/stream` endpoint using Server-Sent Events (SSE)
+- **Streaming Hook**: `useStreamingChat` hook for managing streaming state
+- **Progressive Rendering**: AI responses appear word-by-word as they're generated
+- **Blinking Cursor**: Visual indicator shows streaming progress
+- **Stop Button**: Ability to stop streaming mid-generation
+- **Error Handling**: Graceful fallback if streaming fails
+- **Regenerate Support**: Streaming works for both new messages and regenerations
+
+### 🎨 Canvas Page Refactor
+- **Component Extraction**: Reorganized canvas page with extracted reusable components:
+  - `BlobPdfViewer`: Standalone PDF viewer component
+  - `SourceFileModal`: Unified source content display modal
+  - `SourceParser`: Shared source content parsing utility
+- **Code Organization**: Reduced canvas/page.tsx from 1532 to ~1327 lines for better maintainability
+
+### 🎙️ Audio Summary Integration
+- **AI TTS Integration**: Full integration of Pollinations TTS API for high-quality audio synthesis
+- **Voice Options**: Multiple AI voices (Alloy, Echo, Fable, Onyx, Nova, Shimmer)
+- **Toggle Switch**: Easy switching between AI-generated and browser native TTS
+- **MP3 Download**: Download AI-generated audio summaries directly
+- **Speed Control**: Adjustable playback speed (0.75x, 1x, 1.25x)
+
+### 📱 Mobile Responsiveness
+- **Toolbar Optimization**: Collapsible toolbar with adaptive buttons for different screen sizes
+- **Hidden on Mobile**: Language selector, expand/collapse, Quiz/Summary buttons (show on sm+)
+- **Further Hidden**: File aware toggle, Source button, Nested Maps tools (show on larger screens)
+- **Compact Layout**: Reduced gaps and padding on smaller screens
+- **Smart Visibility**: Essential actions (Share, Save, Publish, Regenerate) always visible
+
+### 📚 MindScape Self-Reference Update
+- **Expanded Architecture Map**: Updated the MindScape Core Architecture mind map with:
+  - New SKEE Pipeline section (Heading Detection, Section Splitter, Keyword Extraction, etc.)
+  - Enhanced Generation Modes (Multi-Source Aggregation, YouTube Integration)
+  - Updated Visualization & UI (Accordion, Radial, Compare views)
+  - Expanded Roadmap & Future phases (Phase 2-4 features)
+  - Cloud & Persistence improvements
+  - Gamification & Progress tracking features
+- **Cleanup**: Removed Roadmap View and Trending Maps (not implemented)
+
 ## [v1.6.6] - 2026-04-08
 
 ### 🛠️ Admin & Infrastructure

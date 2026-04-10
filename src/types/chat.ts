@@ -19,6 +19,7 @@ export interface ChatMessage {
   quiz?: Quiz;
   quizResult?: QuizResult;
   attachments?: ChatAttachment[];
+  isPinned?: boolean;
 }
 
 export interface ChatSession {

@@ -121,9 +121,12 @@ export async function GET(request: Request) {
     }
 
     // Logs
-    let logsQuery = firestore.collection('adminActivityLog').orderBy('timestamp', 'desc');
-    if (since) logsQuery = logsQuery.where('timestamp', '>=', since);
-    else logsQuery = logsQuery.limit(100);
+    let logsQuery: any = firestore.collection('adminActivityLog');
+    if (since) {
+      logsQuery = logsQuery.where('timestamp', '>=', since).orderBy('timestamp', 'desc');
+    } else {
+      logsQuery = logsQuery.orderBy('timestamp', 'desc').limit(100);
+    }
     bundlePromises.push(logsQuery.get());
 
     // Feedback

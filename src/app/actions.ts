@@ -671,12 +671,44 @@ export async function explainNodeAction(
  * @param {ChatWithAssistantInput} input - The input containing the user's question, topic, chat history, and persona.
  * @returns {Promise<{ response: ChatWithAssistantOutput | null; error: string | null }>} An object with either the chat response or an error message.
  */
+const CREATE_MAP_PATTERN = /^(?:create\s+map|generate\s+map|build\s+map|make\s+map|new\s+map|start\s+map)\s*:\s*(.+)/i;
+
 export async function chatAction(
   input: ChatWithAssistantInput,
   options: AIActionOptions = {}
-): Promise<{ response: ChatWithAssistantOutput | null; error: string | null }> {
+): Promise<{ response: ChatWithAssistantOutput | null; error: string | null; mindMapData?: MindMapData | null }> {
   try {
     const effectiveApiKey = await resolveApiKey(options);
+
+    const mapMatch = input.question.match(CREATE_MAP_PATTERN);
+    if (mapMatch) {
+      const topic = mapMatch[1].trim();
+      const depth = (input as any).depth || 'medium';
+      const persona = input.persona || 'Teacher';
+      
+      const result = await generateMindMapAction({
+        topic,
+        depth,
+        persona,
+        useSearch: true,
+      }, options);
+      
+      if (result.error || !result.data) {
+        return { 
+          response: { answer: `❌ Failed to create mind map: ${result.error || 'Unknown error'}` }, 
+          error: null,
+          mindMapData: null 
+        };
+      }
+      
+      const answerText = `🗺️ **Mind Map Created: "${topic}"**\n\nYour mind map has been generated with ${result.data.subTopics?.length || 0} main topics. Click to view the full interactive map.`;
+      
+      return { 
+        response: { answer: answerText }, 
+        error: null,
+        mindMapData: result.data 
+      };
+    }
 
     // Inject PDF context if requested
     let pdfContext = input.pdfContext;

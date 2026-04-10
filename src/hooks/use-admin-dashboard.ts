@@ -5,30 +5,36 @@ import { useFirebase } from '@/firebase';
 const API_BASE = '/api/admin/dashboard';
 
 async function fetcherWithAuth(url: string, getToken: () => Promise<string | null>): Promise<any> {
-  // Get the current Firebase auth token
   let token: string | null = null;
   
   try {
     token = await getToken();
-    console.log('[AdminDashboard] Token result:', token ? 'got token' : 'no token');
+    if (!token) {
+      console.warn('[AdminDashboard] No token available, skipping fetch');
+      return null;
+    }
   } catch (e) {
     console.warn('[AdminDashboard] Failed to get auth token:', e);
+    return null;
   }
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`,
   };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
 
   const res = await fetch(url, { headers });
   console.log('[AdminDashboard] Response status:', res.status);
   
   if (res.status === 403) {
-    throw new Error('Unauthorized: Admin access required');
+    console.warn('[AdminDashboard] 403 - User is not admin or session expired');
+    return null;
   }
-  if (!res.ok) throw new Error('Failed to fetch dashboard data');
+  if (!res.ok) {
+    const error = new Error('Failed to fetch dashboard data');
+    (error as any).status = res.status;
+    throw error;
+  }
   return res.json();
 }
 
@@ -78,8 +84,8 @@ export function useAdminDashboard() {
 
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const mergeData = useCallback((newData: DashboardStats) => {
-    if (!newData.bundle) return;
+  const mergeData = useCallback((newData: DashboardStats | null) => {
+    if (!newData?.bundle) return;
 
     setPersistentBundle(prev => {
       const { users, logs, feedback, serverTime, isIncremental } = newData.bundle;
@@ -122,14 +128,18 @@ export function useAdminDashboard() {
     }
   }, [auth, user]);
 
+  const swrKey = user?.uid ? [STABLE_URL, user.uid] : null;
+
   const { data, error, isLoading, isValidating } = useSWR<DashboardStats>(
-    [STABLE_URL, auth?.currentUser?.uid],
+    swrKey,
     () => fetcherWithAuth(STABLE_URL, getToken),
     {
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
       dedupingInterval: 60000,
+      shouldRetryOnError: false,
       onSuccess: (newData) => {
+        if (!newData?.bundle) return;
         console.log('[AdminDashboard] SWR Data loaded:', {
           users: newData?.bundle?.users?.length || 0,
           logs: newData?.bundle?.logs?.length || 0,
@@ -159,17 +169,24 @@ export function useAdminDashboard() {
         : STABLE_URL;
 
       const token = await getToken();
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+      if (!token) {
+        console.warn('[AdminDashboard] No token, cannot refresh');
+        return;
       }
 
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      };
+
       const response = await fetch(url, { headers });
+      if (response.status === 403) {
+        console.warn('[AdminDashboard] Sync blocked - not admin or session expired');
+        return;
+      }
       if (!response.ok) {
-        if (response.status === 403) throw new Error('Unauthorized: Admin access required');
-        throw new Error('Refresh failed');
+        console.error('[AdminDashboard] Refresh failed:', response.status);
+        return;
       }
 
       const newData = await response.json();
@@ -183,7 +200,7 @@ export function useAdminDashboard() {
       } else {
         mergeData(newData);
       }
-      mutate(STABLE_URL, newData, false);
+      mutate([STABLE_URL, user?.uid], newData, false);
     } catch (err) {
       console.error('Bundle refresh error:', err);
     } finally {

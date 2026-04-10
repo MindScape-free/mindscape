@@ -48,7 +48,8 @@ import {
   Paperclip,
   Image as ImageIcon,
   FileDigit,
-  FileText
+  FileText,
+  Pin
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -69,6 +70,7 @@ import { MindMapData } from '@/types/mind-map';
 import { Quiz, QuizResult } from '@/ai/schemas/quiz-schema';
 import { QuizCard } from './chat/quiz-card';
 import { QuizResultCard } from './chat/quiz-result';
+import { PinnedMessagesDialog } from './chat/PinnedMessagesDialog';
 
 import { doc, getDoc, collection, getDocs, query, where, limit, serverTimestamp, setDoc } from 'firebase/firestore';
 
@@ -93,6 +95,7 @@ declare global {
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useChatPersistence } from '@/hooks/use-chat-persistence';
 import { useChatMigration } from '@/hooks/use-chat-migration';
+import { useStreamingChat } from '@/hooks/use-streaming-chat';
 import { ChatSession, ChatMessage, ChatAttachment, toDate } from '@/types/chat';
 
 export interface Attachment {
@@ -125,6 +128,10 @@ interface ChatPanelProps {
   onUsePdfContextChange?: (usePdf: boolean) => void;
   sourceFileContent?: string | null;
   sourceFileType?: 'text' | 'pdf' | 'image' | null;
+  onMindMapGenerated?: (data: MindMapData) => void;
+  pinnedMessagesCount?: number;
+  onOpenPinnedMessages?: () => void;
+  openPinnedDialog?: boolean;
 }
 
 const allSuggestionPrompts = [
@@ -166,6 +173,10 @@ export function ChatPanel({
   onUsePdfContextChange,
   sourceFileContent,
   sourceFileType,
+  onMindMapGenerated,
+  pinnedMessagesCount = 0,
+  onOpenPinnedMessages,
+  openPinnedDialog = false,
 }: ChatPanelProps) {
   const { toast } = useToast();
   const { user, firestore } = useFirebase();
@@ -244,6 +255,143 @@ export function ChatPanel({
     if (onUsePdfContextChange) onUsePdfContextChange(val);
   };
 
+  // STREAMING STATE
+  const [streamingMessages, setStreamingMessages] = useState<Record<string, string>>({});
+  const [streamingIds, setStreamingIds] = useState<Set<string>>(new Set());
+
+  // PINNED MESSAGES STATE
+  const [isPinnedDialogOpen, setIsPinnedDialogOpen] = useState(false);
+
+  // Effect to handle external trigger for opening pinned dialog
+  useEffect(() => {
+    if (openPinnedDialog) {
+      setIsPinnedDialogOpen(true);
+    }
+  }, [openPinnedDialog]);
+
+  const { startStream, stopStream, reset: resetStream, text: streamText, isStreaming, error: streamError } = useStreamingChat({
+    onChunk: (chunk) => {
+      // Chunk updates handled via effect below
+    },
+    onComplete: (fullText) => {
+      // Stream complete - will be handled via effect
+    },
+    onError: (error) => {
+      // Error handled via effect below
+    }
+  });
+
+  // Track if streaming just completed (for triggering related questions once)
+  const streamingCompletedRef = useRef(false);
+
+  // Effect to sync streaming text to messages
+  useEffect(() => {
+    if (streamText && streamingIds.size > 0) {
+      const firstStreamingId = Array.from(streamingIds)[0];
+      setStreamingMessages(prev => ({
+        ...prev,
+        [firstStreamingId]: streamText
+      }));
+    }
+  }, [streamText, streamingIds]);
+
+  // Effect to handle stream completion - updates message and triggers related questions
+  useEffect(() => {
+    if (!isStreaming && streamText && streamingIds.size > 0) {
+      const firstStreamingId = Array.from(streamingIds)[0];
+      
+      // Update the actual message with final content
+      const currentSession = sessions.find(s => s.id === activeSessionId);
+      if (currentSession) {
+        const messageIndex = currentSession.messages.findIndex(m => m.id === firstStreamingId);
+        if (messageIndex !== -1) {
+          const updatedMessages = [...currentSession.messages];
+          updatedMessages[messageIndex] = {
+            ...updatedMessages[messageIndex],
+            content: streamText
+          };
+          updateSession(activeSessionId, { messages: updatedMessages });
+        }
+      }
+      
+      // Generate related questions after a short delay
+      setTimeout(() => {
+        if (!streamingCompletedRef.current) {
+          streamingCompletedRef.current = true;
+          const session = sessions.find(s => s.id === activeSessionId);
+          if (session && session.messages.length > 0) {
+            const lastMsg = session.messages[session.messages.length - 1];
+            if (lastMsg.role === 'ai' && !streamText.includes('error') && !streamText.includes('Sorry')) {
+              setIsGeneratingRelated(true);
+              generateRelatedQuestionsAction({
+                topic,
+                mindMapData: mindMapData ? toPlainObject(mindMapData) : undefined,
+                history: session.messages.slice(-10).map(m => ({
+                  role: m.role === 'ai' ? 'assistant' : 'user',
+                  content: m.content
+                })),
+                usePdfContext,
+                pdfContext: usePdfContext && mindMapData?.pdfContext ? JSON.stringify(mindMapData.pdfContext) : undefined
+              }, providerOptions).then(({ data: relatedData }) => {
+                if (relatedData?.questions) {
+                  setRelatedQuestions(relatedData.questions);
+                }
+                setIsGeneratingRelated(false);
+              }).catch(() => {
+                setIsGeneratingRelated(false);
+              });
+            }
+          }
+        }
+      }, 100);
+      
+      // Clear streaming state
+      setStreamingIds(prev => {
+        const next = new Set(prev);
+        next.delete(firstStreamingId);
+        return next;
+      });
+      setStreamingMessages(prev => {
+        const next = { ...prev };
+        delete next[firstStreamingId];
+        return next;
+      });
+      
+      // Reset the completion flag after a delay
+      setTimeout(() => {
+        streamingCompletedRef.current = false;
+      }, 1000);
+    }
+  }, [isStreaming, streamText, streamingIds, activeSessionId, sessions, topic, mindMapData, usePdfContext, providerOptions, updateSession]);
+
+  // Effect to handle stream errors
+  useEffect(() => {
+    if (streamError && streamingIds.size > 0) {
+      const firstStreamingId = Array.from(streamingIds)[0];
+      const currentSession = sessions.find(s => s.id === activeSessionId);
+      if (currentSession) {
+        const messageIndex = currentSession.messages.findIndex(m => m.id === firstStreamingId);
+        if (messageIndex !== -1) {
+          const updatedMessages = [...currentSession.messages];
+          updatedMessages[messageIndex] = {
+            ...updatedMessages[messageIndex],
+            content: `Sorry, I encountered an error: ${streamError}`,
+            type: 'text'
+          };
+          updateSession(activeSessionId, { messages: updatedMessages });
+        }
+      }
+      // Clear streaming state
+      setStreamingIds(new Set());
+      setStreamingMessages({});
+      toast({
+        variant: 'destructive',
+        title: 'Stream Error',
+        description: streamError,
+      });
+    }
+  }, [streamError, streamingIds, activeSessionId, sessions, updateSession, toast]);
+
   /**
    * Starts a new chat session.
    */
@@ -319,7 +467,26 @@ export function ChatPanel({
     if (!messageToSend) {
       setInput('');
     }
-    setIsLoading(true);
+
+    // Don't show loading spinner - streaming handles the UI
+    setIsLoading(false);
+
+    // Create placeholder for streaming response
+    const streamingMessageId = `msg-${Date.now()}-ai-stream`;
+    const assistantMessagePlaceholder: ChatMessage = {
+      id: streamingMessageId,
+      role: 'ai',
+      content: '', // Will be updated as stream progresses
+      type: 'text',
+      timestamp: Date.now()
+    };
+
+    // Add placeholder message
+    updateSession(activeSessionId, { messages: [...updatedMessages, assistantMessagePlaceholder] });
+
+    // Track this message as streaming
+    setStreamingIds(prev => new Set([...prev, streamingMessageId]));
+    setStreamingMessages(prev => ({ ...prev, [streamingMessageId]: '' }));
 
     // Prepare history (last 10 messages) for standard chat
     const history = updatedMessages.slice(-10).map(msg => ({
@@ -337,7 +504,8 @@ export function ChatPanel({
       });
     }
 
-    const { response, error } = await chatAction({
+    // Start streaming
+    startStream({
       question: content,
       topic: activeSession?.title || topic,
       history: history.map(m => ({
@@ -348,54 +516,11 @@ export function ChatPanel({
       usePdfContext,
       pdfContext: usePdfContext ? mindMapData?.pdfContext : undefined,
       sessionId: sessionId || activeSessionId,
-      attachments: combinedAttachments as any // Mapping Attachment to logic's expectation
-    }, providerOptions);
-    setIsLoading(false);
+      attachments: combinedAttachments as any,
+      apiKey: providerOptions.apiKey
+    });
 
-    const stripUrls = (text: string): string => {
-      // Regex follows existing logic
-      const markdownLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
-      const urlRegex = /(https?:\/\/[^\s]+)/g;
-      const sourcesRegex = /\(?(Sources?|References?):\s*.*?\)?/gi;
-
-      return cleanCitations(
-        text
-          .replace(markdownLinkRegex, '$1')
-          .replace(urlRegex, '')
-          .replace(sourcesRegex, '')
-      ).trim();
-    };
-
-    const assistantMessage: ChatMessage = {
-      id: `msg-${Date.now()}-ai`,
-      role: 'ai',
-      content: error ? `Sorry, I ran into an error: ${error}` : stripUrls(response!.answer),
-      type: 'text',
-      timestamp: Date.now()
-    };
-
-    updateSession(activeSessionId, { messages: [...updatedMessages, assistantMessage] });
-
-    // After a successful response, generate related questions if we have mindMapData
-    if (!error && response) {
-      setIsGeneratingRelated(true);
-      const { data: relatedData } = await generateRelatedQuestionsAction({
-        topic,
-        mindMapData: mindMapData ? toPlainObject(mindMapData) : undefined,
-        history: [...updatedMessages, assistantMessage].map(m => ({
-          role: m.role === 'ai' ? 'assistant' : 'user',
-          content: m.content
-        })),
-        usePdfContext,
-        pdfContext: usePdfContext && mindMapData?.pdfContext ? JSON.stringify(mindMapData.pdfContext) : undefined
-      }, providerOptions);
-
-      if (relatedData?.questions) {
-        setRelatedQuestions(relatedData.questions);
-      }
-      setIsGeneratingRelated(false);
-    }
-  }, [input, attachments, activeSessionId, activeSession?.messages, topic, persona, providerOptions, mindMapData, updateSession]);
+  }, [input, attachments, activeSessionId, activeSession?.messages, topic, persona, providerOptions, mindMapData, updateSession, startStream]);
 
   /**
    * Handles file selection and processing (PDF, TXT, Images)
@@ -663,10 +788,8 @@ export function ChatPanel({
    */
   useEffect(() => {
     if (isOpen) {
-      // 1. Maintain active session if it's already relevant
       if (activeSessionId) {
         const current = sessions.find(s => s.id === activeSessionId);
-        // If the current session belongs to this map or has the exact matching title, don't switch
         const isSessionRelevant = current && (
           (sessionId && current.mapId === sessionId) || 
           (current.title === topic)
@@ -678,7 +801,6 @@ export function ChatPanel({
         }
       }
 
-      // 2. Find matching session: mapId takes priority over title string
       const existingSession = sessions.find(s => 
         (sessionId && s.mapId === sessionId) || 
         s.title === topic
@@ -687,16 +809,14 @@ export function ChatPanel({
       if (existingSession) {
         setActiveSessionId(existingSession.id);
       } else if (!isSessionLoading) {
-        // 3. Only start a new chat if no relevant session exists
         startNewChat(topic);
       }
       setView('chat');
     } else {
-      // Reset flags when closed
       hasSentInitialMessage.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, topic, sessions, isSessionLoading, sessionId]);
+  }, [isOpen, topic, isSessionLoading, sessionId]);
 
   /**
    * Handles sending an initial message if one is provided.
@@ -890,7 +1010,7 @@ export function ChatPanel({
 
 
   /**
-   * Copies a message to clipboard.
+    * Copies a message to clipboard.
    */
   const handleCopyMessage = async (content: string, index: number) => {
     try {
@@ -911,6 +1031,51 @@ export function ChatPanel({
   };
 
   /**
+   * Toggles pin state for a message.
+   */
+  const togglePinMessage = (messageId: string) => {
+    if (!activeSessionId || !activeSession) return;
+
+    const message = messages.find(m => m.id === messageId);
+    if (!message) return;
+
+    const updatedMessages = messages.map(m => 
+      m.id === messageId ? { ...m, isPinned: !m.isPinned } : m
+    );
+    updateSession(activeSessionId, { messages: updatedMessages });
+    
+    if (!message.isPinned) {
+      toast({
+        title: 'Message pinned',
+        description: 'You can find it in your pinned messages.',
+      });
+    } else {
+      toast({
+        title: 'Message unpinned',
+        description: 'Message removed from pinned messages.',
+      });
+    }
+  };
+
+  /**
+   * Handles unpin from the dialog.
+   */
+  const handleUnpinFromDialog = (messageId: string) => {
+    togglePinMessage(messageId);
+  };
+
+  /**
+   * Handles copy from the dialog.
+   */
+  const handleCopyFromDialog = (content: string) => {
+    navigator.clipboard.writeText(content);
+    toast({
+      title: 'Copied!',
+      description: 'Message copied to clipboard.',
+    });
+  };
+
+  /**
    * Regenerates the last assistant response.
    */
   const handleRegenerate = async (index: number) => {
@@ -926,7 +1091,6 @@ export function ChatPanel({
     const updatedMessages = messages.slice(0, index);
     updateSession(activeSessionId, { messages: updatedMessages });
 
-    setIsLoading(true);
     setRelatedQuestions([]); // Clear when regenerating
 
     const history = updatedMessages.slice(-10).map(msg => ({
@@ -943,7 +1107,25 @@ export function ChatPanel({
       });
     }
 
-    const { response, error } = await chatAction({
+    // Create streaming message placeholder
+    const streamingMessageId = `msg-${Date.now()}-ai-regen`;
+    const assistantMessagePlaceholder: ChatMessage = {
+      id: streamingMessageId,
+      role: 'ai',
+      content: '',
+      type: 'text',
+      timestamp: Date.now()
+    };
+
+    // Add placeholder message
+    updateSession(activeSessionId, { messages: [...updatedMessages, assistantMessagePlaceholder] });
+
+    // Track this message as streaming
+    setStreamingIds(prev => new Set([...prev, streamingMessageId]));
+    setStreamingMessages(prev => ({ ...prev, [streamingMessageId]: '' }));
+
+    // Start streaming
+    startStream({
       question: userMessage,
       topic: activeSession.title,
       history: history.map(m => ({
@@ -954,37 +1136,9 @@ export function ChatPanel({
       usePdfContext,
       pdfContext: usePdfContext ? mindMapData?.pdfContext : undefined,
       sessionId: sessionId || activeSessionId,
-      attachments: combinedAttachments as any
-    }, providerOptions);
-    setIsLoading(false);
-
-    const newAssistantMessage: ChatMessage = {
-      id: `msg-${Date.now()}-ai-regen`,
-      role: 'ai',
-      content: error ? `Sorry, I ran into an error: ${error}` : response!.answer,
-      type: 'text',
-      timestamp: Date.now()
-    };
-
-    updateSession(activeSessionId, { messages: [...updatedMessages, newAssistantMessage] });
-
-    // Also regenerate related questions
-    if (!error && response) {
-      setIsGeneratingRelated(true);
-      const { data: relatedData } = await generateRelatedQuestionsAction({
-        topic: activeSession.title,
-        mindMapData: mindMapData ? toPlainObject(mindMapData) : undefined,
-        history: [...updatedMessages, newAssistantMessage].map(m => ({
-          role: m.role === 'ai' ? 'assistant' : 'user',
-          content: m.content
-        })) as any
-      }, providerOptions);
-
-      if (relatedData?.questions) {
-        setRelatedQuestions(relatedData.questions);
-      }
-      setIsGeneratingRelated(false);
-    }
+      attachments: combinedAttachments as any,
+      apiKey: providerOptions.apiKey
+    });
   };
 
   /**
@@ -1355,54 +1509,131 @@ export function ChatPanel({
                               <div
                                 className="text-sm prose prose-sm max-w-none leading-relaxed prose-invert break-words whitespace-pre-wrap"
                                 style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}
-                                dangerouslySetInnerHTML={{ __html: formatText(message.content) }}
-                              />
+                              >
+                                {(() => {
+                                  // Get content - either from streaming state or message
+                                  const displayContent = streamingMessages[message.id] ?? message.content;
+                                  const isCurrentlyStreaming = streamingIds.has(message.id);
+                                  
+                                  // Show typing indicator when streaming has just started (no content yet)
+                                  if (isCurrentlyStreaming && !displayContent) {
+                                    return (
+                                      <div className="flex items-center gap-1 py-1">
+                                        <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                        <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                        <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                      </div>
+                                    );
+                                  }
+                                  
+                                  return (
+                                    <>
+                                      <span dangerouslySetInnerHTML={{ __html: formatText(displayContent) }} />
+                                      {isCurrentlyStreaming && (
+                                        <span className="inline-block w-0.5 h-4 bg-primary ml-0.5 animate-pulse" />
+                                      )}
+                                    </>
+                                  );
+                                })()}
+                              </div>
                             )}
                           </div>
                           {message.role === 'ai' && (
                             <div className="flex items-center gap-1 px-3 pb-2 pt-0">
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6 text-muted-foreground hover:text-primary"
-                                      onClick={() => handleCopyMessage(message.content, index)}
-                                    >
-                                      {copiedIndex === index ? (
-                                        <Check className="h-3 w-3 text-green-500" />
-                                      ) : (
-                                        <Copy className="h-3 w-3" />
-                                      )}
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Copy</TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
+                              {/* Show buttons only when there's content or not streaming */}
+                              {(streamingMessages[message.id] || message.content || !streamingIds.has(message.id)) && (
+                                <>
+                                  {/* Stop streaming button */}
+                                  {streamingIds.has(message.id) && streamingMessages[message.id] && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 text-muted-foreground hover:text-red-400"
+                                            onClick={stopStream}
+                                          >
+                                            <X className="h-3 w-3" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Stop</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                  
+                                  {/* Copy button */}
+                                  {!streamingIds.has(message.id) && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 text-muted-foreground hover:text-primary"
+                                            onClick={() => handleCopyMessage(streamingMessages[message.id] || message.content, index)}
+                                          >
+                                            {copiedIndex === index ? (
+                                              <Check className="h-3 w-3 text-green-500" />
+                                            ) : (
+                                              <Copy className="h-3 w-3" />
+                                            )}
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Copy</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
 
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6 text-muted-foreground hover:text-primary"
-                                      onClick={() => handleRegenerate(index)}
-                                    >
-                                      <RefreshCw className={cn("h-3 w-3", isLoading && index === messages.length - 1 && "animate-spin")} />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Regenerate</TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
+                                  {/* Regenerate button */}
+                                  {!streamingIds.has(message.id) && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 text-muted-foreground hover:text-primary"
+                                            onClick={() => handleRegenerate(index)}
+                                          >
+                                            <RefreshCw className={cn("h-3 w-3", isLoading && index === messages.length - 1 && "animate-spin")} />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Regenerate</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+
+                                  {/* Pin button */}
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className={cn(
+                                            "h-6 w-6 transition-all",
+                                            message.isPinned 
+                                              ? "text-amber-400 hover:text-amber-300" 
+                                              : "text-muted-foreground hover:text-amber-400"
+                                          )}
+                                          onClick={() => togglePinMessage(message.id)}
+                                        >
+                                          <Pin className={cn("h-3 w-3", message.isPinned && "fill-current")} />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>{message.isPinned ? 'Unpin' : 'Pin message'}</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
                       </div>
 
-                      {/* Related Questions Section */}
-                      {message.role === 'ai' && index === messages.length - 1 && (
+                      {/* Related Questions Section - Only show when not streaming */}
+                      {message.role === 'ai' && index === messages.length - 1 && !streamingIds.has(message.id) && (
                         <div className="ml-11 flex flex-col gap-3">
                           {/* Toggle Header */}
                           {(isGeneratingRelated || relatedQuestions.length > 0) && (
@@ -1517,7 +1748,8 @@ export function ChatPanel({
                 </motion.div>
               )}
 
-              {isLoading && (
+              {/* Loading spinner - shown only for non-streaming operations (quiz generation) */}
+              {isLoading && streamingIds.size === 0 && (
                 <div className="flex items-center gap-3 justify-start">
                   <Avatar className="h-8 w-8 border">
                     <AvatarFallback className="bg-primary text-primary-foreground">
@@ -1743,6 +1975,7 @@ export function ChatPanel({
 
 
   return (
+    <>
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent
         className="flex flex-col p-0 glassmorphism [&>button]:hidden transition-none"
@@ -1995,7 +2228,16 @@ export function ChatPanel({
 
         {view === 'chat' ? renderChatView() : renderHistoryView()}
 
-      </SheetContent>
-    </Sheet>
+        </SheetContent>
+      </Sheet>
+
+      <PinnedMessagesDialog
+        isOpen={isPinnedDialogOpen}
+        onClose={() => setIsPinnedDialogOpen(false)}
+        pinnedMessages={messages.filter(m => m.isPinned)}
+        onUnpin={handleUnpinFromDialog}
+        onCopy={handleCopyFromDialog}
+      />
+    </>
   );
 }

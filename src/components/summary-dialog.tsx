@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -23,10 +23,12 @@ import {
   FastForward,
   Pause,
   Play,
-  RotateCcw
+  RotateCcw,
+  Sparkles
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { useTextToSpeech } from '@/hooks/use-text-to-speech';
 import {
   Select,
   SelectContent,
@@ -56,6 +58,15 @@ function VoiceWaveform({ isPlaying }: { isPlaying: boolean }) {
   );
 }
 
+const VOICE_OPTIONS = [
+  { value: 'alloy', label: 'Alloy', description: 'Neutral & Clear' },
+  { value: 'echo', label: 'Echo', description: 'Warm & Friendly' },
+  { value: 'fable', label: 'Fable', description: 'British Accent' },
+  { value: 'onyx', label: 'Onyx', description: 'Deep & Professional' },
+  { value: 'nova', label: 'Nova', description: 'Bright & Energetic' },
+  { value: 'shimmer', label: 'Shimmer', description: 'Soft & Smooth' },
+];
+
 interface SummaryDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -74,29 +85,33 @@ export function SummaryDialog({
   onReload,
 }: SummaryDialogProps) {
   const { toast } = useToast();
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [selectedVoiceName, setSelectedVoiceName] = useState<string>('male');
   const [viewMode, setViewMode] = useState<'paragraph' | 'bullets'>('bullets');
   const [speechRate, setSpeechRate] = useState(1);
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoice, setSelectedVoice] = useState('alloy');
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [useAdvancedTTS, setUseAdvancedTTS] = useState(true);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const currentCharIndex = useRef(0);
   const isInternalCancel = useRef(false);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedNativeVoice, setSelectedNativeVoice] = useState<string>('male');
 
-  // Load voices dynamically
+  const { generateAndPlay, stop, downloadAudio, isGenerating, isPlaying } = useTextToSpeech({
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Audio Generation Failed",
+        description: error,
+      });
+    },
+    onEnd: () => setUseAdvancedTTS(true),
+  });
+
   useEffect(() => {
     const loadVoices = () => {
-      const allVoices = window.speechSynthesis.getVoices();
-      // Filter for high-quality or preferred languages (English by default for this app)
+      const allVoices = window.speechSynthesis?.getVoices() || [];
       const filteredVoices = allVoices.filter(v => v.lang.includes('en')).sort((a, b) => a.name.localeCompare(b.name));
       setVoices(filteredVoices);
-
-      // Set default voice if not set
-      if (filteredVoices.length > 0 && selectedVoiceName === 'male') {
-        const defaultMale = filteredVoices.find(v => v.name.includes('Male') || v.name.includes('David')) || filteredVoices[0];
-        setSelectedVoiceName(defaultMale.name);
-      }
     };
 
     loadVoices();
@@ -105,68 +120,54 @@ export function SummaryDialog({
     }
   }, []);
 
-  // Stop speaking when dialog closes or component unmounts
   useEffect(() => {
     return () => {
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
+      stop();
     };
-  }, []);
+  }, [stop]);
 
   useEffect(() => {
     if (!isOpen) {
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
-      setIsSpeaking(false);
+      stop();
     }
-  }, [isOpen]);
+  }, [isOpen, stop]);
 
-  // Parse summary into bullets - Handle markdown lists and sentences
   const bulletPoints = summary
     .split(/\n/)
     .map(line => line.trim())
     .filter(line => line.startsWith('- ') || line.startsWith('* ') || line.match(/^\d+\./))
     .map(line => line.replace(/^[-*\d.]+\s+/, ''))
     .concat(
-      // fallback to sentence splitting if no markdown bullets found
       summary.split(/\n/).every(line => !line.startsWith('- ') && !line.startsWith('* '))
         ? summary.split(/[.!?]/).map(s => s.trim()).filter(s => s.length > 20)
         : []
     )
     .filter(s => s.length > 0);
 
-  // Pre-calculate clean text for stable indexing
   const cleanSummary = useMemo(() => {
     return summary.replace(/\*\*|\*|_|#/g, '');
   }, [summary]);
 
-  const startSpeech = (startIndex: number = 0, rate: number = speechRate) => {
+  const startSpeech = useCallback((startIndex: number = 0) => {
     if (typeof window === 'undefined' || !window.speechSynthesis || !cleanSummary) return;
 
     const remainingText = cleanSummary.substring(startIndex);
+    if (!remainingText.trim()) return;
 
-    if (!remainingText.trim()) {
-      setIsSpeaking(false);
-      currentCharIndex.current = 0;
-      return;
-    }
+    window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(remainingText);
-
-    // Voice selection logic
-    const selectedVoice = voices.find(v => v.name === selectedVoiceName);
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
+    const selectedVoiceObj = voices.find(v => v.name === selectedNativeVoice);
+    if (selectedVoiceObj) {
+      utterance.voice = selectedVoiceObj;
     }
-
-    utterance.rate = rate;
-
-    utterance.onstart = () => {
-      // Once the new utterance starts, we can safely clear the internal cancel flag
-      isInternalCancel.current = false;
-    };
+    utterance.rate = speechRate;
 
     utterance.onboundary = (event) => {
       if (event.name === 'word') {
@@ -175,78 +176,71 @@ export function SummaryDialog({
     };
 
     utterance.onend = () => {
-      if (isInternalCancel.current) return;
-
-      if (window.speechSynthesis.speaking === false) {
-        setIsSpeaking(false);
-        currentCharIndex.current = 0;
+      if (!isInternalCancel.current) {
+        setUseAdvancedTTS(true);
       }
     };
 
     utterance.onerror = () => {
-      if (isInternalCancel.current) return;
-
-      setIsSpeaking(false);
-      currentCharIndex.current = 0;
+      if (!isInternalCancel.current) {
+        setUseAdvancedTTS(true);
+      }
     };
 
     utteranceRef.current = utterance;
-    window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
-    setIsSpeaking(true);
-  };
+  }, [cleanSummary, voices, selectedNativeVoice, speechRate]);
 
-  const handleToggleSpeech = () => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
-      toast({
-        variant: "destructive",
-        title: "Speech Not Supported",
-        description: "Your browser does not support text-to-speech.",
-      });
+  const handleToggleSpeech = useCallback(() => {
+    if (useAdvancedTTS && !isGenerating) {
+      generateAndPlay(cleanSummary, selectedVoice);
       return;
     }
 
-    if (isSpeaking) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
+    if (isPlaying || useAdvancedTTS === false) {
+      if (useAdvancedTTS) {
+        stop();
+      } else {
+        isInternalCancel.current = true;
+        window.speechSynthesis?.cancel();
+      }
+      setUseAdvancedTTS(true);
       return;
     }
 
     currentCharIndex.current = 0;
+    setUseAdvancedTTS(false);
     startSpeech(0);
-  };
-
-  const handleRateChange = (newRate: number) => {
-    setSpeechRate(newRate);
-    if (isSpeaking) {
-      isInternalCancel.current = true;
-      window.speechSynthesis.cancel();
-      // Small timeout to allow the browser to process the cancel
-      setTimeout(() => {
-        startSpeech(currentCharIndex.current, newRate);
-      }, 10);
-    }
-  };
+  }, [useAdvancedTTS, isGenerating, isPlaying, generateAndPlay, stop, cleanSummary, selectedVoice, startSpeech]);
 
   const handleDownloadMp3 = async () => {
     if (!summary) return;
     setIsDownloading(true);
 
     try {
-      const blob = new Blob([summary], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${title.replace(/\s+/g, '_')}_Summary.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      toast({
-        title: "Summary Saved",
-        description: "Your text summary has been downloaded.",
-      });
+      if (useAdvancedTTS) {
+        const success = await downloadAudio(cleanSummary, `${title.replace(/\s+/g, '_')}_Summary`);
+        if (success) {
+          toast({
+            title: "Audio Saved",
+            description: "Your summary audio has been downloaded as MP3.",
+          });
+        }
+      } else {
+        const blob = new Blob([summary], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${title.replace(/\s+/g, '_')}_Summary.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast({
+          title: "Summary Saved",
+          description: "Your text summary has been downloaded.",
+        });
+      }
     } catch (err) {
       toast({
         variant: "destructive",
@@ -267,7 +261,6 @@ export function SummaryDialog({
           </Button>
         </DialogClose>
 
-        {/* Minimalist Audio-First Header */}
         <div className="relative pt-8 pb-4 px-8 text-center bg-gradient-to-b from-purple-500/10 via-transparent to-transparent">
           <div className="flex items-center justify-center gap-2 mb-2">
             <div className="h-[1px] w-8 bg-gradient-to-r from-transparent to-purple-500/50" />
@@ -290,7 +283,6 @@ export function SummaryDialog({
             </div>
           ) : (
             <>
-              {/* Content View Selector */}
               <div className="flex justify-center -mt-2">
                 <div className="flex p-1 bg-white/5 rounded-full border border-white/5 scale-90">
                   <button
@@ -316,7 +308,6 @@ export function SummaryDialog({
                 </div>
               </div>
 
-              {/* Enhanced Content Area */}
               <div className="relative group mx-1">
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-pink-500/10 blur-xl opacity-20 group-hover:opacity-40 transition-opacity" />
                 <div className="relative w-full bg-[#0B0B12]/80 rounded-3xl border border-white/10 shadow-[inset_0_2px_20px_rgba(0,0,0,0.4)] overflow-hidden">
@@ -339,37 +330,61 @@ export function SummaryDialog({
                 </div>
               </div>
 
-              {/* Redesigned Audio Integration Hub */}
               <div className="bg-white/5 rounded-[2rem] p-5 border border-white/10 shadow-inner backdrop-blur-xl space-y-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-purple-400 text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2">
+                    <Sparkles className="w-3 h-3" /> AI Audio
+                  </span>
+                  <div className="flex items-center gap-2 text-[9px]">
+                    <span className={cn("text-zinc-500", useAdvancedTTS && !isPlaying && !isGenerating ? "text-purple-400" : "")}>AI Voice</span>
+                    <div className="w-8 h-4 bg-black/40 rounded-full p-0.5 cursor-pointer" onClick={() => setUseAdvancedTTS(!useAdvancedTTS)}>
+                      <div className={cn(
+                        "w-3 h-3 rounded-full bg-purple-500 transition-all shadow-lg",
+                        useAdvancedTTS ? "translate-x-4" : "translate-x-0"
+                      )} />
+                    </div>
+                    <span className={cn("text-zinc-500", !useAdvancedTTS ? "text-purple-400" : "")}>Browser</span>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <span className="px-1 text-purple-400 text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2">
-                      <Music className="w-3 h-3" /> Narrator
+                      <Music className="w-3 h-3" /> Voice
                     </span>
-                    <Select value={selectedVoiceName} onValueChange={setSelectedVoiceName}>
+                    <Select value={useAdvancedTTS ? selectedVoice : selectedNativeVoice} onValueChange={(v) => useAdvancedTTS ? setSelectedVoice(v) : setSelectedNativeVoice(v)}>
                       <SelectTrigger className="h-11 bg-black/40 border-white/5 rounded-2xl text-[11px] text-zinc-300 hover:bg-black/60 transition-all border-none ring-1 ring-white/10 shadow-2xl">
                         <SelectValue placeholder="Select Voice" />
                       </SelectTrigger>
                       <SelectContent className="glassmorphism rounded-2xl border-white/10 max-h-[250px] shadow-2xl">
-                        {voices.map((voice) => (
-                          <SelectItem key={voice.name} value={voice.name} className="text-[11px] text-zinc-300 py-2.5 focus:bg-purple-500/20">
-                            {voice.name.split(' - ')[0]}
-                            <span className="ml-2 opacity-30 text-[9px] uppercase tracking-tighter">({voice.lang.split('-')[0]})</span>
-                          </SelectItem>
-                        ))}
+                        {useAdvancedTTS ? (
+                          VOICE_OPTIONS.map((voice) => (
+                            <SelectItem key={voice.value} value={voice.value} className="text-[11px] text-zinc-300 py-2.5 focus:bg-purple-500/20">
+                              {voice.label}
+                              <span className="ml-2 opacity-50 text-[9px]">({voice.description})</span>
+                            </SelectItem>
+                          ))
+                        ) : (
+                          voices.map((voice) => (
+                            <SelectItem key={voice.name} value={voice.name} className="text-[11px] text-zinc-300 py-2.5 focus:bg-purple-500/20">
+                              {voice.name.split(' - ')[0]}
+                              <span className="ml-2 opacity-30 text-[9px] uppercase tracking-tighter">({voice.lang.split('-')[0]})</span>
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-2">
                     <span className="px-1 text-pink-400 text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2">
-                      <FastForward className="w-3 h-3" /> Pace
+                      <FastForward className="w-3 h-3" /> Speed
                     </span>
                     <div className="flex bg-black/40 rounded-2xl p-1 gap-1 ring-1 ring-white/10 h-11">
-                      {[1, 1.25, 1.5].map(rate => (
+                      {[0.75, 1, 1.25].map(rate => (
                         <button
                           key={rate}
-                          onClick={() => handleRateChange(rate)}
+                          onClick={() => setSpeechRate(rate)}
                           className={cn(
                             "flex-1 rounded-xl text-[11px] font-black transition-all",
                             speechRate === rate
@@ -384,28 +399,28 @@ export function SummaryDialog({
                   </div>
                 </div>
 
-                {/* Primary Interaction Area */}
                 <div className="flex items-center gap-3">
                   <Button
                     className={cn(
                       "flex-1 h-16 rounded-[1.5rem] text-[16px] font-black uppercase tracking-[0.2em] transition-all active:scale-[0.98] shadow-2xl border-none group relative overflow-hidden",
-                      isSpeaking
+                      isPlaying || isGenerating
                         ? "bg-zinc-900 border border-white/5 text-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.1)]"
                         : "bg-gradient-to-r from-[#9333EA] via-[#A855F7] to-[#EC4899] text-white hover:brightness-110 shadow-[0_0_30px_rgba(168,85,247,0.4)]"
                     )}
                     onClick={handleToggleSpeech}
-                    disabled={isLoading}
+                    disabled={isLoading || isGenerating}
                   >
                     <div className="relative z-10 flex items-center justify-center gap-3">
-                      {isSpeaking ? (
+                      {isGenerating ? (
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                      ) : isPlaying ? (
                         <Pause className="h-6 w-6 fill-current" />
                       ) : (
                         <Play className="h-6 w-6 fill-current" />
                       )}
-                      <span>{isSpeaking ? 'Stop' : 'Listen'}</span>
-                      {isSpeaking && <VoiceWaveform isPlaying={isSpeaking} />}
+                      <span>{isGenerating ? 'Generating...' : isPlaying ? 'Stop' : 'Listen'}</span>
+                      {(isPlaying || isGenerating) && <VoiceWaveform isPlaying={isPlaying || isGenerating} />}
                     </div>
-                    {/* Animated Shine Effect */}
                     <div className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-[45deg] -translate-x-full group-hover:animate-[shine_1.5s_infinite]" />
                   </Button>
 
@@ -415,7 +430,7 @@ export function SummaryDialog({
                       size="icon"
                       className="w-16 h-16 rounded-[1.5rem] border-white/5 bg-black/40 hover:bg-black/60 transition-all hover:scale-105 active:scale-95 group shrink-0 shadow-xl ring-1 ring-white/10"
                       onClick={handleDownloadMp3}
-                      disabled={isDownloading}
+                      disabled={isDownloading || isGenerating}
                     >
                       {isDownloading ? (
                         <Loader2 className="h-5 w-5 animate-spin text-zinc-500" />

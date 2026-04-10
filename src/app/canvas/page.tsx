@@ -15,7 +15,7 @@ const ChatPanel = dynamic(() => import('@/components/chat-panel').then(mod => mo
   loading: () => null
 });
 
-import { SearchReferencesPanel } from '@/components/canvas/SearchReferencesPanel';
+import { SearchReferencesPanel, SourceFileModal } from '@/components/canvas';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -40,70 +40,6 @@ import {
   TooltipProvider,
 } from '@/components/ui/tooltip';
 import type { GenerateMindMapOutput } from '@/ai/flows/generate-mind-map';
-
-// --- Blob PDF Viewer Component ---
-function BlobPdfViewer({ dataUri, className }: { dataUri: string, className?: string }) {
-  const [blobUrl, setBlobUrl] = useState<string>('');
-
-  useEffect(() => {
-    if (!dataUri) return;
-    if (dataUri.startsWith('data:')) {
-      try {
-        const arr = dataUri.split(',');
-        const mime = arr[0].match(/:(.*?);/)?.[1] || 'application/pdf';
-        const bstr = atob(arr[1]);
-        let n = bstr.length;
-        const u8arr = new Uint8Array(n);
-        while (n--) {
-          u8arr[n] = bstr.charCodeAt(n);
-        }
-        const blob = new Blob([u8arr], { type: mime });
-        const url = URL.createObjectURL(blob);
-        setBlobUrl(url + '#toolbar=0');
-        return () => URL.revokeObjectURL(url);
-      } catch (e) {
-        console.error('Failed to convert base64 to blob', e);
-        setBlobUrl(dataUri);
-      }
-    } else if (dataUri.startsWith('http')) {
-      let isMounted = true;
-      let objectUrl = '';
-      fetch(dataUri)
-        .then(res => {
-          if (!res.ok) throw new Error('Failed to fetch PDF');
-          return res.blob();
-        })
-        .then(blob => {
-          if (isMounted) {
-            objectUrl = URL.createObjectURL(blob);
-            setBlobUrl(objectUrl + '#toolbar=0');
-          }
-        })
-        .catch(e => {
-          console.error('Failed to fetch PDF blob to bypass X-Frame-Options', e);
-          if (isMounted) setBlobUrl(dataUri);
-        });
-
-      return () => {
-        isMounted = false;
-        if (objectUrl) URL.revokeObjectURL(objectUrl);
-      };
-    } else {
-      setBlobUrl(dataUri);
-    }
-  }, [dataUri]);
-
-  if (!blobUrl) return <div className="flex-1 flex items-center justify-center text-zinc-500 font-bold uppercase tracking-widest text-xs animate-pulse">Processing Document...</div>;
-
-  return (
-    <iframe
-      src={blobUrl}
-      className={className || "w-full h-full border-none"}
-      title="PDF Document Viewer"
-    />
-  );
-}
-// ---------------------------------
 import {
   useUser,
   useFirestore,
@@ -131,45 +67,6 @@ import { useAIHealth } from '@/hooks/use-ai-health';
 import { useActivity } from '@/contexts/activity-context';
 
 const EMPTY_ARRAY: never[] = [];
-
-/**
- * The core content component for the mind map page.
- * It handles fetching and displaying mind map data for all modes.
- */
-/**
- * Parses raw source content into structured chunks.
- * Handles the "--- SOURCE: [Title] ([Type]) ---" format.
- */
-function parseSourceContent(content: string) {
-  if (!content) return [];
-  
-  const sourceRegex = /--- SOURCE: (.*?) \((.*?)\) ---/g;
-  const chunks: { title: string; type: string; content: string }[] = [];
-  
-  let lastIndex = 0;
-  let match;
-  
-  while ((match = sourceRegex.exec(content)) !== null) {
-    if (chunks.length > 0) {
-      chunks[chunks.length - 1].content = content.substring(lastIndex, match.index).trim();
-    }
-    chunks.push({
-      title: match[1],
-      type: match[2],
-      content: ''
-    });
-    lastIndex = sourceRegex.lastIndex;
-  }
-  
-  if (chunks.length > 0) {
-    chunks[chunks.length - 1].content = content.substring(lastIndex).trim();
-  } else {
-    // If no source markers found, treat as a single anonymous source
-    return [{ title: 'Source Content', type: 'text', content: content.trim() }];
-  }
-  
-  return chunks;
-}
 
 function MindMapPageContent() {
   const { params, navigateToMap, changeLanguage, regenerate, clearRegenFlag, getParamKey, router } = useMindMapRouter();
@@ -292,6 +189,15 @@ function MindMapPageContent() {
   const [sourceFileType, setSourceFileType] = useState<string | null>(null);
   const [originalPdfFileContent, setOriginalPdfFileContent] = useState<string | null>(null);
   const [isSourceFileModalOpen, setIsSourceFileModalOpen] = useState(false);
+
+  // Pinned Messages Dialog State
+  const [isPinnedDialogOpen, setIsPinnedDialogOpen] = useState(false);
+
+  // Handler to open pinned messages dialog
+  const handleOpenPinnedMessages = useCallback(() => {
+    setIsChatOpen(true); // Open chat panel if not already open
+    setIsPinnedDialogOpen(true);
+  }, []);
 
 
   // Sync refs whenever state changes
@@ -923,7 +829,6 @@ function MindMapPageContent() {
     const currentMap = mindMapRef.current;
     if (!currentMap) return;
 
-    // Deep-ish check to see if anything actually changed
     let hasActualChanges = false;
     for (const key in updatedData) {
       if (JSON.stringify((updatedData as any)[key]) !== JSON.stringify((currentMap as any)[key])) {
@@ -935,8 +840,9 @@ function MindMapPageContent() {
     if (hasActualChanges) {
       handleUpdateCurrentMap(updatedData);
       setHasUnsavedChanges(true);
+      handleSaveMapFromHook(true);
     }
-  }, [handleUpdateCurrentMap]);
+  }, [handleUpdateCurrentMap, handleSaveMapFromHook]);
 
   const onManualSave = useCallback(async () => {
     await handleSaveMapFromHook();
@@ -1249,6 +1155,7 @@ function MindMapPageContent() {
             allSubMaps={mapHierarchy.allSubMaps}
             onShare={handleShare}
             isSharing={isSharing}
+            onOpenPinnedMessages={handleOpenPinnedMessages}
           />
 
           {/* Search References Panel */}
@@ -1379,116 +1286,14 @@ function MindMapPageContent() {
         </button>
       )}
 
-      <Dialog open={isSourceFileModalOpen} onOpenChange={setIsSourceFileModalOpen}>
-        <DialogContent showCloseButton={false} className="glassmorphism border-white/10 w-[95vw] sm:max-w-7xl h-[92vh] flex flex-col gap-0 rounded-[2rem] p-0 overflow-hidden outline-none shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-          <DialogHeader className="px-6 py-2 border-b border-white/10 shrink-0 bg-black/60 flex flex-row items-center justify-between space-y-0">
-            <DialogTitle className="text-xl font-bold text-white flex items-center gap-2 font-orbitron tracking-wide whitespace-nowrap">
-              {sourceFileType === 'website' && mindMap?.sourceUrl ? (
-                <>
-                  <Globe className="h-5 w-5 text-blue-400" />
-                  <div className="flex items-center gap-2">
-                    <span>Website Content</span>
-                    <a
-                      href={mindMap.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ml-2 flex items-center gap-1 px-2 py-1 rounded-md bg-blue-500/20 text-blue-400 text-[10px] hover:bg-blue-500/30 transition-all font-bold"
-                    >
-                      Open Original <ArrowRight className="h-3 w-3" />
-                    </a>
-                  </div>
-                </>
-              ) : sourceFileType === 'image' ? (
-                <><ImageIcon className="h-5 w-5 text-purple-400" /> Source Image</>
-              ) : sourceFileType === 'youtube' ? (
-                <><Youtube className="h-5 w-5 text-red-500" /> YouTube Video</>
-              ) : sourceFileType === 'website' ? (
-                <><Globe className="h-5 w-5 text-blue-400" /> Website Content</>
-              ) : (
-                <><FileText className="h-5 w-5 text-blue-400" /> Source Document</>
-              )}
-            </DialogTitle>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setIsSourceFileModalOpen(false)}
-                className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-white/10 transition-all active:scale-95"
-                aria-label="Close modal"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-          </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto px-6 pb-2 pt-0 bg-black/5 custom-scrollbar flex flex-col">
-            <div className="flex-1 min-h-0 flex flex-col pt-0">
-              {sourceFileType === 'image' && sourceFileContent ? (
-                <div className="flex items-center justify-center flex-1 bg-black/20 rounded-xl overflow-hidden border border-white/5">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={sourceFileContent}
-                    alt="Source"
-                    className="max-w-full max-h-full object-contain shadow-2xl"
-                  />
-                </div>
-              ) : sourceFileType === 'pdf' && originalPdfFileContent ? (
-                <div className="flex-1 w-full rounded-xl overflow-hidden border border-white/10 shadow-inner bg-white/5">
-                  <BlobPdfViewer
-                    dataUri={originalPdfFileContent}
-                    className="border-none w-full h-full block bg-white"
-                  />
-                </div>
-              ) : sourceFileType === 'youtube' && sourceFileContent ? (
-                <div className="flex-1 w-full rounded-xl overflow-hidden border border-white/10 shadow-inner bg-black">
-                  <iframe
-                    src={`https://www.youtube.com/embed/${extractYoutubeId(sourceFileContent)}`}
-                    width="100%"
-                    height="100%"
-                    className="border-none w-full h-full block"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    title="YouTube Video Player"
-                  />
-                </div>
-              ) : (
-                <div className="flex-1 overflow-y-auto space-y-6 pb-6">
-                  {parseSourceContent(sourceFileContent || '').map((source, idx) => (
-                    <div 
-                      key={idx} 
-                      className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden shadow-sm hover:border-white/20 transition-all"
-                    >
-                      <div className="px-5 py-3 bg-white/10 border-b border-white/5 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          {source.type.toLowerCase().includes('youtube') ? (
-                            <Youtube className="h-4 w-4 text-red-500" />
-                          ) : source.type.toLowerCase().includes('website') ? (
-                            <Globe className="h-4 w-4 text-blue-400" />
-                          ) : (
-                            <FileText className="h-4 w-4 text-purple-400" />
-                          )}
-                          <span className="text-xs font-bold font-orbitron tracking-wider text-zinc-300 uppercase">
-                            {source.type}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-zinc-500 font-medium">Source #{idx + 1}</span>
-                      </div>
-                      <div className="p-6">
-                        <h3 className="text-lg font-bold text-white mb-4 leading-tight">{source.title}</h3>
-                        <div
-                          className="text-zinc-300 font-sans text-base leading-relaxed break-words prose prose-invert prose-sm max-w-none prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline"
-                          dangerouslySetInnerHTML={{ __html: formatText(source.content || 'No content found.') }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* TODO: SearchReferencesPanel component needs to be created */}
-      {/* {showReferences && <SearchReferencesPanel onClose={() => setShowReferences(false)} />} */}
+      <SourceFileModal
+        isOpen={isSourceFileModalOpen}
+        onClose={() => setIsSourceFileModalOpen(false)}
+        sourceFileContent={sourceFileContent}
+        sourceFileType={sourceFileType}
+        originalPdfFileContent={originalPdfFileContent}
+        mindMap={mindMap}
+      />
 
 
 
@@ -1507,6 +1312,14 @@ function MindMapPageContent() {
         onUsePdfContextChange={setUseFileAwareContext}
         sourceFileContent={sourceFileContent}
         sourceFileType={sourceFileType as "text" | "image" | "pdf"}
+        onMindMapGenerated={async (data) => {
+          handleReplaceCurrentMap(data);
+          setHasUnsavedChanges(true);
+          await handleSaveMapFromHook(true);
+        }}
+        pinnedMessagesCount={0}
+        onOpenPinnedMessages={() => setIsPinnedDialogOpen(true)}
+        openPinnedDialog={isPinnedDialogOpen}
       />
     </>
   );

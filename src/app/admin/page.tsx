@@ -280,6 +280,7 @@ export default function AdminDashboard() {
       }
       if (!syncRes.ok) throw new Error(syncJson.error || `Sync failed with status ${syncRes.status}`);
       console.log('✅ Sync response:', syncJson);
+      setLastSyncedAt(syncJson.timestamp || new Date().toISOString());
       await logAdminActivity({
         type: 'FULL_REFRESH',
         targetType: 'system',
@@ -378,21 +379,11 @@ export default function AdminDashboard() {
                             dashboardData?.meta?.cached ? 'bg-amber-500' : 'bg-emerald-500'
                           } ${!dashboardData?.meta?.cached ? 'animate-pulse' : ''}`} />
                           
-                          <div className="flex items-center gap-1.5">
-                            <span className={`text-[9px] font-black uppercase tracking-tight ${
-                              dashboardData?.meta?.cached ? 'text-amber-400' : 'text-emerald-400'
-                            }`}>
-                              {dashboardData?.meta?.cached ? 'Cached' : 'Live'}
-                            </span>
-                            <span className="text-zinc-700 font-bold">•</span>
-                            <span className={`text-[9px] font-bold tracking-tight ${
-                              differenceInMinutes(new Date(), new Date(lastSyncedAt)) > 15 
-                                ? 'text-amber-500/80' 
-                                : 'text-zinc-400'
-                            }`}>
-                              {formatDistanceToNow(new Date(lastSyncedAt), { addSuffix: true })}
-                            </span>
-                          </div>
+                          <span className={`text-[9px] font-black uppercase tracking-tight ${
+                            dashboardData?.meta?.cached ? 'text-amber-400' : 'text-emerald-400'
+                          }`}>
+                            {dashboardData?.meta?.cached ? 'Cached' : 'Synced'} {lastSyncedAt && `• ${formatDistanceToNow(new Date(lastSyncedAt), { addSuffix: true })}`}
+                          </span>
                         </div>
                       </TooltipTrigger>
                       <TooltipContent className="bg-zinc-950 border-white/10 text-[10px] p-2">
