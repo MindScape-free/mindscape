@@ -171,15 +171,40 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
         try {
             const safeTopic = mapToSave.topic || (mapToSave as any).compareData?.root?.title || 'mind map topic';
             const summary = mapToSave.summary || `A detailed mind map exploration of ${safeTopic}.`;
-            // Detect person to avoid contradictory "NO portraits" for people
-            const personKeywords = ['person', 'scientist', 'mathematician', 'leader', 'artist', 'founder', 'philosopher', 'explorer'];
-            const lowerTopic = safeTopic.toLowerCase();
-            const isProbablyPerson = personKeywords.some(kw => lowerTopic.includes(kw)) || /\b[A-Z][a-z]+ [A-Z][a-z]+\b/.test(safeTopic);
 
-            // Create highly specific, literal thumbnail prompt - Unified for all modes
-            const thumbnailPrompt = isProbablyPerson
-                ? `Professional studio portrait of ${safeTopic}, photorealistic, high detail, authentic representation, dramatic lighting, sharp focus, 8k quality`
-                : `Professional product photography of ${safeTopic}, exact subject matter, literal representation, authentic branding, studio lighting, sharp focus, 8k resolution, NO generic people or portraits, realistic objects only`;
+            // ── Professional Thumbnail Prompt Engine ──────────────────────────────
+            const lowerTopic = safeTopic.toLowerCase();
+
+            // Detect topic category for tailored visual treatment
+            const isExplicitPerson = /\b(einstein|newton|tesla|darwin|freud|curie|hawking|turing|jobs|gates|musk|gandhi|lincoln|napoleon|caesar|aristotle|plato|socrates|shakespeare|beethoven|mozart|picasso|van gogh|obama|zuckerberg|lovelace|hopper|feynman|galileo|kepler|wozniak|torvalds)\b/i.test(lowerTopic);
+            const isPersonRole = /\b(scientist|mathematician|philosopher|artist|founder|engineer|architect|designer|leader|inventor|researcher|developer|programmer)\b/i.test(lowerTopic);
+            const isTech = /\b(ai|machine learning|deep learning|neural|algorithm|programming|software|code|data|cloud|blockchain|crypto|quantum|computing|database|api|framework|javascript|python|react|typescript|linux|cybersecurity|network|devops|microservices)\b/i.test(lowerTopic);
+            const isScience = /\b(physics|chemistry|biology|astronomy|neuroscience|genetics|evolution|thermodynamics|relativity|cosmology|ecology|geology|mathematics|calculus|statistics|biochemistry|molecular|astrophysics)\b/i.test(lowerTopic);
+            const isAbstract = /\b(philosophy|consciousness|ethics|metaphysics|epistemology|existentialism|psychology|sociology|economics|politics|history|culture|religion|spirituality|mindfulness|creativity|innovation|strategy|leadership|productivity)\b/i.test(lowerTopic);
+            const isNature = /\b(ocean|forest|mountain|space|universe|galaxy|planet|climate|weather|ecosystem|wildlife|animal|plant|flower|tree|water|fire|earth|wind|nature|environment)\b/i.test(lowerTopic);
+            const isCompare = mapToSave.mode === 'compare';
+
+            // Build a cinematic, topic-aware thumbnail prompt
+            let thumbnailPrompt: string;
+
+            if (isExplicitPerson || isPersonRole) {
+              thumbnailPrompt = `Dramatic cinematic portrait photograph of ${safeTopic}, professional studio lighting with deep shadows, shallow depth of field, photorealistic, 8k resolution, film grain, rich tonal contrast, dark moody background, sharp facial detail`;
+            } else if (isCompare) {
+              const cd = (mapToSave as any).compareData;
+              const t1 = cd?.root?.title?.split(' vs ')?.[0] || safeTopic;
+              thumbnailPrompt = `Split-screen conceptual art comparing ${safeTopic}, two contrasting visual worlds divided by a glowing neon line, cinematic lighting, ultra-detailed digital illustration, dark background, vibrant accent colors, 8k quality, professional concept art`;
+            } else if (isTech) {
+              thumbnailPrompt = `Futuristic digital visualization of ${safeTopic}, glowing circuit patterns and data streams, deep space dark background, electric blue and violet neon accents, holographic interface elements, cinematic depth of field, ultra-detailed 3D render, 8k quality, no text`;
+            } else if (isScience) {
+              thumbnailPrompt = `Scientific visualization of ${safeTopic}, photorealistic macro or cosmic scale imagery, dramatic studio lighting, rich color gradients from deep blue to gold, ultra-sharp detail, cinematic composition, professional science photography, 8k resolution, no text`;
+            } else if (isAbstract) {
+              thumbnailPrompt = `Abstract conceptual art representing ${safeTopic}, flowing geometric shapes and light particles, deep dark background with rich purple and indigo gradients, ethereal atmospheric glow, cinematic composition, digital art masterpiece, 8k quality, no text, no people`;
+            } else if (isNature) {
+              thumbnailPrompt = `Breathtaking cinematic nature photography of ${safeTopic}, golden hour or dramatic storm lighting, ultra-sharp foreground detail with atmospheric depth, rich saturated colors, professional landscape photography, 8k resolution, award-winning composition`;
+            } else {
+              // Universal fallback: clean conceptual illustration
+              thumbnailPrompt = `Cinematic conceptual illustration of ${safeTopic}, dramatic studio lighting, dark premium background, rich purple and gold accent colors, ultra-detailed professional digital art, sharp focus, 8k quality, no text, no watermarks`;
+            }
 
             // SPLIT SCHEMA: Metadata vs Content
             const {

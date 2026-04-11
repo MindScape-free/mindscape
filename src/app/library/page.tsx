@@ -46,6 +46,28 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useMindMapPersistence } from '@/hooks/use-mind-map-persistence';
 import { sanitizeFirestoreData } from '@/lib/sanitize-firestore';
 
+// ── Shared thumbnail prompt engine (mirrors use-mind-map-persistence.ts) ──
+function buildThumbnailPrompt(topic: string): string {
+  const t = topic.toLowerCase();
+  if (/\b(einstein|newton|tesla|darwin|freud|curie|hawking|turing|jobs|gates|musk|gandhi|lincoln|napoleon|aristotle|plato|socrates|shakespeare|beethoven|picasso|van gogh|obama|zuckerberg|lovelace|feynman|galileo|torvalds)\b/i.test(t) ||
+      /\b(scientist|mathematician|philosopher|artist|founder|engineer|architect|designer|leader|inventor)\b/i.test(t)) {
+    return `Dramatic cinematic portrait photograph of ${topic}, professional studio lighting with deep shadows, shallow depth of field, photorealistic, 8k resolution, film grain, rich tonal contrast, dark moody background, sharp facial detail`;
+  }
+  if (/\b(ai|machine learning|deep learning|neural|algorithm|programming|software|code|data|cloud|blockchain|crypto|quantum|computing|database|api|framework|javascript|python|react|typescript|linux|cybersecurity|devops)\b/i.test(t)) {
+    return `Futuristic digital visualization of ${topic}, glowing circuit patterns and data streams, deep space dark background, electric blue and violet neon accents, holographic interface elements, cinematic depth of field, ultra-detailed 3D render, 8k quality, no text`;
+  }
+  if (/\b(physics|chemistry|biology|astronomy|neuroscience|genetics|evolution|thermodynamics|relativity|cosmology|ecology|geology|mathematics|calculus|biochemistry|molecular|astrophysics)\b/i.test(t)) {
+    return `Scientific visualization of ${topic}, photorealistic macro or cosmic scale imagery, dramatic studio lighting, rich color gradients from deep blue to gold, ultra-sharp detail, cinematic composition, professional science photography, 8k resolution, no text`;
+  }
+  if (/\b(philosophy|consciousness|ethics|metaphysics|epistemology|existentialism|psychology|sociology|economics|politics|history|culture|religion|spirituality|mindfulness|creativity|innovation|strategy|leadership|productivity)\b/i.test(t)) {
+    return `Abstract conceptual art representing ${topic}, flowing geometric shapes and light particles, deep dark background with rich purple and indigo gradients, ethereal atmospheric glow, cinematic composition, digital art masterpiece, 8k quality, no text, no people`;
+  }
+  if (/\b(ocean|forest|mountain|space|universe|galaxy|planet|climate|weather|ecosystem|wildlife|animal|plant|flower|tree|water|fire|earth|wind|nature|environment)\b/i.test(t)) {
+    return `Breathtaking cinematic nature photography of ${topic}, golden hour or dramatic storm lighting, ultra-sharp foreground detail with atmospheric depth, rich saturated colors, professional landscape photography, 8k resolution, award-winning composition`;
+  }
+  return `Cinematic conceptual illustration of ${topic}, dramatic studio lighting, dark premium background, rich purple and gold accent colors, ultra-detailed professional digital art, sharp focus, 8k quality, no text, no watermarks`;
+}
+
 
 function DashboardLoadingSkeleton() {
   return (
@@ -834,7 +856,7 @@ export default function DashboardPage() {
       return next;
     });
 
-    const prompt = `${mapToUpdate.topic}, professional photography, high quality, detailed, 8k`;
+    const prompt = buildThumbnailPrompt(mapToUpdate.topic);
 
     toast({
       title: 'Generating Thumbnail...',
@@ -1165,7 +1187,7 @@ export default function DashboardPage() {
                   >
                   <div className="w-full aspect-video relative mb-4 overflow-hidden rounded-xl bg-[#0A0A0A] group/image shrink-0" onClick={() => handleMindMapClick(mapId)}>
                     <img
-                      src={map.thumbnailUrl || `https://gen.pollinations.ai/image/${encodeURIComponent(`${map.topic}, professional photography, high quality, detailed, 8k`)}?width=512&height=288&nologo=true&private=true&model=flux&enhance=true`}
+                      src={map.thumbnailUrl || `https://gen.pollinations.ai/image/${encodeURIComponent(buildThumbnailPrompt(map.topic))}?width=512&height=288&nologo=true&private=true&model=flux&enhance=false`}
                       alt={map.topic}
                       className={cn(
                         "w-full h-full object-cover transition-all duration-700 group-hover:scale-110",
@@ -1464,7 +1486,7 @@ export default function DashboardPage() {
                   {/* Premium Visual Preview */}
                   <div className="relative group/preview w-full aspect-video rounded-2xl overflow-hidden bg-black/60 border border-white/10 shadow-2xl ring-1 ring-white/5">
                     <img
-                      src={selectedMapForPreview.thumbnailUrl || `https://gen.pollinations.ai/image/${encodeURIComponent(`${selectedMapForPreview.topic}, professional photography, high quality, complex mindmap visualization, detailed, 8k`)}?width=512&height=288&nologo=true&private=true&model=flux&enhance=true`}
+                      src={selectedMapForPreview.thumbnailUrl || `https://gen.pollinations.ai/image/${encodeURIComponent(buildThumbnailPrompt(selectedMapForPreview.topic))}?width=512&height=288&nologo=true&private=true&model=flux&enhance=false`}
                       alt={selectedMapForPreview.topic}
                       className={cn(
                         "w-full h-full object-cover transition-all duration-700 ease-out group-hover/preview:scale-105",
