@@ -12,6 +12,7 @@ const GenerateMindMapInputSchema = z.object({
   persona: z.string().optional(),
   depth: z.enum(['low', 'medium', 'deep']).default('low'),
   capability: z.enum(['fast', 'creative', 'reasoning', 'coding']).optional(),
+  context: z.string().optional(),
 });
 export type GenerateMindMapInput = z.infer<typeof GenerateMindMapInputSchema>;
 export type GenerateMindMapOutput = z.infer<typeof AIGeneratedMindMapSchema>;
@@ -38,7 +39,8 @@ GLOBAL RULES:
 - Avoid vague words (important, various, many)
 - Prefer concrete, specific terms
 - "thought": 1–2 sentence structural reasoning only
-- Optional fields (thought, insight, tags, timestamp): omit if not adding value — never fabricate`;
+- insight fields (subTopic + category level): ALWAYS include — one sharp, non-obvious sentence
+- Optional fields (thought, tags, timestamp): omit if not adding value — never fabricate`;
 
 // ── Centralized persona block ─────────────────────────────────────────
 function buildPersona(persona: string): string {
@@ -52,15 +54,35 @@ function buildPersona(persona: string): string {
 export async function generateMindMap(
   input: GenerateMindMapInput & { apiKey?: string; provider?: AIProvider; searchContext?: SearchContext | null; model?: string }
 ): Promise<GenerateMindMapOutput> {
-  const { topic, parentTopic, targetLang, persona, depth = 'low', provider, apiKey, searchContext, model } = input;
+  const { topic, parentTopic, targetLang, persona, depth = 'low', provider, apiKey, searchContext, model, context } = input;
 
-  // ── Density (inline, no repetition) ──────────────────────────────
+  // ── Density with expansion for context ──────────────────────────────
+  const hasContext = !!context && context.trim().length > 0;
   const densityMap = {
-    low:    `subTopics: 2–3 | categories per subTopic: 2 | subCategories per category: 2–3`,
-    medium: `subTopics: 3–5 | categories per subTopic: 3 | subCategories per category: 3–4`,
-    deep:   `subTopics: 5–7 | categories per subTopic: 3–4 | subCategories per category: 4–6`,
+    low:    hasContext ? `subTopics: 4–5 | categories per subTopic: 3–4 | subCategories per category: 3–4` : `subTopics: 2–3 | categories per subTopic: 2 | subCategories per category: 2–3`,
+    medium: hasContext ? `subTopics: 5–7 | categories per subTopic: 4–5 | subCategories per category: 4–5` : `subTopics: 3–5 | categories per subTopic: 3 | subCategories per category: 3–4`,
+    deep:   hasContext ? `subTopics: 7–9 | categories per subTopic: 4–5 | subCategories per category: 5–6` : `subTopics: 5–7 | categories per subTopic: 3–4 | subCategories per category: 4–6`,
   };
   const density = densityMap[depth];
+
+  // ── Context block ───────────────────────────────────────────────────
+  let contextBlock = '';
+  if (hasContext) {
+    const truncatedContext = context.length > 4000 ? context.slice(0, 4000) + '...' : context;
+    contextBlock = `
+CONTEXT FROM CONVERSATION:
+${truncatedContext}
+
+ANALYSIS & EXPANSION MODE:
+- Analyze the context above to understand what was discussed
+- Capture the specific points, examples, and details mentioned
+- EXPAND beyond the context: Add related concepts, subtopics, and categories
+  that naturally connect to the main topic
+- Include practical applications, common patterns, best practices
+- Add relevant edge cases, gotchas, and real-world examples
+- Create cross-domain connections where applicable
+- Generate MORE nodes than standard density (25-40% expansion)`;
+  }
 
   // ── Search grounding ──────────────────────────────────────────────
   let searchBlock = '';
@@ -82,9 +104,11 @@ SOURCES: ${searchContext.sources.slice(0, 5).map((s, i) => `[${i + 1}] ${s.title
 ${buildPersona(persona || 'teacher')}
 LANGUAGE: ${targetLang ? targetLang : 'en'}
 ${parentTopic ? `PARENT CONTEXT: This map for "${topic}" is a sub-map of "${parentTopic}". Keep content interconnected.` : ''}
+${contextBlock}
 ${searchBlock}
 
 DENSITY: ${density}
+${hasContext ? 'EXPANDED: This is an enriched mind map with additional knowledge beyond the context.' : ''}
 ANTI-GENERIC: Reject nodes named "Overview", "Basics", "Introduction", "Various", "General".
 Each subTopic must be a unique, non-overlapping dimension of the topic.
 
@@ -100,11 +124,12 @@ SCHEMA (return ONLY this JSON):
       "name": "Specific Dimension Name",
       "icon": "lucide-kebab-case",
       "thought": "1–2 sentence reasoning for this branch.",
-      "insight": "One concrete insight (optional).",
+      "insight": "One sharp, non-obvious synthesis of this sub-topic (REQUIRED).",
       "categories": [
         {
           "name": "Category Name",
           "icon": "lucide-kebab-case",
+          "insight": "One concrete, specific insight about this category (REQUIRED).",
           "subCategories": [
             {
               "name": "Specific Leaf Name",
@@ -122,7 +147,8 @@ RULES:
 - "mode" MUST be "single"
 - All icons: valid lucide-react kebab-case names
 - NEVER truncate — close all { and [ before stopping
-- ${searchContext ? 'Ground facts in search results.' : ''}`;
+- ${searchContext ? 'Ground facts in search results.' : ''}
+${hasContext ? '- Capture context details AND expand with related knowledge.' : ''}`;
 
   let capability: any = input.capability || (depth === 'deep' ? 'fast' : 'fast');
 
