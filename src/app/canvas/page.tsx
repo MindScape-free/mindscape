@@ -90,7 +90,6 @@ function MindMapPageContent() {
   const [showReferences, setShowReferences] = useState(false);
   const [useFileAwareContext, setUseFileAwareContext] = useState(false);
   const [pinnedMessagesCount, setPinnedMessagesCount] = useState(0);
-  const [pinnedMessagesDialogOpen, setPinnedMessagesDialogOpen] = useState(false);
 
   // Universal Nested Maps Dialog state
   const [mapHierarchy, setMapHierarchy] = useState<{
@@ -209,9 +208,6 @@ function MindMapPageContent() {
   const [sourceFileType, setSourceFileType] = useState<string | null>(null);
   const [originalPdfFileContent, setOriginalPdfFileContent] = useState<string | null>(null);
   const [isSourceFileModalOpen, setIsSourceFileModalOpen] = useState(false);
-
-  // Pinned Messages Dialog State
-  const [isPinnedDialogOpen, setIsPinnedDialogOpen] = useState(false);
 
   // Toolbar pin button → open chat panel at canvas-pins view
   const handleOpenPinnedMessages = useCallback(() => {
@@ -1356,27 +1352,6 @@ function MindMapPageContent() {
         }}
       />
 
-      {/* GlobalPinnedMessagesDialog - opens from toolbar pin button */}
-      <GlobalPinnedMessagesDialog
-        isOpen={pinnedMessagesDialogOpen}
-        onClose={() => setPinnedMessagesDialogOpen(false)}
-        pinnedMessages={pinnedMessages}
-        onUnpin={removePinnedMessage}
-        onCopy={(content) => {
-          navigator.clipboard.writeText(content);
-        }}
-        currentMap={mindMap || null}
-        onMindMapGenerated={async (mapData) => {
-          handleReplaceCurrentMap(mapData);
-          setHasUnsavedChanges(true);
-          await handleSaveMap(mapData, mapData.id, true);
-        }}
-        onOpenChat={(initialView) => {
-          setChatInitialView(initialView || 'pins');
-          setPinnedMessagesDialogOpen(false);
-          setIsChatOpen(true);
-        }}
-      />
     </>
   );
 }
