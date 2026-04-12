@@ -432,8 +432,6 @@ export const MindMap = ({
 
   // #10 — Quiz-adaptive deepening state
   const [deepeningTags, setDeepeningTags] = useState<string[]>([]);
-  // #10 — Quiz-adaptive deepening state
-  const [deepeningTags, setDeepeningTags] = useState<string[]>([]);
 
 
   // State for images and expansions is initialized from data prop
