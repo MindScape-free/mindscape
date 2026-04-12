@@ -189,6 +189,7 @@ import Image from 'next/image';
 import { Badge } from './ui/badge';
 import { toPascalCase } from '@/lib/utils';
 import { toPlainObject } from '@/lib/serialize';
+import { findMatchingCategory } from '@/lib/depth-analysis';
 
 import { addDoc, collection, getDocs, query, where, serverTimestamp, doc, updateDoc, getDoc, deleteDoc, writeBatch, setDoc, limit } from 'firebase/firestore';
 import { useFirebase } from '@/firebase';
@@ -238,6 +239,7 @@ interface MindMapProps {
   onToggleFileAware?: () => void;
   onOpenPinnedMessages?: () => void;
   pinnedMessagesCount?: number;
+  onQuizDeepenRef?: React.MutableRefObject<((w: { tag: string; score: number }[], t: string) => void) | null>;
 }
 
 /**
@@ -294,6 +296,7 @@ export const MindMap = ({
   onViewSource,
   onOpenPinnedMessages,
   pinnedMessagesCount = 0,
+  onQuizDeepenRef,
 }: MindMapProps) => {
   const [viewMode, setViewMode] = useState<'accordion' | 'map' | 'roadmap'>('accordion');
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
@@ -426,6 +429,11 @@ export const MindMap = ({
   const [practiceQuestions, setPracticeQuestions] = useState<string[]>([]);
   const [isPracticeLoading, setIsPracticeLoading] = useState(false);
   const [practiceTopic, setPracticeTopic] = useState('');
+
+  // #10 — Quiz-adaptive deepening state
+  const [deepeningTags, setDeepeningTags] = useState<string[]>([]);
+  // #10 — Quiz-adaptive deepening state
+  const [deepeningTags, setDeepeningTags] = useState<string[]>([]);
 
 
   // State for images and expansions is initialized from data prop
@@ -815,6 +823,66 @@ export const MindMap = ({
   };
 
 
+
+  // #10 — Quiz-adaptive deepening: generate + merge nodes for weak sections
+  const handleQuizDeepen = React.useCallback(async (
+    weakSections: { tag: string; score: number }[],
+    quizTopic: string
+  ) => {
+    if (data.mode !== 'single' || !onUpdate) return;
+    const { generateQuizDepthNodesAction } = await import('@/app/actions');
+
+    // Start shimmer on matched branches
+    setDeepeningTags(weakSections.map(s => s.tag));
+
+    for (const section of weakSections) {
+      // Find the best matching category using the 4-level matcher
+      const match = findMatchingCategory(section.tag, data.subTopics);
+      const targetCat = data.subTopics[match.subTopicIndex]?.categories[match.categoryIndex];
+      const existingNodes = targetCat?.subCategories.map(sc => sc.name) ?? [];
+
+      const { data: newNodes, error } = await generateQuizDepthNodesAction({
+        mainTopic: quizTopic,
+        sectionName: section.tag,
+        existingNodes,
+        quizScore: section.score,
+        persona: aiPersona,
+      }, providerOptions);
+
+      if (error || !newNodes || newNodes.length === 0) {
+        console.warn(`Quiz deepen failed for "${section.tag}":`, error);
+        continue;
+      }
+
+      // Append-only merge — deduplicate by name
+      const updatedSubTopics = data.subTopics.map((st, si) => ({
+        ...st,
+        categories: st.categories.map((cat, ci) => {
+          if (si !== match.subTopicIndex || ci !== match.categoryIndex) return cat;
+          const existingNames = new Set(cat.subCategories.map(sc => sc.name));
+          const dedupedNew = newNodes.filter(n => !existingNames.has(n.name));
+          return { ...cat, subCategories: [...cat.subCategories, ...dedupedNew] };
+        })
+      }));
+
+      onUpdate({ subTopics: updatedSubTopics });
+
+      toast({
+        title: '🎯 Quiz Insights Added',
+        description: `${newNodes.length} new nodes added to "${targetCat?.name ?? section.tag}" (score: ${section.score}%)`,
+        duration: 5000,
+      });
+    }
+
+    setDeepeningTags([]);
+  }, [data, aiPersona, providerOptions, onUpdate, toast]);
+
+  // Wire handleQuizDeepen to the ref so canvas/chat-panel can call it
+  useEffect(() => {
+    if (onQuizDeepenRef) {
+      onQuizDeepenRef.current = handleQuizDeepen;
+    }
+  }, [handleQuizDeepen, onQuizDeepenRef]);
 
   const handleSubCategoryClick = (subCategory: SubCategoryInfo) => {
     setActiveSubCategory(subCategory);
@@ -1397,6 +1465,7 @@ export const MindMap = ({
                 onStartQuiz={onStartQuiz}
                 status={status}
                 onPracticeClick={handleGeneratePracticeQuestions}
+                deepeningTags={deepeningTags}
               />
             )}
           </>

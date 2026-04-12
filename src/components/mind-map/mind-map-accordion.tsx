@@ -64,6 +64,7 @@ interface MindMapAccordionProps {
     onStartQuiz: (topic: string) => void;
     status: MindMapStatus;
     onPracticeClick: (topic: string) => void;
+    deepeningTags?: string[]; // #10 — tags currently being deepened (shows shimmer)
 }
 
 const InsightCard = ({ text, title, mode }: { text: string; title: string, mode: 'topic' | 'category' }) => (
@@ -104,7 +105,8 @@ export const MindMapAccordion = React.memo(({
     onExplainWithExample,
     onStartQuiz,
     status,
-    onPracticeClick
+    onPracticeClick,
+    deepeningTags = [],
 }: MindMapAccordionProps) => {
     const [showInsight, setShowInsight] = React.useState<string | null>(null);
 
@@ -132,11 +134,22 @@ export const MindMapAccordion = React.memo(({
                         className="border-none rounded-2xl bg-zinc-900/20 backdrop-blur-3xl shadow-3xl ring-1 ring-white/5 overflow-hidden data-[state=open]:ring-primary/30 transition-all duration-700"
                     >
                         <div
-                            className="group/subtopic px-8 py-5 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer"
+                            className={cn(
+                                "group/subtopic px-8 py-5 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer relative overflow-hidden",
+                                deepeningTags.some(t => subTopic.name.toLowerCase().includes(t.toLowerCase()) || t.toLowerCase().includes(subTopic.name.toLowerCase())) && "ring-1 ring-amber-500/30"
+                            )}
                             onClick={() => {
                                 setOpenSubTopics(openSubTopics.includes(subTopicId) ? openSubTopics.filter(x => x !== subTopicId) : [...openSubTopics, subTopicId]);
                             }}
                         >
+                            {/* #10 — Shimmer overlay while quiz-deepening this branch */}
+                            {deepeningTags.some(t => subTopic.name.toLowerCase().includes(t.toLowerCase()) || t.toLowerCase().includes(subTopic.name.toLowerCase())) && (
+                                <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                                    <div className="absolute inset-0 bg-amber-500/5" />
+                                    <div className="absolute top-0 bottom-0 w-1/3 bg-gradient-to-r from-transparent via-amber-400/10 to-transparent animate-shimmer" />
+                                    <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
+                                </div>
+                            )}
                             <div className="flex items-center gap-6 flex-1">
                                 <div className="w-14 h-14 flex items-center justify-center rounded-2xl bg-primary text-white shadow-[0_0_30px_rgba(139,92,246,0.3)] ring-1 ring-white/20 group-hover/subtopic:scale-110 transition-all duration-500">
                                     <SubTopicIcon className="h-6 w-6" />

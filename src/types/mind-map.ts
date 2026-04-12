@@ -9,6 +9,8 @@ export interface SubCategory {
   icon?: string;
   tags?: string[];
   isExpanded?: boolean;
+  source?: 'quiz';      // marks nodes injected by quiz-deepening
+  quizScore?: number;   // score that triggered this deepening
   nestedExpansion?: {
     id: string;
     topic: string;

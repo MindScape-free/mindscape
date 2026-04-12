@@ -245,3 +245,67 @@ export function getDepthColor(depth: 'low' | 'medium' | 'deep'): string {
   };
   return colors[depth];
 }
+
+// ── Quiz-adaptive: fuzzy conceptTag → Category matcher (#10) ─────────
+// 4-level fallback chain: exact → contains → Levenshtein < 3 → root SubTopic
+import type { SubTopic, Category } from '@/types/mind-map';
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
+    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+  );
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1]
+        ? dp[i-1][j-1]
+        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+  return dp[m][n];
+}
+
+export interface QuizMatchResult {
+  subTopicIndex: number;
+  categoryIndex: number;
+  matchLevel: 'exact' | 'contains' | 'fuzzy' | 'fallback';
+}
+
+export function findMatchingCategory(
+  tag: string,
+  subTopics: SubTopic[]
+): QuizMatchResult {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const tagN = norm(tag);
+
+  // Level 1: exact normalized match on category or subTopic name
+  for (let si = 0; si < subTopics.length; si++) {
+    for (let ci = 0; ci < subTopics[si].categories.length; ci++) {
+      if (norm(subTopics[si].categories[ci].name) === tagN)
+        return { subTopicIndex: si, categoryIndex: ci, matchLevel: 'exact' };
+    }
+    if (norm(subTopics[si].name) === tagN)
+      return { subTopicIndex: si, categoryIndex: 0, matchLevel: 'exact' };
+  }
+
+  // Level 2: one contains the other
+  for (let si = 0; si < subTopics.length; si++) {
+    for (let ci = 0; ci < subTopics[si].categories.length; ci++) {
+      const catN = norm(subTopics[si].categories[ci].name);
+      if (catN.includes(tagN) || tagN.includes(catN))
+        return { subTopicIndex: si, categoryIndex: ci, matchLevel: 'contains' };
+    }
+    const stN = norm(subTopics[si].name);
+    if (stN.includes(tagN) || tagN.includes(stN))
+      return { subTopicIndex: si, categoryIndex: 0, matchLevel: 'contains' };
+  }
+
+  // Level 3: Levenshtein distance < 3
+  for (let si = 0; si < subTopics.length; si++) {
+    for (let ci = 0; ci < subTopics[si].categories.length; ci++) {
+      if (levenshtein(tagN, norm(subTopics[si].categories[ci].name)) < 3)
+        return { subTopicIndex: si, categoryIndex: ci, matchLevel: 'fuzzy' };
+    }
+  }
+
+  // Level 4: fallback — attach to first subTopic, first category (never silently drop)
+  return { subTopicIndex: 0, categoryIndex: 0, matchLevel: 'fallback' };
+}

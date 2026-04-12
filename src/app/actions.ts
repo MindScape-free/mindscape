@@ -1291,6 +1291,76 @@ export async function generateQuizAction(
 
 
 /**
+ * #10 — Quiz-adaptive deepening: generate new nodes for a weak section.
+ * Passes existing node names to prevent duplication.
+ */
+export async function generateQuizDepthNodesAction(
+  input: {
+    mainTopic: string;
+    sectionName: string;
+    existingNodes: string[];
+    quizScore: number;
+    persona?: string;
+  },
+  options: AIActionOptions = {}
+): Promise<{ data: SubCategory[] | null; error: string | null }> {
+  try {
+    const effectiveApiKey = await resolveApiKey(options);
+    const existingList = input.existingNodes.slice(0, 20).join(', ');
+
+    const { generateContent } = await import('@/ai/client-dispatcher');
+    const { z } = await import('zod');
+
+    const NodeArraySchema = z.array(z.object({
+      name: z.string().min(1),
+      description: z.string().min(1),
+      icon: z.string().optional(),
+    })).min(1).max(5);
+
+    const systemPrompt = `Output ONLY a valid JSON array of objects. No markdown, no explanation.`;
+    const userPrompt = `You are expanding an existing mind map section.
+Topic: "${input.mainTopic}"
+Section: "${input.sectionName}"
+User quiz score on this section: ${input.quizScore}%
+Existing nodes (DO NOT duplicate any of these): ${existingList || 'none'}
+
+Generate 3-5 NEW sub-categories that:
+- Do NOT duplicate any existing node name
+- Focus on concepts a user scoring ${input.quizScore}% likely misunderstood or needs reinforcement on
+- Are concrete, specific, and actionable
+- Each description is exactly 1 sentence, ≤20 words
+
+Return ONLY a JSON array:
+[{"name":"Specific Concept","description":"One sentence ≤20 words.","icon":"lucide-kebab-case"}]`;
+
+    const result = await generateContent({
+      provider: options.provider as any,
+      apiKey: effectiveApiKey,
+      systemPrompt,
+      userPrompt,
+      schema: NodeArraySchema,
+      options: { capability: 'fast' },
+    });
+
+    const nodes: SubCategory[] = (Array.isArray(result) ? result : []).map((n: any) => ({
+      name: (n.name || '').trim().replace(/[:.!?]$/, ''),
+      description: n.description || '',
+      icon: n.icon || 'lightbulb',
+      tags: [],
+      id: `quiz-${Math.random().toString(36).substr(2, 9)}`,
+      isExpanded: false,
+      source: 'quiz' as const,
+      quizScore: input.quizScore,
+    })).filter((n: SubCategory) => n.name.length > 0);
+
+    return { data: nodes, error: null };
+  } catch (error) {
+    console.error('Error in generateQuizDepthNodesAction:', error);
+    return { data: null, error: error instanceof Error ? error.message : 'Failed to generate quiz depth nodes.' };
+  }
+}
+
+/**
  * Server action to log administrative activity.
  * Bypasses client-side security rules by using the Admin SDK.
  * Also performs incremental stats updates for real-time dashboarding.

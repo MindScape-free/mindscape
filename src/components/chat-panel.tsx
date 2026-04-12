@@ -138,6 +138,7 @@ interface ChatPanelProps {
   canvasPinnedMessages?: import('@/types/chat').PinnedMessage[];
   onCanvasUnpin?: (pinId: string) => void;
   onAllPinsUnpin?: (pinId: string, mapId?: string) => void;
+  onQuizDeepen?: (weakSections: { tag: string; score: number }[], quizTopic: string) => void;
   initialView?: 'chat' | 'history' | 'pins' | 'canvas-pins';
   rememberLastView?: boolean;
 }
@@ -189,6 +190,7 @@ export function ChatPanel({
   onCanvasUnpin,
   onAllPinsUnpin,
   initialView,
+  onQuizDeepen,
 }: ChatPanelProps) {
   const { toast } = useToast();
   const { user, firestore } = useFirebase();
@@ -710,7 +712,30 @@ export function ChatPanel({
       quizHistory: [...(activeSession.quizHistory || []), results],
       weakTags: Array.from(sessionWeakTags)
     });
-  }, [activeSession, activeSessionId, updateSession]);
+
+    // #10 — Quiz-adaptive deepening
+    // Correct denominator: questions per tag, not total questions
+    if (onQuizDeepen && message.quiz) {
+      const tagQuestionCounts = message.quiz.questions.reduce((acc: Record<string, number>, q) => {
+        acc[q.conceptTag] = (acc[q.conceptTag] || 0) + 1;
+        return acc;
+      }, {});
+
+      // Filter first (score < 60%), then take bottom 2 — avoids missing weak sections
+      const weakSections = Object.entries(results.weakAreas)
+        .map(([tag, mistakeCount]) => ({
+          tag,
+          score: Math.round(((tagQuestionCounts[tag] - mistakeCount) / tagQuestionCounts[tag]) * 100)
+        }))
+        .filter(s => s.score < 60)
+        .sort((a, b) => a.score - b.score)
+        .slice(0, 2);
+
+      if (weakSections.length > 0) {
+        setTimeout(() => onQuizDeepen(weakSections, topic), 800);
+      }
+    }
+  }, [activeSession, activeSessionId, updateSession, onQuizDeepen, topic]);
 
   /**
    * Handles adaptive quiz regeneration

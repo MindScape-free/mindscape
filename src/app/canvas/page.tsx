@@ -102,6 +102,7 @@ function MindMapPageContent() {
   const aiHealth = useAIHealth();
   const { setStatus: setGlobalStatus, setAiHealth: setGlobalHealth, setActiveTaskName } = useActivity();
   const handleUpdateRef = useRef<(data: Partial<MindMapData>) => void>(() => { });
+  const quizDeepenRef = useRef<((w: { tag: string; score: number }[], t: string) => void) | null>(null);
 
   const persistenceOptions = useMemo(() => ({
     onRemoteUpdate: (data: MindMapData) => handleUpdateRef.current(data),
@@ -1179,6 +1180,7 @@ function MindMapPageContent() {
             isSharing={isSharing}
             onOpenPinnedMessages={handleOpenPinnedMessages}
             pinnedMessagesCount={pinnedMessagesCount}
+            onQuizDeepenRef={quizDeepenRef}
           />
 
           {/* Search References Panel */}
@@ -1367,6 +1369,9 @@ function MindMapPageContent() {
           if (pinToRemove) {
             removePinnedMessage(pinToRemove.id);
           }
+        }}
+        onQuizDeepen={(weakSections, quizTopic) => {
+          quizDeepenRef.current?.(weakSections, quizTopic);
         }}
       />
 

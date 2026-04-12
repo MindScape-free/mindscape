@@ -101,6 +101,15 @@ export const LeafNodeCard = memo(function LeafNodeCard({
             className="group/item relative h-full cursor-pointer rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-primary/40 hover:shadow-[0_0_40px_rgba(139,92,246,0.1)] transition-all duration-500 overflow-hidden flex flex-col"
             onClick={() => onSubCategoryClick(node)}
         >
+            {/* #10 — Quiz insight pill */}
+            {node.source === 'quiz' && node.quizScore !== undefined && (
+                <div className="absolute -top-2 right-3 z-10 pointer-events-none">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[9px] font-black uppercase tracking-widest"
+                        style={{ animation: 'quizPulse 2.5s ease-in-out infinite' }}>
+                        📊 Quiz · {node.quizScore}%
+                    </span>
+                </div>
+            )}
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover/item:opacity-100 transition-opacity duration-500" />
 
             <div className="relative z-10 p-5 flex flex-col h-full">
