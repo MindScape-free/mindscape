@@ -729,8 +729,7 @@ export function ChatPanel({
           score: Math.round(((tagQuestionCounts[tag] - mistakeCount) / tagQuestionCounts[tag]) * 100)
         }))
         .filter(s => s.score < 60)
-        .sort((a, b) => a.score - b.score)
-        .slice(0, 2);
+        .sort((a, b) => a.score - b.score);
 
       if (weakSections.length > 0) {
         setTimeout(() => onQuizDeepen(weakSections, topic), 800);

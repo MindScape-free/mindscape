@@ -39,8 +39,7 @@ export function QuizResultCard({ result, quiz, onRegenerate, isRegenerating, onD
                 : 0
         }))
         .filter(s => s.score < 60)
-        .sort((a, b) => a.score - b.score)
-        .slice(0, 2);
+        .sort((a, b) => a.score - b.score);
 
     const getScoreColor = () => {
         if (percentage >= 80) return 'text-emerald-400';
