@@ -450,33 +450,23 @@ export function ChatPanel({
 
   // Handle initialMode to trigger quiz selector
   useEffect(() => {
-    console.log('🔍 ChatPanel useEffect triggered:', { isOpen, initialMode, activeSessionId, topic, quizSelectorAdded: quizSelectorAddedRef.current });
+    if (!isOpen || initialMode !== 'quiz') return;
+    if (!activeSessionId || quizSelectorAddedRef.current) return;
 
-    if (isOpen && initialMode === 'quiz' && activeSessionId && !quizSelectorAddedRef.current) {
-      console.log('✅ Quiz mode detected! Starting quiz flow...');
-      quizSelectorAddedRef.current = true; // Set flag immediately to prevent re-runs
+    quizSelectorAddedRef.current = true;
+    const currentSession = sessions.find(s => s.id === activeSessionId);
+    if (currentSession?.messages.some(m => m.type === 'quiz-selector')) return;
 
-      const currentSession = sessions.find(s => s.id === activeSessionId);
-      const hasQuizSelector = currentSession?.messages.some(m => m.type === 'quiz-selector');
-
-      if (!hasQuizSelector) {
-        console.log('📝 Adding quiz-selector message to session');
-        const quizSelectorMessage: ChatMessage = {
-          id: `msg-${Date.now()}-quiz-sel`,
-          role: 'ai',
-          content: `I'm ready to prepare a comprehensive quiz for you on **${topic}**. Which level of challenge should I architect for you?`,
-          type: 'quiz-selector',
-          timestamp: Date.now()
-        };
-
-        updateSession(activeSessionId, { messages: [...(currentSession?.messages || []), quizSelectorMessage] });
-      }
-    } else if (isOpen && initialMode === 'quiz' && !activeSessionId && !isSessionLoading) {
-      // Start a new session if needed
-      console.log('📝 Creating new session for topic:', topic);
-      startNewChat(topic);
-    }
-  }, [isOpen, initialMode, activeSessionId, topic, startNewChat]);
+    const quizSelectorMessage: ChatMessage = {
+      id: `msg-${Date.now()}-quiz-sel`,
+      role: 'ai',
+      content: `I'm ready to prepare a comprehensive quiz for you on **${topic}**. Which level of challenge should I architect for you?`,
+      type: 'quiz-selector',
+      timestamp: Date.now()
+    };
+    updateSession(activeSessionId, { messages: [...(currentSession?.messages || []), quizSelectorMessage] });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialMode, activeSessionId]);
 
   const activeSession = useMemo(() => {
     return sessions.find(s => s.id === activeSessionId) || null;

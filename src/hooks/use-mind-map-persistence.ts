@@ -230,14 +230,14 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
                     // Use the user's API key from AI config context (passed via options)
                     // Only fall back to Firestore settings if config key is not available
                     let effectiveApiKey = options.userApiKey;
-                    let effectiveModel = options.preferredModel || 'flux';
+                    const effectiveModel = "flux"; // always flux for thumbnails
 
                     if (!effectiveApiKey) {
                         try {
                             const { getUserImageSettings } = await import('@/lib/firestore-helpers');
                             const userSettings = await getUserImageSettings(firestore, user.uid);
                             if (userSettings?.pollinationsApiKey) effectiveApiKey = userSettings.pollinationsApiKey;
-                            if (userSettings?.preferredModel) effectiveModel = userSettings.preferredModel;
+                            
                         } catch (firestoreError: any) {
                             console.warn('⚠️ Could not load user settings from Firestore:', firestoreError.message);
                         }
@@ -266,7 +266,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
                         console.log('✅ Background thumbnail generated:', data.model);
                     } else {
                         // Fallback to direct URL if API fails
-                        finalThumbnailUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(thumbnailPrompt)}?model=flux&width=512&height=288&enhance=true`;
+                        finalThumbnailUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(thumbnailPrompt)}?model=flux&width=512&height=288&enhance=false`;
                         console.log('⚠️ Using fallback thumbnail URL');
                     }
 

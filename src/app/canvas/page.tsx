@@ -882,11 +882,9 @@ function MindMapPageContent() {
   }, []);
 
   const handleStartQuizForTopic = useCallback((topic?: string) => {
-    console.log('🎯 handleStartQuizForTopic called with topic:', topic);
     setChatTopic(topic);
     setChatMode('quiz');
     setIsChatOpen(true);
-    console.log('✅ Chat state updated: mode=quiz, isOpen=true, topic=', topic);
   }, []);
 
   const handleRegenerateClick = useCallback(() => {
