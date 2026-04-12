@@ -270,6 +270,7 @@ export function ChatPanel({
   // QUIZ STATE
   const [isQuizLoading, setIsQuizLoading] = useState(false);
   const [isDeepeningMap, setIsDeepeningMap] = useState(false);
+  const [deepenedTags, setDeepenedTags] = useState<string[]>([]);
   const [quizDifficulty, setQuizDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [quizShowingDifficultySelector, setQuizShowingDifficultySelector] = useState(false);
   const [hiddenSelectorMessages, setHiddenSelectorMessages] = useState<Set<number>>(new Set());
@@ -1552,11 +1553,19 @@ export function ChatPanel({
                                 quiz={message.quiz}
                                 onRegenerate={() => handleRegenerateQuiz(message.quiz!, message.quizResult!)}
                                 isRegenerating={isQuizLoading}
+                                deepenedTags={deepenedTags}
                                 isDeepeningMap={isDeepeningMap}
                                 onDeepenMap={onQuizDeepen ? async (weakSections) => {
                                   setIsDeepeningMap(true);
                                   try {
-                                    await onQuizDeepen(weakSections, topic);
+                                    // Filter out already deepened sections before deepening
+                                    const sectionsToDeepen = weakSections.filter(s => !deepenedTags.includes(s.tag));
+                                    if (sectionsToDeepen.length === 0) {
+                                      return; // All sections already deepened
+                                    }
+                                    await onQuizDeepen(sectionsToDeepen, topic);
+                                    // Track which tags were deepened
+                                    setDeepenedTags(prev => [...new Set([...prev, ...sectionsToDeepen.map(s => s.tag)])]);
                                   } finally {
                                     setIsDeepeningMap(false);
                                   }

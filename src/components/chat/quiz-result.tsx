@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, Target, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Trophy, Target, AlertTriangle, RefreshCw, Check } from 'lucide-react';
 import { Quiz, QuizQuestion, QuizResult } from '@/ai/schemas/quiz-schema';
 import { Button } from '@/components/ui/button';
 import { cn, cleanCitations } from '@/lib/utils';
@@ -20,9 +20,10 @@ interface QuizResultCardProps {
     isRegenerating?: boolean;
     onDeepenMap?: (weakSections: { tag: string; score: number }[]) => void;
     isDeepeningMap?: boolean;
+    deepenedTags?: string[];
 }
 
-export function QuizResultCard({ result, quiz, onRegenerate, isRegenerating, onDeepenMap, isDeepeningMap }: QuizResultCardProps) {
+export function QuizResultCard({ result, quiz, onRegenerate, isRegenerating, onDeepenMap, isDeepeningMap, deepenedTags = [] }: QuizResultCardProps) {
     const percentage = (result.score / result.totalQuestions) * 100;
 
     // Compute weak sections the same way chat-panel does
@@ -40,6 +41,10 @@ export function QuizResultCard({ result, quiz, onRegenerate, isRegenerating, onD
         }))
         .filter(s => s.score < 60)
         .sort((a, b) => a.score - b.score);
+
+    // Separate deepened vs not-deepened sections
+    const deepenedSections = weakSections.filter(s => deepenedTags.includes(s.tag));
+    const notDeepenedSections = weakSections.filter(s => !deepenedTags.includes(s.tag));
 
     const getScoreColor = () => {
         if (percentage >= 80) return 'text-emerald-400';
@@ -166,10 +171,25 @@ export function QuizResultCard({ result, quiz, onRegenerate, isRegenerating, onD
 
             {/* Action CTA - Streamlined */}
             <div className="space-y-2 pt-2">
-                {/* #10 — Deepen weak areas CTA */}
-                {weakSections.length > 0 && onDeepenMap && (
+                {/* Show deepened sections with checkmark */}
+                {deepenedSections.length > 0 && (
+                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-emerald-400">Deepened:</span>
+                            {deepenedSections.map(s => (
+                                <span key={s.tag} className="text-[9px] text-emerald-300/80 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                    {s.tag}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* #10 — Deepen weak areas CTA - only for non-deepened sections */}
+                {notDeepenedSections.length > 0 && onDeepenMap && (
                     <button
-                        onClick={() => onDeepenMap(weakSections)}
+                        onClick={() => onDeepenMap(notDeepenedSections)}
                         disabled={isDeepeningMap}
                         className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/15 hover:border-amber-500/50 transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
                     >
@@ -184,7 +204,7 @@ export function QuizResultCard({ result, quiz, onRegenerate, isRegenerating, onD
                                     {isDeepeningMap ? 'Adding insights to map...' : 'Deepen Weak Areas'}
                                 </p>
                                 <p className="text-[10px] text-amber-500/70 mt-0.5">
-                                    {weakSections.map(s => `${s.tag} (${s.score}%)`).join(' · ')}
+                                    {notDeepenedSections.map(s => `${s.tag} (${s.score}%)`).join(' · ')}
                                 </p>
                             </div>
                         </div>
@@ -193,6 +213,14 @@ export function QuizResultCard({ result, quiz, onRegenerate, isRegenerating, onD
                         )}
                     </button>
                 )}
+
+                {/* Show when all sections are deepened */}
+                {weakSections.length > 0 && deepenedSections.length === weakSections.length && (
+                    <div className="text-center py-2">
+                        <span className="text-[10px] font-bold text-emerald-400">✓ All weak areas deepened</span>
+                    </div>
+                )}
+
                 <Button
                     onClick={onRegenerate}
                     disabled={isRegenerating}
@@ -203,7 +231,7 @@ export function QuizResultCard({ result, quiz, onRegenerate, isRegenerating, onD
                     ) : (
                         <RefreshCw className="w-3 h-3" />
                     )}
-                    Regenerate Focused Quiz
+                    Regenerate Quiz
                 </Button>
                 <p className="text-[8px] text-zinc-600 text-center uppercase tracking-widest">
                     Adaptive Engine Active

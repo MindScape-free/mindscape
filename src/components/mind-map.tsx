@@ -838,10 +838,17 @@ export const MindMap = ({
     if (data.mode !== 'single' || !onUpdate) return;
     const { generateQuizDepthNodesAction } = await import('@/app/actions');
 
-    // Start shimmer on matched branches
-    setDeepeningTags(weakSections.map(s => s.tag));
+    // Always process all weak sections - deduplication happens during merge
+    const sectionsToProcess = weakSections;
 
-    for (const section of weakSections) {
+    if (sectionsToProcess.length === 0) {
+      return;
+    }
+
+    // Start shimmer on matched branches
+    setDeepeningTags(sectionsToProcess.map(s => s.tag));
+
+    for (const section of sectionsToProcess) {
       // Always read the LATEST subTopics from the ref, not the stale closure
       const currentSubTopics = subTopicsRef.current;
 

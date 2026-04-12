@@ -860,11 +860,23 @@ function MindMapPageContent() {
     }
 
     if (hasActualChanges) {
-      handleUpdateCurrentMap(resolved);
-      setHasUnsavedChanges(true);
-      handleSaveMapFromHook(true);
+      // If subTopics changed (quiz deepening), update mindMapRef IMMEDIATELY
+      // before scheduling the React state update. This prevents the Firestore
+      // real-time listener from overwriting new nodes with stale local data.
+      if ('subTopics' in resolved) {
+        const mergedMap = { ...currentMap, ...resolved } as MindMapData;
+        // Update ref FIRST so the Firestore listener has the correct data when it fires
+        mindMapRef.current = mergedMap;
+        handleUpdateCurrentMap(resolved);
+        setHasUnsavedChanges(true);
+        // Save immediately - mindMapRef now has the correct data
+        handleSaveMap(mergedMap, (currentMap as any).id, true);
+      } else {
+        handleUpdateCurrentMap(resolved);
+        setHasUnsavedChanges(true);
+      }
     }
-  }, [handleUpdateCurrentMap, handleSaveMapFromHook]);
+  }, [handleUpdateCurrentMap, handleSaveMap]);
 
   const onManualSave = useCallback(async () => {
     await handleSaveMapFromHook();

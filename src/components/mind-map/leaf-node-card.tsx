@@ -98,23 +98,24 @@ export const LeafNodeCard = memo(function LeafNodeCard({
 
     return (
         <Card
-            className="group/item relative h-full cursor-pointer rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-primary/40 hover:shadow-[0_0_40px_rgba(139,92,246,0.1)] transition-all duration-500 overflow-hidden flex flex-col"
+            className={cn(
+                "group/item relative h-full cursor-pointer rounded-2xl bg-white/[0.03] border hover:bg-white/[0.06] hover:shadow-[0_0_40px_rgba(139,92,246,0.1)] transition-all duration-500 overflow-hidden flex flex-col",
+                node.source === 'quiz'
+                    ? "border-amber-500/40 border-l-2 border-l-amber-500/70 hover:border-amber-500/60"
+                    : "border-white/5 hover:border-primary/40"
+            )}
             onClick={() => onSubCategoryClick(node)}
         >
-            {/* #10 — Quiz insight pill */}
-            {node.source === 'quiz' && node.quizScore !== undefined && (
-                <div className="absolute -top-2 right-3 z-10 pointer-events-none">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[9px] font-black uppercase tracking-widest"
-                        style={{ animation: 'quizPulse 2.5s ease-in-out infinite' }}>
-                        📊 Quiz · {node.quizScore}%
-                    </span>
-                </div>
-            )}
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover/item:opacity-100 transition-opacity duration-500" />
 
             <div className="relative z-10 p-5 flex flex-col h-full">
                 <div className="flex items-start gap-4 mb-4">
-                    <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-primary/10 border border-primary/20 text-primary group-hover/item:scale-110 group-hover/item:bg-primary group-hover/item:text-white transition-all duration-500">
+                    <div className={cn(
+                        "flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-xl border transition-all duration-500 group-hover/item:scale-110",
+                        node.source === 'quiz'
+                            ? "bg-amber-500/10 border-amber-500/30 text-amber-400 group-hover/item:bg-amber-500 group-hover/item:text-white"
+                            : "bg-primary/10 border-primary/20 text-primary group-hover/item:bg-primary group-hover/item:text-white"
+                    )}>
                         <Icon className="h-5 w-5" />
                     </div>
                     <div className="flex-1 min-w-0">

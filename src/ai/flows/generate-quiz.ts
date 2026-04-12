@@ -27,10 +27,46 @@ PRIORITY ORDER:
 
 CONFLICT RESOLVER: If instructions conflict → schema > brevity > ignore style`;
 
+// Extract category and subtopic names from mind map JSON context
+function extractMindMapCategories(context: string): string[] {
+    try {
+        const data = JSON.parse(context);
+        const names: string[] = [];
+        
+        // Handle single mode mind maps
+        if (data.subTopics && Array.isArray(data.subTopics)) {
+            for (const st of data.subTopics) {
+                if (st.name) names.push(st.name);
+                if (st.categories && Array.isArray(st.categories)) {
+                    for (const cat of st.categories) {
+                        if (cat.name) names.push(cat.name);
+                    }
+                }
+            }
+        }
+        
+        // Handle compare mode
+        if (data.compareData?.dimensions) {
+            for (const dim of data.compareData.dimensions) {
+                if (dim.name) names.push(dim.name);
+            }
+        }
+        
+        return [...new Set(names)]; // Deduplicate
+    } catch {
+        return [];
+    }
+}
+
 export async function generateQuizFlow(input: GenerateQuizInput): Promise<any> {
     const { topic, difficulty, mindMapContext, pdfContext } = input;
     const questionCount = difficulty === 'easy' ? 5 : difficulty === 'medium' ? 8 : 12;
     const isCompareMode = mindMapContext && (mindMapContext.includes('"mode":"compare"') || mindMapContext.includes('compareData'));
+    
+    const categoryNames = mindMapContext ? extractMindMapCategories(mindMapContext) : [];
+    const categoriesBlock = categoryNames.length > 0 
+        ? `\nMIND MAP CATEGORIES (use these as conceptTags for proper matching):\n${categoryNames.slice(0, 20).map(n => `- "${n}"`).join('\n')}`
+        : '';
 
     const systemPrompt = `${SYSTEM_GUARANTEES}
 
@@ -43,7 +79,12 @@ QUALITY RULES:
 - No duplicate questions.
 - No conceptTag repeated more than twice across all questions.
 - Ensure even coverage across different aspects of the topic.
-- Each question must test a distinct concept.
+- Each question must test a distinct concept.${categoriesBlock}
+
+CONCEPTTAG RULES:
+- conceptTag MUST match ONE of the mind map category names exactly (or a close variant)
+- If no category matches, use a concise subtopic name from the topic
+- conceptTag should help users understand which section of the mind map this question relates to
 
 SCHEMA (return ONLY this JSON):
 {
@@ -60,7 +101,7 @@ SCHEMA (return ONLY this JSON):
         {"id": "D", "text": "Plausible option"}
       ],
       "correctOptionId": "A",
-      "conceptTag": "specific-subtopic",
+      "conceptTag": "matching-category-name",
       "explanation": "Why this answer is correct."
     }
   ]
@@ -75,6 +116,7 @@ ${pdfContext ? `\nSOURCE FILE CONTEXT (prioritize for questions):\n${pdfContext.
 
     const userPrompt = `Generate a ${difficulty} quiz for: "${topic}".
 ${mindMapContext ? `Mind map context:\n${mindMapContext}` : ''}
+${categoriesBlock}
 ${pdfContext ? `Use source file content for domain-specific questions.` : ''}
 Return JSON with "topic", "difficulty", and "questions" at root level.`;
 

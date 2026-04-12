@@ -269,6 +269,33 @@ export interface QuizMatchResult {
   matchLevel: 'exact' | 'contains' | 'fuzzy' | 'fallback';
 }
 
+function tokenize(s: string): string[] {
+  return s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
+}
+
+function wordOverlapScore(tag: string, target: string): number {
+  const tagTokens = tokenize(tag);
+  const targetTokens = tokenize(target);
+  
+  if (tagTokens.length === 0 || targetTokens.length === 0) return 0;
+  
+  let score = 0;
+  for (const tagToken of tagTokens) {
+    for (const targetToken of targetTokens) {
+      if (tagToken === targetToken) {
+        score += 2;
+      } else if (targetToken.includes(tagToken) || tagToken.includes(targetToken)) {
+        score += 1;
+      } else if (levenshtein(tagToken, targetToken) <= 2) {
+        score += 0.5;
+      }
+    }
+  }
+  
+  const maxPossible = Math.max(tagTokens.length, targetTokens.length) * 2;
+  return score / maxPossible;
+}
+
 export function findMatchingCategory(
   tag: string,
   subTopics: SubTopic[]
@@ -306,6 +333,31 @@ export function findMatchingCategory(
     }
   }
 
-  // Level 4: fallback — attach to first subTopic, first category (never silently drop)
+  // Level 4: smart fallback — score ALL categories and pick the best match
+  let bestMatch: QuizMatchResult = { subTopicIndex: 0, categoryIndex: 0, matchLevel: 'fallback' };
+  let bestScore = 0;
+  
+  for (let si = 0; si < subTopics.length; si++) {
+    const subTopicName = subTopics[si].name;
+    const subTopicScore = wordOverlapScore(tag, subTopicName);
+    
+    for (let ci = 0; ci < subTopics[si].categories.length; ci++) {
+      const categoryName = subTopics[si].categories[ci].name;
+      
+      const catScore = wordOverlapScore(tag, categoryName);
+      const combinedScore = Math.max(catScore, subTopicScore * 0.7);
+      
+      if (combinedScore > bestScore) {
+        bestScore = combinedScore;
+        bestMatch = { subTopicIndex: si, categoryIndex: ci, matchLevel: 'fallback' };
+      }
+    }
+  }
+  
+  if (bestScore > 0.15) {
+    return bestMatch;
+  }
+
+  // Level 5: ultimate fallback — attach to first subTopic, first category (never silently drop)
   return { subTopicIndex: 0, categoryIndex: 0, matchLevel: 'fallback' };
 }
