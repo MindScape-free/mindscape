@@ -4,7 +4,7 @@ import { MindMapData, NestedExpansionItem } from '@/types/mind-map';
 export type MindMapStatus = 'idle' | 'generating' | 'syncing' | 'error';
 
 export interface ExpansionAdapter {
-    generate: (topic: string, parentTopic?: string) => Promise<{ data: MindMapData | null; error: string | null }>;
+    generate: (topic: string, parentTopic?: string, branchDepth?: 'low' | 'medium' | 'deep') => Promise<{ data: MindMapData | null; error: string | null }>;
 }
 
 export interface PersistenceAdapter {
@@ -52,7 +52,7 @@ export function useMindMapStack(options: {
         });
     }, [activeIndex]);
 
-    const push = useCallback(async (topic: string, nodeId: string, navOptions: { mode: 'foreground' | 'background', parentDepth?: number } = { mode: 'background' }) => {
+    const push = useCallback(async (topic: string, nodeId: string, navOptions: { mode: 'foreground' | 'background', parentDepth?: number, branchDepth?: 'low' | 'medium' | 'deep' } = { mode: 'background' }) => {
         if (status !== 'idle') return;
 
         // CRITICAL: Ensure parent map is saved before creating sub-map
@@ -84,7 +84,7 @@ export function useMindMapStack(options: {
 
         try {
             const parentTopic = currentMap?.topic;
-            const result = await options.expansionAdapter.generate(topic, parentTopic);
+            const result = await options.expansionAdapter.generate(topic, parentTopic, navOptions.branchDepth);
 
             if (result.error) {
                 throw new Error(result.error);

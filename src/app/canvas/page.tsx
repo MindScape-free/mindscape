@@ -67,6 +67,7 @@ import { useMindMapPersistence } from '@/hooks/use-mind-map-persistence';
 import { useMindMapPinnedMessages } from '@/hooks/use-mind-map-pinned-messages';
 import { useAIHealth } from '@/hooks/use-ai-health';
 import { useActivity } from '@/contexts/activity-context';
+import { resolveDepthWithConfidence, getDepthLabel, getDepthColor, analyzeTopicComplexity } from '@/lib/depth-analysis';
 
 const EMPTY_ARRAY: never[] = [];
 
@@ -87,6 +88,7 @@ function MindMapPageContent() {
   const [isRegenDialogOpen, setIsRegenDialogOpen] = useState(false);
   const [tempPersona, setTempPersona] = useState<string>('Teacher');
   const [tempDepth, setTempDepth] = useState<'low' | 'medium' | 'deep'>('low');
+  const [dynamicItemRange, setDynamicItemRange] = useState<{ min: number; max: number }>({ min: 24, max: 40 });
   const [showReferences, setShowReferences] = useState(false);
   const [useFileAwareContext, setUseFileAwareContext] = useState(false);
   const [pinnedMessagesCount, setPinnedMessagesCount] = useState(0);
@@ -118,7 +120,7 @@ function MindMapPageContent() {
 
   // 1. ADAPTERS
   const expansionAdapter = useMemo(() => ({
-    generate: async (topic: string, parentTopic?: string) => {
+    generate: async (topic: string, parentTopic?: string, branchDepth?: 'low' | 'medium' | 'deep') => {
       const aiOptions = {
         provider: config.provider,
         apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
@@ -129,7 +131,7 @@ function MindMapPageContent() {
         parentTopic,
         targetLang: params.lang,
         persona: params.persona || aiPersona,
-        depth: params.depth,
+        depth: branchDepth || params.depth,
         useSearch: params.useSearch === 'true',
       }, aiOptions);
       
@@ -138,7 +140,7 @@ function MindMapPageContent() {
       
       return result;
     }
-  }), [params.persona, aiPersona, params.lang, config.provider, config.apiKey, config.pollinationsModel]);
+  }), [params.persona, aiPersona, params.lang, params.depth, config.provider, config.apiKey, config.pollinationsModel]);
   // Keep a ref of the current source context for the persistence adapter closure
   const sourceContextRefs = useRef({ content: null as string | null, type: null as string | null, originalPdf: null as string | null });
 
@@ -888,9 +890,13 @@ function MindMapPageContent() {
     const currentPersona = aiPersona || 'Teacher';
     const normalizedPersona = currentPersona.charAt(0).toUpperCase() + currentPersona.slice(1).toLowerCase();
     setTempPersona(normalizedPersona);
-    setTempDepth(params.depth || 'low');
+    const depth = params.depth || 'low';
+    setTempDepth(depth as 'low' | 'medium' | 'deep');
+    const analysis = analyzeTopicComplexity(params.topic || '');
+    const itemCount = resolveDepthWithConfidence(params.topic || '').suggestedItems;
+    setDynamicItemRange({ min: itemCount.min, max: itemCount.max });
     setIsRegenDialogOpen(true);
-  }, [aiPersona, params.depth]);
+  }, [aiPersona, params.depth, params.topic]);
 
   const handleConfirmRegeneration = useCallback(() => {
     setIsRegenDialogOpen(false);
@@ -907,7 +913,7 @@ function MindMapPageContent() {
 
 
 
-  const handleGenerateAndOpenSubMap = useCallback(async (subTopic: string, nodeId?: string, contextPath?: string, mode: 'foreground' | 'background' = 'background') => {
+  const handleGenerateAndOpenSubMap = useCallback(async (subTopic: string, nodeId?: string, contextPath?: string, mode: 'foreground' | 'background' = 'background', branchDepth?: 'low' | 'medium' | 'deep') => {
     try {
       // First check if it already exists locally in the parent map to avoid duplicate generations
       const existingExpansion = mindMap?.nestedExpansions?.find(e => e.topic === subTopic);
@@ -928,7 +934,7 @@ function MindMapPageContent() {
         parentAbsoluteDepth = matchingSub?.depth || 0;
       }
 
-      await expandNode(subTopic, nodeId || `sub-${Date.now()}`, { mode, parentDepth: parentAbsoluteDepth });
+      await expandNode(subTopic, nodeId || `sub-${Date.now()}`, { mode, parentDepth: parentAbsoluteDepth, branchDepth });
       refreshBalance();
       if (mode === 'foreground') {
         toast({ title: "Sub-Map Generated", description: `Created detailed map for "${subTopic}".` });
@@ -1237,7 +1243,19 @@ function MindMapPageContent() {
 
             <div className="space-y-3">
               <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1 font-orbitron">Structural Depth</label>
-              <Select value={tempDepth} onValueChange={(val: any) => setTempDepth(val)}>
+              <Select value={tempDepth} onValueChange={(val: any) => {
+                setTempDepth(val);
+                const analysis = analyzeTopicComplexity(params.topic || '');
+                const suggestion = resolveDepthWithConfidence(params.topic || '');
+                const depthRanges = {
+                  low: { min: 24, max: 40 },
+                  medium: { min: 60, max: 90 },
+                  deep: { min: 100, max: 150 },
+                };
+                const base = depthRanges[val as keyof typeof depthRanges];
+                const bonus = Math.min(30, analysis.complexity * 5 + (val === 'deep' ? 15 : val === 'medium' ? 10 : 0));
+                setDynamicItemRange({ min: base.min + bonus, max: base.max + bonus });
+              }}>
                 <SelectTrigger className="w-full h-12 border border-white/10 bg-black/60 text-[11px] font-bold uppercase tracking-widest text-zinc-100 rounded-2xl hover:bg-black/80 transition px-4 font-orbitron shadow-inner flex items-center justify-between group">
                   <SelectValue placeholder="Select Depth" />
                 </SelectTrigger>
@@ -1245,19 +1263,19 @@ function MindMapPageContent() {
                   <SelectItem value="low" className="text-[11px] font-bold uppercase font-orbitron py-3 focus:bg-white/10 cursor-pointer">
                     <div className="flex items-center gap-2">
                       <RefreshCw className="w-4 h-4 opacity-40 shrink-0" />
-                      <span>Quick Overview (24-40 items)</span>
+                      <span>Quick Overview ({dynamicItemRange.min >= 24 && dynamicItemRange.max <= 40 ? '24-40' : `${dynamicItemRange.min}-${dynamicItemRange.max}`} items)</span>
                     </div>
                   </SelectItem>
                   <SelectItem value="medium" className="text-[11px] font-bold uppercase font-orbitron py-3 focus:bg-white/10 cursor-pointer">
                     <div className="flex items-center gap-2">
                       <List className="w-4 h-4 opacity-40 shrink-0" />
-                      <span>Balanced Exploration (75 items)</span>
+                      <span>Balanced Exploration ({dynamicItemRange.min >= 60 && dynamicItemRange.max <= 90 ? '75' : `${dynamicItemRange.min}-${dynamicItemRange.max}`} items)</span>
                     </div>
                   </SelectItem>
                   <SelectItem value="deep" className="text-[11px] font-bold uppercase font-orbitron py-3 focus:bg-white/10 cursor-pointer">
                     <div className="flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-purple-400" />
-                      <span>Deep Knowledge Dive (120 items)</span>
+                      <span>Deep Knowledge Dive ({dynamicItemRange.min >= 100 && dynamicItemRange.max <= 150 ? '120' : `${dynamicItemRange.min}-${dynamicItemRange.max}`} items)</span>
                     </div>
                   </SelectItem>
                 </SelectContent>

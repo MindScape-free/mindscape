@@ -1,13 +1,14 @@
 
 'use client';
 
-import { useState, useRef, createRef, useEffect } from 'react';
+import { useState, useRef, createRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles,
   Bot,
   Paperclip,
   List,
+  Gauge,
   ArrowRight,
   Globe,
   GitBranch,
@@ -54,6 +55,17 @@ import dynamic from 'next/dynamic';
 import { useMultiSource } from '@/hooks/use-multi-source';
 import { MultiSourceInput } from '@/components/mind-map/MultiSourceInput';
 import { SourcePillList } from '@/components/mind-map/SourcePillList';
+import { resolveDepthWithConfidence, getDepthLabel, getDepthColor } from '@/lib/depth-analysis';
+
+// #6 — Source-type depth presets
+const SOURCE_DEPTH_PRESETS: Record<string, 'low' | 'medium' | 'deep'> = {
+  pdf:     'deep',
+  youtube: 'medium',
+  image:   'low',
+  website: 'medium',
+  text:    'medium',
+  multi:   'deep',
+};
 
 const ChatPanel = dynamic(() => import('@/components/chat-panel').then(mod => mod.ChatPanel), {
   ssr: false,
@@ -89,6 +101,9 @@ function Hero({
   persona,
   setPersona,
   onActiveModeChange,
+  topic,
+  setTopic,
+  depthSuggestion,
 }: {
   onGenerate: (
     topic: string,
@@ -107,11 +122,13 @@ function Hero({
   setPersona: (persona: string) => void;
   onActiveModeChange: (mode: 'single' | 'compare' | 'multi') => void;
   onMultiSourceTrigger?: () => void;
+  topic: string;
+  setTopic: (topic: string) => void;
+  depthSuggestion: { depth: 'low' | 'medium' | 'deep'; confidence: number; reasons: string[]; suggestedItems: { min: number; max: number; label: string } } | null;
 }) {
   // Web search is always enabled for real-time information
   const useSearch = true;
   const router = useRouter();
-  const [topic, setTopic] = useState('');
   const [topic2, setTopic2] = useState('');
   const [activeMode, setActiveMode] = useState<'single' | 'compare' | 'multi'>('single');
   const isCompareMode = activeMode === 'compare';
@@ -433,6 +450,17 @@ function Hero({
                             </>
                           );
                         }
+                        if (depth === 'auto' && depthSuggestion) {
+                          const suggestedLabel = getDepthLabel(depthSuggestion.depth);
+                          const suggestedColor = getDepthColor(depthSuggestion.depth);
+                          return (
+                            <>
+                              <Sparkles className="w-3.5 h-3.5 mr-2 group-hover:scale-110 transition-transform text-pink-400" />
+                              <span>Auto</span>
+                              <span className="ml-1.5 text-[9px] opacity-60">({suggestedLabel} {depthSuggestion.confidence}%)</span>
+                            </>
+                          );
+                        }
                         return (
                           <>
                             <active.icon className={cn("w-3.5 h-3.5 mr-2 group-hover:scale-110 transition-transform", active.color)} />
@@ -441,7 +469,7 @@ function Hero({
                         );
                       })()}
                     </SelectTrigger>
-                    <SelectContent className="glassmorphism border-white/10 min-w-[160px]" position="popper">
+                    <SelectContent className="glassmorphism border-white/10 min-w-[200px]" position="popper">
                       <div className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1 border-b border-white/5">Exploration Depth</div>
                       {DEPTHS.map((d) => (
                         <SelectItem
@@ -454,10 +482,36 @@ function Hero({
                             <div className="flex items-center gap-2 w-full">
                               <d.icon className={cn("w-4 h-4", d.color)} />
                               <span className="font-bold tracking-wide uppercase text-[11px]">{d.label}</span>
+                              {d.id === 'auto' && depthSuggestion && (
+                                <Badge variant="outline" className="ml-auto text-[8px] h-4 px-1.5 bg-pink-500/10 border-pink-500/30 text-pink-400">
+                                  {depthSuggestion.confidence}% conf
+                                </Badge>
+                              )}
+                              {/* #7 — Show mismatch hint on manual depth options */}
+                              {d.id !== 'auto' && depthSuggestion && depth !== 'auto' && depthSuggestion.depth !== d.id && d.id === depth && (
+                                <Badge variant="outline" className="ml-auto text-[8px] h-4 px-1.5 bg-amber-500/10 border-amber-500/30 text-amber-400">
+                                  AI suggests {getDepthLabel(depthSuggestion.depth)}
+                                </Badge>
+                              )}
                             </div>
                             <p className="text-[10px] text-zinc-400 font-normal leading-relaxed whitespace-normal normal-case tracking-normal">
                               {d.description}
                             </p>
+                            {d.id === 'auto' && depthSuggestion && depthSuggestion.reasons.length > 0 && (
+                              <div className="mt-1 pt-1 border-t border-white/5 w-full">
+                                <div className="flex items-center gap-1 text-[9px] text-zinc-500">
+                                  <Gauge className="w-3 h-3" />
+                                  <span className="font-medium">Detected: </span>
+                                  <span className={getDepthColor(depthSuggestion.depth)}>{getDepthLabel(depthSuggestion.depth)}</span>
+                                  <span className="text-zinc-600">•</span>
+                                  <span className="text-zinc-500">{depthSuggestion.reasons[0]}</span>
+                                </div>
+                                <div className="flex items-center gap-1 mt-0.5 text-[9px] text-zinc-600">
+                                  <Sparkles className="w-2.5 h-2.5" />
+                                  <span>~{depthSuggestion.suggestedItems.min}-{depthSuggestion.suggestedItems.max} items</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </SelectItem>
                       ))}
@@ -732,12 +786,14 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [lang, setLang] = useState('en');
   const [depth, setDepth] = useState('auto');
+  const [depthSuggestion, setDepthSuggestion] = useState<{ depth: 'low' | 'medium' | 'deep'; confidence: number; reasons: string[]; suggestedItems: { min: number; max: number; label: string } } | null>(null);
   const [persona, setPersona] = useState('teacher');
   const [activeMode, setActiveMode] = useState<'single' | 'compare' | 'multi'>('single');
   const useSearch = true;
   const languageSelectRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user, firestore } = useFirebase();
+  const [topic, setTopic] = useState('');
 
   // Load user's saved preferences from Firestore
   useEffect(() => {
@@ -773,14 +829,37 @@ export default function Home() {
     };
   }, [activeMode]);
 
+  useEffect(() => {
+    if (depth === 'auto' && topic.trim().length >= 3) {
+      const suggestion = resolveDepthWithConfidence(topic);
+      setDepthSuggestion(suggestion);
+    } else if (depth !== 'auto' && topic.trim().length >= 3) {
+      // #7 — Show suggestion hint even on manual depth so user knows if they're under/over
+      const suggestion = resolveDepthWithConfidence(topic);
+      setDepthSuggestion(suggestion);
+    } else {
+      setDepthSuggestion(null);
+    }
+  }, [depth, topic]);
 
 
   const handleGenerate = async (
     topic: string,
     fileInfo?: { name: string; type: string; content: string; originalContent?: string }
   ) => {
-    // Navigate immediately. The target page (Canvas) will show the radial skeleton.
     setIsGenerating(true);
+
+    // #2 — Resolve 'auto' depth client-side before navigation so server never sees 'auto'
+    let resolvedDepth = depth;
+    if (depth === 'auto') {
+      const suggestion = resolveDepthWithConfidence(topic);
+      resolvedDepth = suggestion.depth;
+    }
+
+    // #6 — Override depth with source-type preset when a file is attached
+    if (fileInfo?.type && SOURCE_DEPTH_PRESETS[fileInfo.type]) {
+      resolvedDepth = SOURCE_DEPTH_PRESETS[fileInfo.type];
+    }
 
     // Check if user is searching for "MindScape" itself
     const normalizedTopic = topic.toLowerCase().trim();
@@ -796,23 +875,27 @@ export default function Home() {
     const trimmedTopic = topic.trim();
 
     if (websiteRegex.test(trimmedTopic) && !youtubeRegex.test(trimmedTopic)) {
+      // #6 — website preset
+      const websiteDepth = SOURCE_DEPTH_PRESETS['website'];
       const timestamp = Date.now();
       const sessionId = `web-${timestamp}`;
       safeSetItem(`session-type-${sessionId}`, 'website');
       safeSetItem(`session-content-${sessionId}`, { file: trimmedTopic, text: '' });
       safeSetItem(`session-persona-${sessionId}`, persona);
-      router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${depth}&persona=${persona}`);
+      router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${websiteDepth}&persona=${persona}`);
       return;
     }
 
     // NEW: Handle YouTube URL Detection
     if (youtubeRegex.test(trimmedTopic)) {
+      // #6 — youtube preset
+      const ytDepth = SOURCE_DEPTH_PRESETS['youtube'];
       const timestamp = Date.now();
       const sessionId = `yt-${timestamp}`;
       safeSetItem(`session-type-${sessionId}`, 'youtube');
       safeSetItem(`session-content-${sessionId}`, { file: trimmedTopic, text: '' });
       safeSetItem(`session-persona-${sessionId}`, persona);
-      router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${depth}&persona=${persona}`);
+      router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${ytDepth}&persona=${persona}`);
       return;
     }
 
@@ -840,7 +923,7 @@ export default function Home() {
         safeSetItem(`session-type-${sessionId}`, finalSessionType);
         safeSetItem(`session-persona-${sessionId}`, persona);
 
-        router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${depth}&persona=${persona}`);
+        router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${resolvedDepth}&persona=${persona}`);
       } catch (error: any) {
         toast({
           variant: 'destructive',
@@ -853,18 +936,26 @@ export default function Home() {
     }
 
     // Handle regular text-based generation
-    const query = new URLSearchParams({ topic, lang, depth, persona, useSearch: useSearch.toString() }).toString();
+    const query = new URLSearchParams({ topic, lang, depth: resolvedDepth, persona, useSearch: useSearch.toString() }).toString();
     router.push(`/canvas?${query}`);
   };
 
   const handleCompare = (topic1: string, topic2: string) => {
     setIsGenerating(true);
-    const query = new URLSearchParams({ topic1, topic2, lang, depth, persona, useSearch: useSearch.toString() }).toString();
+    // #2 — resolve auto before compare navigation
+    let resolvedDepth = depth;
+    if (depth === 'auto') {
+      const suggestion = resolveDepthWithConfidence(`${topic1} vs ${topic2}`);
+      resolvedDepth = suggestion.depth;
+    }
+    const query = new URLSearchParams({ topic1, topic2, lang, depth: resolvedDepth, persona, useSearch: useSearch.toString() }).toString();
     router.push(`/canvas?${query}`);
   };
 
   const handleMultiGenerate = async (mergedContent: string, topic: string) => {
     setIsGenerating(true);
+    // #6 — multi-source always uses deep
+    const multiDepth = SOURCE_DEPTH_PRESETS['multi'];
     const timestamp = Date.now();
     const sessionId = `multi-${timestamp}`;
 
@@ -886,7 +977,7 @@ export default function Home() {
     safeSetItem(`session-type-${sessionId}`, 'multi');
     safeSetItem(`session-persona-${sessionId}`, persona);
 
-    router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${depth}&persona=${persona}`);
+    router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${multiDepth}&persona=${persona}`);
   };
 
 
@@ -910,6 +1001,9 @@ export default function Home() {
         languageSelectRef={languageSelectRef}
         fileInputRef={fileInputRef}
         onActiveModeChange={setActiveMode}
+        topic={topic}
+        setTopic={setTopic}
+        depthSuggestion={depthSuggestion}
       />
 
       <button

@@ -12,7 +12,8 @@ import {
     Info,
     Sparkles,
     BrainCircuit,
-    Swords
+    Swords,
+    Layers,
 } from 'lucide-react';
 import {
     Accordion,
@@ -26,6 +27,12 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn, toPascalCase, cleanCitations } from '@/lib/utils';
 import { LeafNodeCard } from './leaf-node-card';
 import { Icons } from '../icons';
@@ -45,7 +52,7 @@ interface MindMapAccordionProps {
     setOpenSubTopics: (value: string[]) => void;
     openCategories: string[];
     setOpenCategories: (value: string[] | ((prev: string[]) => string[])) => void;
-    onGenerateNewMap: (topic: string, nodeId: string, contextPath: string, mode?: 'foreground' | 'background') => void;
+    onGenerateNewMap: (topic: string, nodeId: string, contextPath: string, mode?: 'foreground' | 'background', depth?: 'low' | 'medium' | 'deep') => void;
     handleSubCategoryClick: (subCategory: SubCategoryInfo) => void;
     handleGenerateImageClick: (subCategory: SubCategory) => void;
     onExplainInChat: (message: string) => void;
@@ -176,6 +183,32 @@ export const MindMapAccordion = React.memo(({
                                         </TooltipTrigger>
                                         <TooltipContent className="glassmorphism"><p>Generate Sub-Map</p></TooltipContent>
                                     </Tooltip>
+                                    {/* #4 — Per-branch depth selector */}
+                                    <DropdownMenu>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-10 w-10 text-zinc-500 hover:text-indigo-400 hover:bg-indigo-400/10 rounded-xl" disabled={isGlobalBusy}>
+                                                        <Layers className="h-5 w-5" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="glassmorphism"><p>Expand at Depth</p></TooltipContent>
+                                        </Tooltip>
+                                        <DropdownMenuContent className="glassmorphism border-white/10 w-44" align="end">
+                                            <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-500">Expand this branch at</div>
+                                            {(['low', 'medium', 'deep'] as const).map(d => (
+                                                <DropdownMenuItem
+                                                    key={d}
+                                                    onClick={() => onGenerateNewMap(subTopic.name, subTopicId, mindMap.topic, 'background', d)}
+                                                    className="cursor-pointer rounded-lg text-[11px] font-bold uppercase tracking-wide"
+                                                >
+                                                    <span className={cn('mr-2 w-1.5 h-1.5 rounded-full inline-block', d === 'low' ? 'bg-green-400' : d === 'medium' ? 'bg-blue-400' : 'bg-purple-400')} />
+                                                    {d === 'low' ? 'Quick' : d === 'medium' ? 'Balanced' : 'Detailed'}
+                                                </DropdownMenuItem>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                             <Button variant="ghost" size="icon" className="h-10 w-10 text-zinc-500 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-xl" onClick={() => onStartQuiz(subTopic.name)}>

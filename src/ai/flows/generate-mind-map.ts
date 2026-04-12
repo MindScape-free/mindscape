@@ -42,28 +42,60 @@ GLOBAL RULES:
 - insight fields (subTopic + category level): ALWAYS include — one sharp, non-obvious sentence
 - Optional fields (thought, tags, timestamp): omit if not adding value — never fabricate`;
 
-// ── Centralized persona block ─────────────────────────────────────────
-function buildPersona(persona: string): string {
+// ── Persona × Depth resolution matrix (#3) ───────────────────────────
+// Resolves contradictions before hitting the AI
+function resolvePersonaDepth(
+  persona: string,
+  depth: 'low' | 'medium' | 'deep'
+): { depth: 'low' | 'medium' | 'deep'; note: string } {
   const p = persona.toLowerCase().trim();
-  if (p === 'concise') return `PERSONA: Concise — remove all explanations, use keywords only.`;
-  if (p === 'creative') return `PERSONA: Creative — allow metaphors and non-obvious angles.`;
-  if (p === 'sage' || p === 'cognitive sage') return `PERSONA: Cognitive Sage — reveal patterns, cross-domain links, philosophical depth.`;
-  return `PERSONA: Structured Expert — clear, specific, curriculum-style.`;
+  if (p === 'concise' && depth === 'deep')
+    return { depth: 'medium', note: 'Concise persona: depth capped at medium — dense but focused.' };
+  if ((p === 'sage' || p === 'cognitive sage') && depth === 'low')
+    return { depth: 'medium', note: 'Cognitive Sage: depth raised to medium for analytical richness.' };
+  return { depth, note: '' };
+}
+
+// ── Centralized persona block ─────────────────────────────────────────
+function buildPersona(persona: string, note: string): string {
+  const p = persona.toLowerCase().trim();
+  const noteBlock = note ? `\nDEPTH ADJUSTMENT: ${note}` : '';
+  if (p === 'concise') return `PERSONA: Concise — keywords only, no explanations, ≤12 words per description.${noteBlock}`;
+  if (p === 'creative') return `PERSONA: Creative — metaphors, analogies, non-obvious lateral connections.${noteBlock}`;
+  if (p === 'sage' || p === 'cognitive sage') return `PERSONA: Cognitive Sage — hidden patterns, cross-domain links, second-order effects.${noteBlock}`;
+  return `PERSONA: Structured Expert — clear, specific, curriculum-style, pedagogically ordered.${noteBlock}`;
 }
 
 export async function generateMindMap(
   input: GenerateMindMapInput & { apiKey?: string; provider?: AIProvider; searchContext?: SearchContext | null; model?: string }
 ): Promise<GenerateMindMapOutput> {
-  const { topic, parentTopic, targetLang, persona, depth = 'low', provider, apiKey, searchContext, model, context } = input;
+  const { topic, parentTopic, targetLang, persona, depth: rawDepth = 'low', provider, apiKey, searchContext, model, context } = input;
 
-  // ── Density with expansion for context ──────────────────────────────
+  // #3 — Resolve persona×depth contradictions before generation
+  const { depth, note: personaDepthNote } = resolvePersonaDepth(persona || 'teacher', rawDepth);
+
+  // ── Density map: 3 variants per level (#5 progressive density) ──────
   const hasContext = !!context && context.trim().length > 0;
+  const isConcise = (persona || '').toLowerCase().trim() === 'concise';
   const densityMap = {
-    low:    hasContext ? `subTopics: 4–5 | categories per subTopic: 3–4 | subCategories per category: 3–4` : `subTopics: 2–3 | categories per subTopic: 2 | subCategories per category: 2–3`,
-    medium: hasContext ? `subTopics: 5–7 | categories per subTopic: 4–5 | subCategories per category: 4–5` : `subTopics: 3–5 | categories per subTopic: 3 | subCategories per category: 3–4`,
-    deep:   hasContext ? `subTopics: 7–9 | categories per subTopic: 4–5 | subCategories per category: 5–6` : `subTopics: 5–7 | categories per subTopic: 3–4 | subCategories per category: 4–6`,
+    low: {
+      base:    `subTopics: 2–3 | categories per subTopic: 2 | subCategories per category: 2–3`,
+      context: `subTopics: 4–5 | categories per subTopic: 3–4 | subCategories per category: 3–4`,
+      concise: `subTopics: 2–3 | categories per subTopic: 2 | subCategories per category: 2`,
+    },
+    medium: {
+      base:    `subTopics: 3–5 | categories per subTopic: 3 | subCategories per category: 3–4`,
+      context: `subTopics: 5–7 | categories per subTopic: 4–5 | subCategories per category: 4–5`,
+      concise: `subTopics: 3–4 | categories per subTopic: 2–3 | subCategories per category: 2–3`,
+    },
+    deep: {
+      base:    `subTopics: 5–7 | categories per subTopic: 3–4 | subCategories per category: 4–6`,
+      context: `subTopics: 7–9 | categories per subTopic: 4–5 | subCategories per category: 5–6`,
+      concise: `subTopics: 4–5 | categories per subTopic: 3 | subCategories per category: 3–4`,
+    },
   };
-  const density = densityMap[depth];
+  const densityVariant: 'concise' | 'context' | 'base' = isConcise ? 'concise' : hasContext ? 'context' : 'base';
+  const density = densityMap[depth][densityVariant];
 
   // ── Context block ───────────────────────────────────────────────────
   let contextBlock = '';
@@ -101,7 +133,7 @@ SOURCES: ${searchContext.sources.slice(0, 5).map((s, i) => `[${i + 1}] ${s.title
 
   const prompt = `${SYSTEM_GUARANTEES}
 
-${buildPersona(persona || 'teacher')}
+${buildPersona(persona || 'teacher', personaDepthNote)}
 LANGUAGE: ${targetLang ? targetLang : 'en'}
 ${parentTopic ? `PARENT CONTEXT: This map for "${topic}" is a sub-map of "${parentTopic}". Keep content interconnected.` : ''}
 ${contextBlock}
@@ -150,7 +182,7 @@ RULES:
 - ${searchContext ? 'Ground facts in search results.' : ''}
 ${hasContext ? '- Capture context details AND expand with related knowledge.' : ''}`;
 
-  let capability: any = input.capability || (depth === 'deep' ? 'fast' : 'fast');
+  let capability: any = input.capability || 'fast';
 
   const TEMPLATE_MARKERS = ['Subtopic Name', 'Category Name', 'Subcategory Name', 'One sentence explanation', 'Specific Dimension Name', 'Reasoning about this'];
   const MAX_RETRIES = 2;
