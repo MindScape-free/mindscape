@@ -844,20 +844,23 @@ function MindMapPageContent() {
     }
   }, [mindMap]);
 
-  const onMapUpdate = useCallback((updatedData: Partial<MindMapData>) => {
+  const onMapUpdate = useCallback((updatedData: Partial<MindMapData> | ((prev: MindMapData) => Partial<MindMapData>)) => {
     const currentMap = mindMapRef.current;
     if (!currentMap) return;
 
+    // Resolve functional updater
+    const resolved = typeof updatedData === 'function' ? updatedData(currentMap) : updatedData;
+
     let hasActualChanges = false;
-    for (const key in updatedData) {
-      if (JSON.stringify((updatedData as any)[key]) !== JSON.stringify((currentMap as any)[key])) {
+    for (const key in resolved) {
+      if (JSON.stringify((resolved as any)[key]) !== JSON.stringify((currentMap as any)[key])) {
         hasActualChanges = true;
         break;
       }
     }
 
     if (hasActualChanges) {
-      handleUpdateCurrentMap(updatedData);
+      handleUpdateCurrentMap(resolved);
       setHasUnsavedChanges(true);
       handleSaveMapFromHook(true);
     }

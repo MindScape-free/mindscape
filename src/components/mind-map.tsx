@@ -224,7 +224,7 @@ interface MindMapProps {
   mindMapStack?: MindMapData[];
   activeStackIndex?: number;
   onStackSelect?: (index: number) => void;
-  onUpdate?: (updatedData: Partial<MindMapData>) => void;
+  onUpdate?: (updatedData: Partial<MindMapData> | ((prev: MindMapData) => Partial<MindMapData>)) => void;
   status: MindMapStatus;
   aiHealth?: { name: string, status: string }[];
   hasUnsavedChanges?: boolean;
@@ -822,6 +822,14 @@ export const MindMap = ({
 
 
 
+  // Keep a stable ref to the latest data.subTopics for quiz deepening
+  const subTopicsRef = useRef(data.mode === 'single' ? (data as any).subTopics : []);
+  useEffect(() => {
+    if (data.mode === 'single') {
+      subTopicsRef.current = (data as any).subTopics || [];
+    }
+  }, [data]);
+
   // #10 — Quiz-adaptive deepening: generate + merge nodes for weak sections
   const handleQuizDeepen = React.useCallback(async (
     weakSections: { tag: string; score: number }[],
@@ -834,10 +842,13 @@ export const MindMap = ({
     setDeepeningTags(weakSections.map(s => s.tag));
 
     for (const section of weakSections) {
+      // Always read the LATEST subTopics from the ref, not the stale closure
+      const currentSubTopics = subTopicsRef.current;
+
       // Find the best matching category using the 4-level matcher
-      const match = findMatchingCategory(section.tag, data.subTopics);
-      const targetCat = data.subTopics[match.subTopicIndex]?.categories[match.categoryIndex];
-      const existingNodes = targetCat?.subCategories.map(sc => sc.name) ?? [];
+      const match = findMatchingCategory(section.tag, currentSubTopics);
+      const targetCat = currentSubTopics[match.subTopicIndex]?.categories[match.categoryIndex];
+      const existingNodes = targetCat?.subCategories.map((sc: any) => sc.name) ?? [];
 
       const { data: newNodes, error } = await generateQuizDepthNodesAction({
         mainTopic: quizTopic,
@@ -852,34 +863,53 @@ export const MindMap = ({
         continue;
       }
 
-      // Append-only merge — deduplicate by name
-      const updatedSubTopics = data.subTopics.map((st, si) => ({
+      // Capture match indices for the closure below
+      const { subTopicIndex, categoryIndex } = match;
+      const nodeCount = newNodes.length;
+      const targetCatName = targetCat?.name ?? section.tag;
+      const sectionScore = section.score;
+
+      // Functional update: always merges onto the LATEST state, not the stale closure
+      onUpdate((prevData: any) => {
+        const prevSubTopics: any[] = prevData?.subTopics ?? subTopicsRef.current;
+        const updatedSubTopics = prevSubTopics.map((st: any, si: number) => ({
+          ...st,
+          categories: st.categories.map((cat: any, ci: number) => {
+            if (si !== subTopicIndex || ci !== categoryIndex) return cat;
+            const existingNames = new Set(cat.subCategories.map((sc: any) => sc.name));
+            const dedupedNew = newNodes.filter((n: any) => !existingNames.has(n.name));
+            return { ...cat, subCategories: [...cat.subCategories, ...dedupedNew] };
+          })
+        }));
+        return { subTopics: updatedSubTopics };
+      });
+
+      // Also update the ref immediately so the next loop iteration sees the new nodes
+      subTopicsRef.current = subTopicsRef.current.map((st: any, si: number) => ({
         ...st,
-        categories: st.categories.map((cat, ci) => {
-          if (si !== match.subTopicIndex || ci !== match.categoryIndex) return cat;
-          const existingNames = new Set(cat.subCategories.map(sc => sc.name));
-          const dedupedNew = newNodes.filter(n => !existingNames.has(n.name));
+        categories: st.categories.map((cat: any, ci: number) => {
+          if (si !== subTopicIndex || ci !== categoryIndex) return cat;
+          const existingNames = new Set(cat.subCategories.map((sc: any) => sc.name));
+          const dedupedNew = newNodes.filter((n: any) => !existingNames.has(n.name));
           return { ...cat, subCategories: [...cat.subCategories, ...dedupedNew] };
         })
       }));
 
-      onUpdate({ subTopics: updatedSubTopics });
-
       // Auto-open the matched SubTopic + Category so user sees the new nodes
-      const subTopicId = `topic-${match.subTopicIndex}`;
-      const catId = `cat-${match.subTopicIndex}-${match.categoryIndex}`;
+      const subTopicId = `topic-${subTopicIndex}`;
+      const catId = `cat-${subTopicIndex}-${categoryIndex}`;
       setOpenSubTopics(prev => prev.includes(subTopicId) ? prev : [...prev, subTopicId]);
       setOpenCategories(prev => prev.includes(catId) ? prev : [...prev, catId]);
 
       toast({
         title: '🎯 Quiz Insights Added',
-        description: `${newNodes.length} new nodes added to "${targetCat?.name ?? section.tag}" (score: ${section.score}%)`,
+        description: `${nodeCount} new nodes added to "${targetCatName}" (score: ${sectionScore}%)`,
         duration: 5000,
       });
     }
 
     setDeepeningTags([]);
-  }, [data, aiPersona, providerOptions, onUpdate, toast]);
+  }, [data.mode, aiPersona, providerOptions, onUpdate, toast]);
 
   // Wire handleQuizDeepen to the ref so canvas/chat-panel can call it
   useEffect(() => {
