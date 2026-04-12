@@ -18,10 +18,29 @@ interface QuizResultCardProps {
     quiz?: Quiz;
     onRegenerate: () => void;
     isRegenerating?: boolean;
+    onDeepenMap?: (weakSections: { tag: string; score: number }[]) => void;
+    isDeepeningMap?: boolean;
 }
 
-export function QuizResultCard({ result, quiz, onRegenerate, isRegenerating }: QuizResultCardProps) {
+export function QuizResultCard({ result, quiz, onRegenerate, isRegenerating, onDeepenMap, isDeepeningMap }: QuizResultCardProps) {
     const percentage = (result.score / result.totalQuestions) * 100;
+
+    // Compute weak sections the same way chat-panel does
+    const tagQuestionCounts = quiz?.questions.reduce((acc: Record<string, number>, q) => {
+        acc[q.conceptTag] = (acc[q.conceptTag] || 0) + 1;
+        return acc;
+    }, {}) ?? {};
+
+    const weakSections = Object.entries(result.weakAreas)
+        .map(([tag, mistakeCount]) => ({
+            tag,
+            score: tagQuestionCounts[tag]
+                ? Math.round(((tagQuestionCounts[tag] - mistakeCount) / tagQuestionCounts[tag]) * 100)
+                : 0
+        }))
+        .filter(s => s.score < 60)
+        .sort((a, b) => a.score - b.score)
+        .slice(0, 2);
 
     const getScoreColor = () => {
         if (percentage >= 80) return 'text-emerald-400';
@@ -148,6 +167,33 @@ export function QuizResultCard({ result, quiz, onRegenerate, isRegenerating }: Q
 
             {/* Action CTA - Streamlined */}
             <div className="space-y-2 pt-2">
+                {/* #10 — Deepen weak areas CTA */}
+                {weakSections.length > 0 && onDeepenMap && (
+                    <button
+                        onClick={() => onDeepenMap(weakSections)}
+                        disabled={isDeepeningMap}
+                        className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/15 hover:border-amber-500/50 transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                        <div className="flex items-center gap-2.5">
+                            {isDeepeningMap ? (
+                                <RefreshCw className="w-4 h-4 text-amber-400 animate-spin" />
+                            ) : (
+                                <span className="text-base">🎯</span>
+                            )}
+                            <div className="text-left">
+                                <p className="text-[11px] font-black text-amber-300 uppercase tracking-widest">
+                                    {isDeepeningMap ? 'Adding insights to map...' : 'Deepen Weak Areas'}
+                                </p>
+                                <p className="text-[10px] text-amber-500/70 mt-0.5">
+                                    {weakSections.map(s => `${s.tag} (${s.score}%)`).join(' · ')}
+                                </p>
+                            </div>
+                        </div>
+                        {!isDeepeningMap && (
+                            <span className="text-[9px] font-black text-amber-400/60 uppercase tracking-widest group-hover:text-amber-400 transition-colors">Add nodes →</span>
+                        )}
+                    </button>
+                )}
                 <Button
                     onClick={onRegenerate}
                     disabled={isRegenerating}

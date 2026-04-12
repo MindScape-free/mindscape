@@ -269,6 +269,7 @@ export function ChatPanel({
 
   // QUIZ STATE
   const [isQuizLoading, setIsQuizLoading] = useState(false);
+  const [isDeepeningMap, setIsDeepeningMap] = useState(false);
   const [quizDifficulty, setQuizDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [quizShowingDifficultySelector, setQuizShowingDifficultySelector] = useState(false);
   const [hiddenSelectorMessages, setHiddenSelectorMessages] = useState<Set<number>>(new Set());
@@ -1562,6 +1563,15 @@ export function ChatPanel({
                                 quiz={message.quiz}
                                 onRegenerate={() => handleRegenerateQuiz(message.quiz!, message.quizResult!)}
                                 isRegenerating={isQuizLoading}
+                                isDeepeningMap={isDeepeningMap}
+                                onDeepenMap={onQuizDeepen ? async (weakSections) => {
+                                  setIsDeepeningMap(true);
+                                  try {
+                                    await onQuizDeepen(weakSections, topic);
+                                  } finally {
+                                    setIsDeepeningMap(false);
+                                  }
+                                } : undefined}
                               />
                             ) : message.type === 'quiz-selector' ? (
                               <div className="flex flex-col gap-4">

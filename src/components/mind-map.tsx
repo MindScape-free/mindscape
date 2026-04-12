@@ -865,6 +865,12 @@ export const MindMap = ({
 
       onUpdate({ subTopics: updatedSubTopics });
 
+      // Auto-open the matched SubTopic + Category so user sees the new nodes
+      const subTopicId = `topic-${match.subTopicIndex}`;
+      const catId = `cat-${match.subTopicIndex}-${match.categoryIndex}`;
+      setOpenSubTopics(prev => prev.includes(subTopicId) ? prev : [...prev, subTopicId]);
+      setOpenCategories(prev => prev.includes(catId) ? prev : [...prev, catId]);
+
       toast({
         title: '🎯 Quiz Insights Added',
         description: `${newNodes.length} new nodes added to "${targetCat?.name ?? section.tag}" (score: ${section.score}%)`,
