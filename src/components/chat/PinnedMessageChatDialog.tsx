@@ -248,7 +248,6 @@ export function PinnedMessageChatDialog({ pin, onClose, currentMap, onMindMapGen
         open={createMindmapOpen}
         onOpenChange={setCreateMindmapOpen}
         content={createMindmapContent}
-        currentMap={currentMap}
         onMindmapCreated={(mapData) => {
           if (onMindMapGenerated) {
             onMindMapGenerated(mapData);

@@ -201,3 +201,24 @@ export interface ExplainableNode {
 }
 
 export type ExplanationMode = 'Beginner' | 'Intermediate' | 'Expert';
+
+export interface DepthSuggestion {
+  depth: 'low' | 'medium' | 'deep';
+  confidence: number;
+  reasons: string[];
+  suggestedItems: {
+    min: number;
+    max: number;
+    label: string;
+  };
+}
+
+export interface DepthAnalysis {
+  technical: number;
+  academic: number;
+  scientific: number;
+  business: number;
+  complexity: number;
+  multiConcept: number;
+  questionType: 'how' | 'what' | 'why' | 'comparison' | 'none';
+}

@@ -1628,7 +1628,7 @@ export const MindMap = ({
           }}
           nodeName={nestedLabNode.topic}
           nodeDescription={`Updating thumbnail for ${nestedLabNode.topic}`}
-          initialPrompt={`${nestedLabNode.topic}, professional photography, high quality, detailed, 8k`}
+          initialPrompt={`${nestedLabNode.topic}, concept visualization, abstract representation, professional illustration, clean design, high quality`}
           onEnhancePrompt={async (prompt, style, composition, mood, colorPalette, lighting) => {
             setIsEnhancingNested(true);
             try {

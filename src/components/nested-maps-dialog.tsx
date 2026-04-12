@@ -391,7 +391,7 @@ export function NestedMapsDialog({
                                                 const createdAt = getDisplayDate(expansion.createdAt);
 
                                                 const mapDataForUrl = expansion.fullData || expansion;
-                                                const fallbackImage = `https://gen.pollinations.ai/image/${encodeURIComponent(`${expansion.topic}, professional photography, high quality, detailed, 8k`)}?width=512&height=288&model=flux&enhance=true`;
+                                                const fallbackImage = `https://gen.pollinations.ai/image/${encodeURIComponent(`${expansion.topic}, concept visualization, abstract representation, professional illustration, clean design, high quality`)}?width=512&height=288&model=flux&enhance=true`;
                                                 const thumbnailUrl = (expansion as any).thumbnailUrl || (mapDataForUrl as any).thumbnailUrl || fallbackImage;
 
                                                 return (

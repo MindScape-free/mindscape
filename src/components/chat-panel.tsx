@@ -244,7 +244,9 @@ export function ChatPanel({
   const [isResizing, setIsResizing] = useState(false);
 
   // REMEMBER LAST VIEW
-  const [lastView, setLastView] = useLocalStorage<'chat' | 'history' | 'pins' | 'canvas-pins'>('mindscape-chat-last-view', 'chat');
+  const [lastView, setLastView] = useLocalStorage<'chat' | 'history' | 'pins' | 'canvas-pins' | 'pin-chat'>('mindscape-chat-last-view', 'chat');
+  const [hasOpenedBefore, setHasOpenedBefore] = useLocalStorage('mindscape-chat-opened', false);
+  const [savedView, setSavedView] = useState<'chat' | 'history' | 'pins' | 'canvas-pins' | 'pin-chat'>('chat');
 
 
 
@@ -858,15 +860,20 @@ export function ChatPanel({
   // Apply initialView — runs after session effect so it wins
   useEffect(() => {
     if (isOpen) {
-      const viewToSet = initialView || lastView;
+      // First time open → show chat home
+      // Returning user → show last saved view
+      const viewToSet = hasOpenedBefore ? (initialView || savedView) : 'chat';
       setView(viewToSet);
-      setLastView(viewToSet);
+      if (hasOpenedBefore) {
+        setLastView(viewToSet);
+      }
+      setHasOpenedBefore(true);
       // Pre-load all pins when opening a pin view
       if (viewToSet === 'pins' || viewToSet === 'canvas-pins') {
         loadAllUserPins();
       }
     }
-  }, [isOpen, initialView, lastView]);
+  }, [isOpen, initialView, savedView, hasOpenedBefore]);
 
   /**
    * Handles sending an initial message if one is provided.
@@ -2385,7 +2392,13 @@ export function ChatPanel({
 
   return (
     <>
-    <Sheet open={isOpen} onOpenChange={onClose}>
+    <Sheet open={isOpen} onOpenChange={(open) => {
+      if (!open) {
+        setSavedView(view);
+        setLastView(view);
+      }
+      onClose();
+    }}>
       <SheetContent
         className="flex flex-col p-0 glassmorphism [&>button]:hidden transition-none"
         style={{ width: `${panelWidth}px`, maxWidth: 'none', minWidth: 'auto' }}
@@ -2725,7 +2738,6 @@ export function ChatPanel({
         onOpenChange={setCreateMindmapOpen}
         content={createMindmapContent}
         userMessage={createMindmapUserMessage}
-        currentMap={mindMapData}
         onMindmapCreated={(mapData) => {
           if (onMindMapGenerated) {
             onMindMapGenerated(mapData);

@@ -168,24 +168,28 @@ function applyStyleToPrompt(prompt: string, style?: string, composition?: string
     if (keywords) addKeywords(keywords);
   } else if (!style || style === 'cinematic') {
     // Fallback to cinematic defaults if no major style is set
-    const personKeywords = [
-      'person', 'people', 'man', 'woman', 'leader', 'figure', 'celebrity',
-      'scientist', 'artist', 'politician', 'entrepreneur', 'founder', 'ceo',
-      'president', 'king', 'queen', 'emperor', 'philosopher', 'inventor',
-      'author', 'writer', 'actor', 'musician', 'athlete', 'coach', 'teacher',
-      'doctor', 'engineer', 'designer', 'developer', 'researcher', 'professor',
+    // Only explicit named individuals should trigger portrait mode, not generic roles
+    const explicitPersonKeywords = [
       'einstein', 'newton', 'tesla', 'jobs', 'gates', 'musk', 'bezos',
       'gandhi', 'lincoln', 'washington', 'churchill', 'napoleon', 'caesar',
       'da vinci', 'michelangelo', 'shakespeare', 'beethoven', 'mozart',
-      'he ', 'she ', 'his ', 'her ', 'him ', 'himself', 'herself'
+      'euler', 'hawking', 'curie', 'planck', 'feynman',
+      'galileo', 'kepler', 'darwin', 'freud',
+      'aristotle', 'plato', 'socrates', 'confucius',
+      'obama', 'macron', 'merkel', 'putin', 'trump', 'biden', 'harris',
+      'zuckerberg', 'wozniak', 'hopper', 'lovelace',
+      'turing', 'babbage', 'stroustrup', 'torvalds', 'stallman',
+      'hemingway', 'dostoevsky', 'tolstoy', 'orwell',
+      'picasso', 'van gogh', 'monet', 'dali', 'warhol',
+      'marilyn monroe', 'elvis', 'michael jackson', 'kobe bryant'
     ];
 
-    const isPerson = personKeywords.some(keyword => {
+    const isExplicitPerson = explicitPersonKeywords.some(keyword => {
       const regex = new RegExp(`\\b${keyword}\\b`, 'i');
       return regex.test(lowerEnhanced);
     });
 
-    if (isPerson) {
+    if (isExplicitPerson) {
       addKeywords('professional portrait photography, dramatic studio lighting, 8k resolution, cinematic composition, photorealistic, sharp focus');
     } else {
       addKeywords('cinematic landscape photography, dramatic lighting, ultra-detailed, 8k quality, depth of field, atmospheric rendering');
