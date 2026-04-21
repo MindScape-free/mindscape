@@ -13,7 +13,7 @@ import {
   limit,
   Firestore,
   Timestamp 
-} from 'firebase/firestore';
+// firebase/firestore removed
 import { format, subDays, subHours, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth } from 'date-fns';
 
 interface HeatmapDay {

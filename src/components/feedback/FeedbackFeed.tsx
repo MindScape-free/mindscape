@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
-import { useFirebase } from '@/firebase';
+import { useUser, useFirestore } from '@/lib/auth-context';
+import { getSupabaseClient } from '@/lib/supabase-db';
 import { Feedback, FeedbackType, FeedbackPriority } from '@/types/feedback';
 import { FeedbackBadge } from './FeedbackBadge';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -37,7 +37,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { doc, updateDoc, serverTimestamp, arrayUnion } from 'firebase/firestore';
+// firebase/firestore removed
 import { AdminActivityLogEntry } from '@/ai/schemas/feedback-schema';
 import { cn } from '@/lib/utils';
 
@@ -134,18 +134,18 @@ export const FeedbackFeed: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [copiedUserId, setCopiedUserId] = useState(false);
 
-  const { firestore, isAdmin, user } = useFirebase();
+  const { isAdmin, user } = useFirestore();
+  const supabase = getSupabaseClient();
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!firestore) return;
-    const q = query(collection(firestore, 'feedback'), orderBy('createdAt', 'desc'), limit(50));
-    const unsub = onSnapshot(q, (snap) => {
-      setFeedbacks(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Feedback[]);
+    async function fetchFeedback() {
+      const { data } = await supabase.from('feedback').select('*').order('created_at', { ascending: false }).limit(50);
+      setFeedbacks(data as Feedback[] || []);
       setIsLoading(false);
-    }, () => setIsLoading(false));
-    return () => unsub();
-  }, [firestore]);
+    }
+    fetchFeedback();
+  }, [supabase]);
 
   const filteredFeedbacks = feedbacks.filter(f => {
     const matchesType = typeFilter === 'all' || f.type === typeFilter;

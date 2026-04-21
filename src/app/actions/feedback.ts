@@ -1,168 +1,78 @@
 'use server';
 
 import { FeedbackSchema, FeedbackInput } from '@/ai/schemas/feedback-schema';
-import { initializeFirebaseServer } from '@/firebase/server';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { v4 as uuidv4 } from 'uuid';
 import { revalidatePath } from 'next/cache';
-import { AdminActivityLogEntry } from '@/lib/admin-utils';
 import { getTrackingIdPrefix, formatDateForTrackingId, formatSeriesNumber, FeedbackType } from '@/types/feedback';
 
-/**
- * Generate a unique tracking ID for feedback.
- * Format: {Prefix}-{ddmmyyyy}-{00001}
- * B = Bug, S = Suggestion, I = Improvement, F = Feature
- */
-async function generateTrackingId(
-  firestore: any, 
-  type: FeedbackType
-): Promise<string> {
+async function generateTrackingId(type: FeedbackType): Promise<string> {
   const now = new Date();
   const prefix = getTrackingIdPrefix(type);
   const dateStr = formatDateForTrackingId(now);
   const counterId = `${prefix}-${dateStr}`;
-  
-  // Get or create counter document
-  const counterRef = firestore.collection('feedbackCounters').doc(counterId);
-  const counterDoc = await counterRef.get();
-  
-  let seriesNumber = 1;
-  if (counterDoc.exists) {
-    seriesNumber = (counterDoc.data().lastNumber || 0) + 1;
-  }
-  
-  // Update counter
-  await counterRef.set({
-    lastNumber: seriesNumber,
-    lastUpdated: now,
-  }, { merge: true });
-  
+
+  const supabase = getSupabaseAdmin();
+  const { data } = await supabase.from('feedback_counters').select('last_number').eq('id', counterId).single();
+  const seriesNumber = (data?.last_number || 0) + 1;
+
+  await supabase.from('feedback_counters').upsert({ id: counterId, last_number: seriesNumber, last_updated: now.toISOString() }, { onConflict: 'id' });
+
   return `${prefix}-${dateStr}-${formatSeriesNumber(seriesNumber)}`;
 }
 
-/**
- * Submit user feedback to Firestore.
- */
 export async function submitFeedbackAction(input: FeedbackInput) {
-    try {
-        const validated = FeedbackSchema.parse(input);
-        const { firestore } = initializeFirebaseServer();
-        if (!firestore) throw new Error('Firestore initialization failed');
+  try {
+    const validated = FeedbackSchema.parse(input);
+    const supabase = getSupabaseAdmin();
+    const feedbackId = uuidv4();
+    const now = new Date().toISOString();
+    const trackingId = await generateTrackingId(validated.type as FeedbackType);
 
-        const feedbackId = uuidv4();
-        const now = new Date();
-        
-        // Generate tracking ID
-        const trackingId = await generateTrackingId(firestore, validated.type as FeedbackType);
+    await supabase.from('feedback').insert({
+      id: feedbackId,
+      ...validated,
+      tracking_id: trackingId,
+      status: 'OPEN',
+      upvotes: 0,
+      created_at: now,
+      updated_at: now,
+    });
 
-        const feedbackData = {
-            ...validated,
-            id: feedbackId,
-            trackingId,
-            status: 'OPEN',
-            createdAt: now,
-            updatedAt: now,
-            upvotes: 0,
-        };
-
-        await firestore.collection('feedback').doc(feedbackId).set(feedbackData);
-
-        return { success: true, id: feedbackId, trackingId };
-    } catch (error: any) {
-        console.error('Error submitting feedback:', error);
-        return { success: false, error: error.message || 'Failed to submit feedback' };
-    }
+    return { success: true, id: feedbackId, trackingId };
+  } catch (error: any) {
+    console.error('Error submitting feedback:', error);
+    return { success: false, error: error.message || 'Failed to submit feedback' };
+  }
 }
 
-/**
- * Get all feedback for Admin.
- */
-export async function getFeedbackAction(filters?: { type?: string, status?: string, priority?: string }) {
-    try {
-        const { firestore } = initializeFirebaseServer();
-        if (!firestore) throw new Error('Firestore initialization failed');
+export async function getFeedbackAction(filters?: { type?: string; status?: string; priority?: string }) {
+  try {
+    const supabase = getSupabaseAdmin();
+    let query = supabase.from('feedback').select('*').order('created_at', { ascending: false });
 
-        let query: any = firestore.collection('feedback').orderBy('createdAt', 'desc');
+    if (filters?.type && filters.type !== 'all') query = query.eq('type', filters.type);
+    if (filters?.status && filters.status !== 'all') query = query.eq('status', filters.status);
+    if (filters?.priority && filters.priority !== 'all') query = query.eq('priority', filters.priority);
 
-        if (filters?.type && filters.type !== 'all') {
-            query = query.where('type', '==', filters.type);
-        }
-        if (filters?.status && filters.status !== 'all') {
-            query = query.where('status', '==', filters.status);
-        }
-        if (filters?.priority && filters.priority !== 'all') {
-            query = query.where('priority', '==', filters.priority);
-        }
+    const { data, error } = await query;
+    if (error) throw error;
 
-        const snapshot = await query.get();
-        console.log(`[getFeedbackAction] Found ${snapshot.size} feedback documents`);
-        
-        const feedback = snapshot.docs.map((doc: any) => {
-            const data = doc.data();
-            let createdAt = data.createdAt;
-            let updatedAt = data.updatedAt;
-            
-            if (createdAt && createdAt.toDate) {
-                createdAt = createdAt.toDate().toISOString();
-            } else if (createdAt instanceof Date) {
-                createdAt = createdAt.toISOString();
-            } else if (typeof createdAt === 'string') {
-                // already a string, keep it
-            } else {
-                createdAt = new Date().toISOString();
-            }
-            
-            if (updatedAt && updatedAt.toDate) {
-                updatedAt = updatedAt.toDate().toISOString();
-            } else if (updatedAt instanceof Date) {
-                updatedAt = updatedAt.toISOString();
-            } else if (typeof updatedAt === 'string') {
-                // already a string, keep it
-            } else {
-                updatedAt = createdAt;
-            }
-            
-            return {
-                id: doc.id,
-                ...data,
-                createdAt,
-                updatedAt,
-            };
-        });
-
-        return { success: true, data: feedback };
-    } catch (error: any) {
-        console.error('Error getting feedback:', error);
-        return { success: false, error: error.message || 'Failed to get feedback' };
-    }
+    return { success: true, data: data || [] };
+  } catch (error: any) {
+    console.error('Error getting feedback:', error);
+    return { success: false, error: error.message || 'Failed to get feedback' };
+  }
 }
 
-/**
- * Update feedback status or admin notes.
- */
-export async function updateFeedbackAction(
-    feedbackId: string, 
-    updates: { status?: string, adminNotes?: string },
-    adminUserId: string
-) {
-    try {
-        const { firestore } = initializeFirebaseServer();
-        if (!firestore) throw new Error('Firestore initialization failed');
-
-        const ref = firestore.collection('feedback').doc(feedbackId);
-        const now = new Date();
-
-        await ref.update({
-            ...updates,
-            updatedAt: now
-        });
-
-        // Log this action in admin activity logs if possible
-        // (Assuming useAdminActivityLog's logic can be used or mimicked here)
-        
-        revalidatePath('/admin');
-        return { success: true };
-    } catch (error: any) {
-        console.error('Error updating feedback:', error);
-        return { success: false, error: error.message || 'Failed to update feedback' };
-    }
+export async function updateFeedbackAction(feedbackId: string, updates: { status?: string; adminNotes?: string }, adminUserId: string) {
+  try {
+    const supabase = getSupabaseAdmin();
+    await supabase.from('feedback').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', feedbackId);
+    revalidatePath('/admin');
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error updating feedback:', error);
+    return { success: false, error: error.message || 'Failed to update feedback' };
+  }
 }

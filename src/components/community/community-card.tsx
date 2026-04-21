@@ -1,5 +1,6 @@
 'use client';
 
+import { getSupabaseClient } from '@/lib/supabase-db';
 import React, { useState } from 'react';
 import { Clock, Eye, User, MoreVertical, Trash2 } from 'lucide-react';
 import { MindMapWithId } from '@/types/mind-map';
@@ -7,8 +8,8 @@ import { formatShortDistanceToNow } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
-import { useFirestore, useUser } from '@/firebase';
-import { doc, deleteDoc, updateDoc, getDoc, addDoc, collection } from 'firebase/firestore';
+import { useUser } from '@/lib/auth-context';
+// firebase/firestore removed
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { DepthBadge } from '@/components/mind-map/depth-badge';
@@ -37,7 +38,7 @@ interface CommunityCardProps {
 }
 
 export const CommunityCard = ({ map, onClick }: CommunityCardProps) => {
-    const firestore = useFirestore();
+    const supabase = getSupabaseClient();
     const { user } = useUser();
     const { toast } = useToast();
 
@@ -49,7 +50,7 @@ export const CommunityCard = ({ map, onClick }: CommunityCardProps) => {
         : (map.updatedAt as any)?.toDate?.() || new Date();
 
     // Check if current user can remove this map (original author or admin)
-    const adminId = 'ldTOigUhGqX5x8UAOj1ouTZIyfm1';
+    const adminId = '765cd0a0-6201-41d2-ac8d-ff99b4941289';
     const isAdmin = user && user.uid === adminId;
     const canRemove = user && (user.uid === map.originalAuthorId || isAdmin);
 

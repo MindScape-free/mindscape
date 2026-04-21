@@ -1,5 +1,5 @@
 
-import { Timestamp } from 'firebase/firestore';
+// Timestamp type removed - using string dates
 import { PinnedMessage } from './chat';
 
 export interface SubCategory {
@@ -155,6 +155,9 @@ export interface BaseMindMapData {
   mode?: 'single' | 'compare' | 'multi';
   compareData?: CompareData;
   pinnedMessages?: PinnedMessage[];
+  enrichments?: Record<string, NodeEnrichment>;
+  confidenceRatings?: Record<string, ConfidenceLevel>;
+  quizAnswers?: Record<string, string>;
 }
 
 export interface PdfContextData {
@@ -224,3 +227,59 @@ export interface DepthAnalysis {
   multiConcept: number;
   questionType: 'how' | 'what' | 'why' | 'comparison' | 'none';
 }
+
+// ── Explanation Dialog Enrichment (Dialog 2.0) ─────────────────────────
+
+export interface RelatedNode {
+  name: string;
+  description: string;
+  icon: string;
+}
+
+export interface LearningPath {
+  before: string;
+  after: string;
+}
+
+export interface ConceptSnapshot {
+  difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
+  readTimeMinutes: number;
+  similarTo: string;
+}
+
+export interface MisconceptionItem {
+  claim: string;
+  correction: string;
+}
+
+export interface RealWorldRadarItem {
+  domain: string;
+  icon: string;
+  color: string;
+  application: string;
+}
+
+export interface TimelineEvent {
+  year: string;
+  event: string;
+  isKey?: boolean;
+}
+
+export interface MicroQuizQuestion {
+  question: string;
+  options: { id: 'A' | 'B' | 'C' | 'D'; text: string }[];
+  correctId: 'A' | 'B' | 'C' | 'D';
+  explanation: string;
+}
+
+export interface NodeEnrichment {
+  relatedNodes: RelatedNode[];
+  learningPath: LearningPath;
+  snapshot: ConceptSnapshot;
+  misconceptions: MisconceptionItem[];
+  realWorldRadar: RealWorldRadarItem[];
+  timeline: TimelineEvent[];
+  microQuiz: MicroQuizQuestion;
+}
+
+export type ConfidenceLevel = 1 | 2 | 3 | 4;

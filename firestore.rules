@@ -15,7 +15,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.uid == 'ldTOigUhGqX5x8UAOj1ouTZIyfm1' || 
+        request.auth.uid == '765cd0a0-6201-41d2-ac8d-ff99b4941289' || 
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
@@ -72,6 +72,12 @@ service cloud.firestore {
           allow read: if isOwner(userId) || isAdmin();
           allow write: if isOwner(userId) || isAdmin();
         }
+      }
+
+      /* 2d. User Points */
+      match /points/{docId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isAdmin(); // only server-side (Admin SDK) can write points
       }
     }
 

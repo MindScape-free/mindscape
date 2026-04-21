@@ -29,6 +29,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useTextToSpeech } from '@/hooks/use-text-to-speech';
+import { useXP } from '@/contexts/xp-context';
 import {
   Select,
   SelectContent,
@@ -85,6 +86,7 @@ export function SummaryDialog({
   onReload,
 }: SummaryDialogProps) {
   const { toast } = useToast();
+  const { awardXP } = useXP();
   const [viewMode, setViewMode] = useState<'paragraph' | 'bullets'>('bullets');
   const [speechRate, setSpeechRate] = useState(1);
   const [selectedVoice, setSelectedVoice] = useState('alloy');
@@ -105,6 +107,7 @@ export function SummaryDialog({
       });
     },
     onEnd: () => setUseAdvancedTTS(true),
+    onGenerated: () => awardXP('AUDIO_GENERATED').catch(() => {}),
   });
 
   useEffect(() => {

@@ -13,7 +13,7 @@ import { chatAction } from '@/app/actions';
 import { MindMapData } from '@/types/mind-map';
 import { CreateMindmapDialog } from './CreateMindmapDialog';
 import { useAIConfig } from '@/contexts/ai-config-context';
-import { useUser } from '@/firebase';
+import { useUser } from '@/lib/auth-context';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface EphemeralMessage {

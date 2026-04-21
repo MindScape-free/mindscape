@@ -1,6 +1,6 @@
 import useSWR, { mutate } from 'swr';
 import { useState, useCallback, useEffect } from 'react';
-import { useFirebase } from '@/firebase';
+import { useUser, useFirestore } from '@/lib/auth-context';
 
 const API_BASE = '/api/admin/dashboard';
 
@@ -69,7 +69,8 @@ interface DashboardStats {
 const STABLE_URL = `${API_BASE}?range=all`;
 
 export function useAdminDashboard() {
-  const { user, auth } = useFirebase();
+  const { user } = useUser();
+  const { supabase } = useFirestore();
   const [persistentBundle, setPersistentBundle] = useState<{
     users: any[];
     logs: any[];
@@ -84,6 +85,7 @@ export function useAdminDashboard() {
 
   const [isSyncing, setIsSyncing] = useState(false);
 
+  const auth = supabase?.auth;
   const mergeData = useCallback((newData: DashboardStats | null) => {
     if (!newData?.bundle) return;
 

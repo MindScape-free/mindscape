@@ -41,7 +41,7 @@ function getServiceAccount(): any {
   return null;
 }
 
-export function initializeFirebaseServer(): { 
+export function { firestore: getSupabaseAdmin() }: { 
   admin: typeof admin; 
   app: admin.app.App; 
   firestore: admin.firestore.Firestore 
@@ -86,6 +86,6 @@ export function initializeFirebaseServer(): {
 }
 
 export function isFirebaseAdminAvailable(): boolean {
-  const result = initializeFirebaseServer();
+  const result = { firestore: getSupabaseAdmin() };
   return result.firestore !== null && result.admin !== null;
 }

@@ -1,5 +1,5 @@
 
-import { Sparkles, Zap, Palette, Layout, Network, Image as ImageIcon, FastForward, Info, Shield, Brain, Cpu, RefreshCw, Trash2, Eye, FileText, MessageSquare, Search, Youtube, Layers, Globe, Folders, SlidersHorizontal, ListFilter, BarChart2, Wrench, MousePointerClick, Gem } from 'lucide-react';
+import { Sparkles, Zap, Palette, Layout, Network, Image as ImageIcon, FastForward, Info, Shield, Brain, Cpu, RefreshCw, Trash2, Eye, FileText, MessageSquare, Search, Youtube, Layers, Globe, Folders, SlidersHorizontal, ListFilter, BarChart2, Wrench, MousePointerClick, Gem, PanelRight, BookOpen, ChevronDown, Star } from 'lucide-react';
 
 export interface ChangelogHighlight {
     icon: any;
@@ -23,6 +23,53 @@ export interface ChangelogVersion {
 }
 
 export const CHANGELOG_DATA: ChangelogVersion[] = [
+    {
+        version: '1.6.7',
+        slug: 'explanation-dialog-chat-rework',
+        date: 'July 14, 2025',
+        title: 'Explanation Dialog 2.0 & Chat Card Rework',
+        summary: 'A complete visual overhaul of the Explanation Dialog with collapsible accordion sections, Orbitron typography, a redesigned Learning Path, and a new glassmorphism user message card in the chat panel.',
+        coverImage: '/changelog/homepage-hero.png',
+        tags: ['UI/UX', 'Chat', 'Explanation', 'Typography'],
+        impact: 'minor',
+        highlights: [
+            {
+                icon: BookOpen,
+                color: 'text-violet-400 bg-violet-500/10',
+                title: 'Collapsible Accordion Sections',
+                description: 'All enrichment sections are now collapsible with accordion behavior. Opening one auto-closes the rest. Explanation cards and Confidence Rating stay always visible.',
+            },
+            {
+                icon: Star,
+                color: 'text-amber-400 bg-amber-500/10',
+                title: 'Learning Path Redesign',
+                description: 'Previous, Current, and Next cards in a clean single-row layout with Orbitron labels. Clicking sends a context-aware AI prompt tied to the learning journey.',
+            },
+            {
+                icon: Palette,
+                color: 'text-pink-400 bg-pink-500/10',
+                title: 'Orbitron Typography System',
+                description: 'Section headers use bold Orbitron uppercase with brighter white text. Content text is standardized to match the leaf node card style across all dialog sections.',
+            },
+            {
+                icon: PanelRight,
+                color: 'text-blue-400 bg-blue-500/10',
+                title: 'Glassmorphism User Chat Card',
+                description: 'User messages are now frosted glass cards with a You Orbitron label, replacing the solid primary-color bubble. Pin button removed from user cards.',
+            },
+        ],
+        content: [
+            "v1.6.7 is a focused UI quality release that brings the Explanation Dialog and Chat Panel up to the same visual standard as the rest of the platform.",
+            "## Explanation Dialog Typography",
+            "Every section in the Explanation Dialog now follows a consistent typography system. Section headers use font-orbitron font-bold uppercase with brighter white text. Content text across all sections is standardized to text-sm text-zinc-400 leading-relaxed, matching the leaf node card description style for visual harmony.",
+            "## Collapsible Sections with Accordion Behavior",
+            "All six enrichment sections — Learning Path, Related, Applications, Timeline, Myths, and Quiz — are now collapsible and default to closed so the dialog opens clean and focused. Opening one section automatically closes all others. The Explanation cards and Confidence Rating remain always visible and unaffected.",
+            "## Learning Path Card Redesign",
+            "The Learning Path section was reworked into a professional three-card single-row design. Each card (Previous, Current, Next) takes equal width with a stacked Orbitron label and text layout. Clicking Previous or Next sends a contextual AI prompt — for example, Before learning X, you should understand Y. Can you explain Y and how it connects to X? — instead of a generic explain request.",
+            "## Chat Panel User Message Card",
+            "User messages in the chat panel have been redesigned from a solid primary-color pill into a glassmorphism card with a subtle border and a small Orbitron You label at the top. The user avatar is now a clean rounded icon box. The pin button is only shown on AI messages — user cards no longer have it.",
+        ],
+    },
     {
         version: '1.6.6',
         slug: 'feedback-profile-pollination-sync',
@@ -408,5 +455,5 @@ export const CHANGELOG_DATA: ChangelogVersion[] = [
     },
 ];
 
-export const CURRENT_VERSION = '1.6.6';
+export const CURRENT_VERSION = '1.6.7';
 export const STORAGE_KEY = 'mindscape_changelog_version';

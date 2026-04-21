@@ -1,8 +1,9 @@
 'use client';
 
+import { getSupabaseClient } from '@/lib/supabase-db';
 import { useState, useEffect, useCallback } from 'react';
-import { useFirebase } from '@/firebase';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { useUser } from '@/lib/auth-context';
+// firebase/firestore removed
 import { formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +22,7 @@ interface ModerationCardsProps {
 }
 
 export default function ModerationCards({ onViewMap }: ModerationCardsProps) {
-  const { firestore } = useFirebase();
+  const supabase = getSupabaseClient();
   const [maps, setMaps] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 

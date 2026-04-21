@@ -77,7 +77,7 @@ try {
 
 ```javascript
 function isAdmin() {
-  return isSignedIn() && request.auth.uid == 'ldTOigUhGqX5x8UAOj1ouTZIyfm1';
+  return isSignedIn() && request.auth.uid == '765cd0a0-6201-41d2-ac8d-ff99b4941289';
 }
 ```
 

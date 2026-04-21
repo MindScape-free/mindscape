@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { initializeFirebaseServer } from '@/firebase/server';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
 
@@ -22,15 +22,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: 'No events to process' });
     }
 
-    const { admin, firestore } = initializeFirebaseServer();
+    const { admin, supabase } = { supabase: getSupabaseAdmin() };
 
-    if (!firestore || !admin) {
+    if (!supabase || !admin) {
       console.warn('[AnalyticsAPI] Firebase not initialized, skipping analytics write');
       return NextResponse.json({ success: false, error: 'Firebase not initialized' }, { status: 500 });
     }
 
-    const batch = firestore.batch();
-    const analyticsRef = firestore.collection('analyticsEvents');
+    const batch = supabase.batch();
+    const analyticsRef = supabase.collection('analyticsEvents');
 
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       const eventRef = analyticsRef.doc();
       batch.set(eventRef, {
         ...event,
-        receivedAt: admin.firestore.Timestamp.now(),
+        receivedAt: admin.supabase.Timestamp.now(),
         date: dateStr,
         month: monthStr,
       });

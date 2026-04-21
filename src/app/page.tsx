@@ -46,8 +46,8 @@ import { languages } from '@/lib/languages';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useFirebase } from '@/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { useUser } from '@/lib/auth-context';
+import { getSupabaseClient } from '@/lib/supabase-db';
 import { useAIConfig } from '@/contexts/ai-config-context';
 import { OnboardingWizard, TRIGGER_ONBOARDING_EVENT } from '@/components/onboarding-wizard';
 
@@ -162,9 +162,9 @@ function Hero({
     setIsClient(true);
   }, []);
 
-  const { user } = useFirebase();
+  const { user } = useUser();
   const { config } = useAIConfig();
-  const isSetupComplete = !!user && !!config.pollinationsApiKey;
+  const isSetupComplete = !!user && config?.pollinationsApiKey;
 
   const {
     sources,
@@ -792,21 +792,20 @@ export default function Home() {
   const useSearch = true;
   const languageSelectRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { user, firestore } = useFirebase();
+  const { user } = useUser();
+  const supabase = getSupabaseClient();
   const [topic, setTopic] = useState('');
 
-  // Load user's saved preferences from Firestore
+  // Load user's saved preferences from Supabase
   useEffect(() => {
-    if (!user || !firestore) return;
-    const userRef = doc(firestore, 'users', user.uid);
-    const unsub = onSnapshot(userRef, (snap) => {
-      const prefs = snap.data()?.preferences;
+    if (!user) return;
+    supabase.from('users').select('preferences').eq('id', user.uid).single().then(({ data }) => {
+      const prefs = data?.preferences;
       if (prefs?.defaultDepth) setDepth(prefs.defaultDepth);
       if (prefs?.defaultAIPersona) setPersona(prefs.defaultAIPersona.toLowerCase());
       if (prefs?.preferredLanguage) setLang(prefs.preferredLanguage);
     });
-    return () => unsub();
-  }, [user, firestore]);
+  }, [user]);
 
 
 

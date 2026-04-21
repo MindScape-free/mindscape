@@ -66,7 +66,8 @@ import { Separator } from './ui/separator';
 import { formatDistanceToNow } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
-import { useFirebase } from '@/firebase';
+import { useUser } from '@/lib/auth-context';
+import { getSupabaseClient } from '@/lib/supabase-db';
 
 import { MindMapData } from '@/types/mind-map';
 import { Quiz, QuizResult } from '@/ai/schemas/quiz-schema';
@@ -74,7 +75,7 @@ import { QuizCard } from './chat/quiz-card';
 import { QuizResultCard } from './chat/quiz-result';
 import { CreateMindmapDialog } from './chat/CreateMindmapDialog';
 
-import { doc, getDoc, collection, getDocs, query, where, limit, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+// firebase/firestore removed
 import { ChatSession, ChatMessage, ChatAttachment, PinnedMessage, toDate } from '@/types/chat';
 
 import { toPlainObject } from '@/lib/serialize';
@@ -86,7 +87,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAIConfig } from '@/contexts/ai-config-context';
 
-// Global type declarations for Web Speech API
+import { useXP } from '@/contexts/xp-context';
 declare global {
   interface Window {
     SpeechRecognition: any;
@@ -193,8 +194,9 @@ export function ChatPanel({
   onQuizDeepen,
 }: ChatPanelProps) {
   const { toast } = useToast();
-  const { user, firestore } = useFirebase();
+  const { user } = useUser();
   const { config: providerOptionsConfig, updateConfig } = useAIConfig();
+  const { awardXP } = useXP();
   const providerOptions = useMemo(() => ({
     provider: providerOptionsConfig.provider,
     apiKey: providerOptionsConfig.provider === 'pollinations' ? providerOptionsConfig.pollinationsApiKey : providerOptionsConfig.apiKey,
@@ -419,24 +421,28 @@ export function ChatPanel({
   /**
    * Starts a new chat session.
    */
+  const supabase = getSupabaseClient();
   const loadAllUserPins = useCallback(async () => {
-    if (!user || !firestore) return;
+    if (!user) return;
     setIsLoadingPins(true);
     try {
-      const mapsSnap = await getDocs(collection(firestore, 'users', user.uid, 'mindmaps'));
+      const { data: mapsData } = await supabase
+        .from('mindmaps')
+        .select('pinned_messages')
+        .eq('user_id', user.uid);
+      
       const pins: PinnedMessage[] = [];
-      mapsSnap.forEach(d => {
-        const data = d.data();
-        if (Array.isArray(data.pinnedMessages)) pins.push(...data.pinnedMessages);
+      mapsData?.forEach(d => {
+        if (Array.isArray(d.pinned_messages)) pins.push(...d.pinned_messages);
       });
-      pins.sort((a, b) => b.createdAt - a.createdAt);
+      pins.sort((a: any, b: any) => b.createdAt - a.createdAt);
       setAllUserPins(pins);
     } catch (e) {
       console.error('Failed to load user pins:', e);
     } finally {
       setIsLoadingPins(false);
     }
-  }, [user, firestore]);
+  }, [user]);
 
   const startNewChat = useCallback(async (newTopic: string = 'General Conversation') => {
     const mapId = mindMapData?.id || null;
@@ -503,6 +509,9 @@ export function ChatPanel({
       setInput('');
     }
 
+    // Award XP for chat message
+    awardXP('CHAT_MESSAGE').catch(() => {});
+
     // Don't show loading spinner - streaming handles the UI
     setIsLoading(false);
 
@@ -552,7 +561,8 @@ export function ChatPanel({
       pdfContext: usePdfContext ? mindMapData?.pdfContext : undefined,
       sessionId: sessionId || activeSessionId,
       attachments: combinedAttachments as any,
-      apiKey: providerOptions.apiKey
+      apiKey: providerOptions.apiKey,
+      model: providerOptionsConfig.pollinationsModel || 'openai',
     });
 
   }, [input, attachments, activeSessionId, activeSession?.messages, topic, persona, providerOptions, mindMapData, updateSession, startStream]);
@@ -705,6 +715,12 @@ export function ChatPanel({
       weakTags: Array.from(sessionWeakTags)
     });
 
+    // Award quiz XP
+    const scorePct = Math.round((results.score / results.totalQuestions) * 100);
+    awardXP('QUIZ_COMPLETED', { score: results.score, total: results.totalQuestions }).catch(() => {});
+    if (scorePct === 100) awardXP('QUIZ_PERFECT').catch(() => {});
+    else if (scorePct >= 80) awardXP('QUIZ_BONUS_80').catch(() => {});
+
     // #10 — Quiz-adaptive deepening
     // Correct denominator: questions per tag, not total questions
     if (onQuizDeepen && message.quiz) {
@@ -755,17 +771,18 @@ export function ChatPanel({
   // Load persona preference from user profile
   useEffect(() => {
     const loadPreferences = async () => {
-      if (!user || !firestore) return;
+      if (!user) return;
 
       try {
-        const userRef = doc(firestore, 'users', user.uid);
-        const docSnap = await getDoc(userRef);
+        const { data } = await supabase
+          .from('users')
+          .select('preferences')
+          .eq('id', user.uid)
+          .single();
 
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          const prefs = data.preferences;
-          const savedPersona = prefs?.defaultAIPersona as Persona;
-          if (savedPersona && ['Teacher', 'Concise', 'Creative', 'Sage'].includes(savedPersona)) {
+        if (data?.preferences?.default_ai_persona) {
+          const savedPersona = data.preferences.default_ai_persona as Persona;
+          if (['Teacher', 'Concise', 'Creative', 'Sage'].includes(savedPersona)) {
             setPersona(savedPersona);
           }
         }
@@ -777,7 +794,7 @@ export function ChatPanel({
     if (isOpen) {
       loadPreferences();
     }
-  }, [isOpen, user, firestore]);
+  }, [isOpen, user]);
 
   // Shuffle prompts when starting a fresh 'General Conversation' chat
   useEffect(() => {
@@ -1128,6 +1145,7 @@ export function ChatPanel({
     updateSession(activeSessionId, { messages: updatedMessages });
     
     if (!message.isPinned) {
+      awardXP('CHAT_PINNED').catch(() => {});
       if (message.role === 'ai') {
         const userMessageIndex = messageIndex - 1;
         if (userMessageIndex >= 0 && messages[userMessageIndex].role === 'user' && messages[userMessageIndex].type === 'text') {
@@ -1205,7 +1223,8 @@ export function ChatPanel({
       pdfContext: usePdfContext ? mindMapData?.pdfContext : undefined,
       sessionId: sessionId || activeSessionId,
       attachments: combinedAttachments as any,
-      apiKey: providerOptions.apiKey
+      apiKey: providerOptions.apiKey,
+      model: providerOptionsConfig.pollinationsModel || 'openai',
     });
   };
 
@@ -1511,33 +1530,35 @@ export function ChatPanel({
                         )}
                       >
                         {message.role === 'ai' ? (
-                          <Avatar className="h-8 w-8 border">
+                          <Avatar className="h-8 w-8 border flex-shrink-0">
                             <AvatarFallback className="bg-primary text-primary-foreground">
                               <Bot className="h-5 w-5" />
                             </AvatarFallback>
                           </Avatar>
                         ) : (
-                          <div className="order-2">
-                            <Avatar className="h-8 w-8 border shadow-sm">
-                              <AvatarFallback className="bg-secondary text-secondary-foreground">
-                                <User className="h-5 w-5 text-muted-foreground" />
-                              </AvatarFallback>
-                            </Avatar>
+                          <div className="order-2 flex-shrink-0">
+                            <div className="h-8 w-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                              <User className="h-4 w-4 text-zinc-400" />
+                            </div>
                           </div>
                         )}
                         <div
                           className={cn(
-                            'rounded-3xl max-w-[85%] overflow-hidden transition-all duration-300',
-                            'break-words overflow-wrap-anywhere', // Content wrapping
+                            'max-w-[85%] overflow-hidden transition-all duration-300 break-words overflow-wrap-anywhere',
                             message.role === 'user'
-                              ? 'bg-primary text-primary-foreground rounded-br-none order-1'
-                              : 'bg-secondary/40 backdrop-blur-sm border border-white/5 rounded-bl-none'
+                              ? 'order-1 rounded-2xl rounded-tr-sm bg-white/[0.06] border border-white/10 shadow-sm'
+                              : 'bg-secondary/40 backdrop-blur-sm border border-white/5 rounded-2xl rounded-tl-sm'
                           )}
                         >
                           {message.isPinned && (
                             <div className="px-3 pt-2 flex items-center gap-1.5">
                               <Pin className="h-3 w-3 text-amber-400 fill-amber-400" />
                               <span className="text-[10px] font-bold text-amber-400/80 uppercase tracking-widest">Pinned</span>
+                            </div>
+                          )}
+                          {message.role === 'user' && (
+                            <div className="px-4 pt-3 pb-0 flex items-center gap-1.5">
+                              <span className="font-orbitron text-[9px] uppercase tracking-widest text-zinc-600">You</span>
                             </div>
                           )}
                           <div className="p-4">
@@ -1597,17 +1618,16 @@ export function ChatPanel({
                                   ))}
                                 </div>
                               </div>
+                            ) : message.type !== 'quiz' && message.type !== 'quiz-result' && message.type !== 'quiz-selector' && message.role === 'user' ? (
+                              <p className="text-sm text-zinc-200 leading-relaxed">{message.content}</p>
                             ) : (
                               <div
                                 className="text-sm prose prose-sm max-w-none leading-relaxed prose-invert break-words whitespace-pre-wrap"
                                 style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}
                               >
                                 {(() => {
-                                  // Get content - either from streaming state or message
                                   const displayContent = streamingMessages[message.id] ?? message.content;
                                   const isCurrentlyStreaming = streamingIds.has(message.id);
-                                  
-                                  // Show typing indicator when streaming has just started (no content yet)
                                   if (isCurrentlyStreaming && !displayContent) {
                                     return (
                                       <div className="flex items-center gap-1 py-1">
@@ -1617,7 +1637,6 @@ export function ChatPanel({
                                       </div>
                                     );
                                   }
-                                  
                                   return (
                                     <>
                                       <span dangerouslySetInnerHTML={{ __html: formatText(displayContent) }} />
@@ -1672,17 +1691,19 @@ export function ChatPanel({
                                   </Button>
                                 </TooltipTrigger><TooltipContent>Create Mind Map</TooltipContent></Tooltip></TooltipProvider>
                               )}
-                              <TooltipProvider><Tooltip><TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost" size="icon"
-                                  className={cn("h-6 w-6 transition-all", message.isPinned ? "text-amber-400 hover:text-amber-300" : "text-muted-foreground hover:text-amber-400")}
-                                  onClick={() => togglePinMessage(message.id)}
-                                >
-                                  <motion.div animate={message.isPinned ? { scale: [1, 1.3, 1] } : { scale: 1 }} transition={{ duration: 0.3 }}>
-                                    <Pin className={cn("h-3 w-3", message.isPinned && "fill-current")} />
-                                  </motion.div>
-                                </Button>
-                              </TooltipTrigger><TooltipContent>{message.isPinned ? 'Unpin' : 'Pin'}</TooltipContent></Tooltip></TooltipProvider>
+                              {message.role === 'ai' && (
+                                <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost" size="icon"
+                                    className={cn("h-6 w-6 transition-all", message.isPinned ? "text-amber-400 hover:text-amber-300" : "text-muted-foreground hover:text-amber-400")}
+                                    onClick={() => togglePinMessage(message.id)}
+                                  >
+                                    <motion.div animate={message.isPinned ? { scale: [1, 1.3, 1] } : { scale: 1 }} transition={{ duration: 0.3 }}>
+                                      <Pin className={cn("h-3 w-3", message.isPinned && "fill-current")} />
+                                    </motion.div>
+                                  </Button>
+                                </TooltipTrigger><TooltipContent>{message.isPinned ? 'Unpin' : 'Pin'}</TooltipContent></Tooltip></TooltipProvider>
+                              )}
                             </div>
                           )}
                         </div>
@@ -2329,15 +2350,21 @@ export function ChatPanel({
       // Optimistically remove from local state
       setAllUserPins(prev => prev.filter(p => p.id !== pinId));
 
-      // Find and update the Firestore doc that owns this pin
-      if (user && firestore) {
+      // Find and update the Supabase record that owns this pin
+      if (user) {
         try {
-          const mapsSnap = await getDocs(collection(firestore, 'users', user.uid, 'mindmaps'));
-          for (const d of mapsSnap.docs) {
-            const data = d.data();
-            if (Array.isArray(data.pinnedMessages) && data.pinnedMessages.some((p: any) => p.id === pinId)) {
-              const updated = data.pinnedMessages.filter((p: any) => p.id !== pinId);
-              await updateDoc(doc(firestore, 'users', user.uid, 'mindmaps', d.id), { pinnedMessages: updated });
+          const { data: mapsData } = await supabase
+            .from('mindmaps')
+            .select('id, pinned_messages')
+            .eq('user_id', user.uid);
+          
+          for (const map of mapsData || []) {
+            if (Array.isArray(map.pinned_messages) && map.pinned_messages.some((p: any) => p.id === pinId)) {
+              const updated = map.pinned_messages.filter((p: any) => p.id !== pinId);
+              await supabase
+                .from('mindmaps')
+                .update({ pinned_messages: updated })
+                .eq('id', map.id);
               break;
             }
           }
@@ -2591,46 +2618,6 @@ export function ChatPanel({
           <div className='flex items-center gap-1 flex-shrink-0'>
             {view === 'chat' && (
               <>
-                {/* AI Model Selector */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 px-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-primary transition-colors flex items-center gap-1.5"
-                    >
-                      <Bot className="w-3.5 h-3.5 mr-1" />
-                      {providerOptionsConfig.pollinationsModel?.split('/').pop() || 'Select Engine'}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-[220px] p-2 glassmorphism border-white/10 z-[200]">
-                    <div className="px-2 py-1.5 text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1">Select AI Engine</div>
-                    {[
-                      { id: 'pollinations/kimi', label: 'Kimi K2.5', desc: 'Coding & reasoning specialist', icon: Zap },
-                      { id: 'pollinations/gemini-search', label: 'Gemini Search', desc: 'Real-time web knowledge', icon: Wand2 },
-                      { id: 'pollinations/deepseek', label: 'DeepSeek V3', desc: 'Strong reasoning alternative', icon: BrainCircuit },
-                      { id: 'pollinations/glm', label: 'GLM-4.7', desc: 'Agentic workflows & coding', icon: Sparkles },
-                      { id: 'pollinations/claude-fast', label: 'Claude Haiku', desc: 'Fast & reliable responses', icon: Zap },
-                    ].map((m) => (
-                      <DropdownMenuItem
-                        key={m.id}
-                        onClick={() => updateConfig({ pollinationsModel: m.id })}
-                        className={cn(
-                          "flex flex-col items-start gap-1 p-2 focus:bg-primary/10 rounded-xl cursor-pointer mb-0.5 last:mb-0",
-                          providerOptionsConfig.pollinationsModel === m.id && "bg-primary/5 shadow-[0_0_10px_rgba(139,92,246,0.1)]"
-                        )}
-                      >
-                        <div className="flex items-center gap-2">
-                          <m.icon className="w-3 h-3 text-primary" />
-                          <span className="font-bold text-xs">{m.label}</span>
-                        </div>
-                        <span className="text-[9px] text-zinc-500 leading-tight">{m.desc}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
                 {/* Persona Selector */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

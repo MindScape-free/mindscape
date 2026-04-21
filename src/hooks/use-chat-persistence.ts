@@ -1,199 +1,107 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  collection, 
-  query, 
-  doc, 
-  setDoc, 
-  deleteDoc,
-  serverTimestamp, 
-  onSnapshot,
-  orderBy
-} from 'firebase/firestore';
-import { useFirebase } from '@/firebase';
+import { useUser } from '@/lib/auth-context';
 import { ChatSession } from '@/types/chat';
-import { onAuthStateChanged } from 'firebase/auth';
+import { getSupabaseClient, saveChatSession, getChatSessions, deleteChatSession } from '@/lib/supabase-db';
 
-/**
- * useChatPersistence hook handles syncing chat sessions with Firestore.
- * It provides a debounced save mechanism and real-time updates for the active session.
- */
 export function useChatPersistence() {
-  const { user, firestore, auth } = useFirebase();
+  const { user, isUserLoading } = useUser();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Fetch all sessions for the user on mount
   useEffect(() => {
-    if (!firestore || !auth) return;
+    if (isUserLoading) return;
+    if (!user) { setSessions([]); setIsLoading(false); return; }
 
-    // Use onAuthStateChanged to ensure the Firestore SDK has processed 
-    // the auth state before we attempt a query.
-    let unsubscribeSnap: (() => void) | null = null;
+    const supabase = getSupabaseClient();
+    setIsLoading(true);
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      // Clean up previous snapshot listener whenever auth state changes
-      if (unsubscribeSnap) {
-        unsubscribeSnap();
-        unsubscribeSnap = null;
-      }
+    getChatSessions(supabase, user.uid).then(data => {
+      setSessions(data.map(row => ({
+        id: row.id,
+        mapId: row.map_id,
+        mapTitle: row.map_title,
+        title: row.title,
+        messages: row.messages || [],
+        weakTags: row.weak_tags || [],
+        quizHistory: row.quiz_history || [],
+        createdAt: new Date(row.created_at).getTime(),
+        updatedAt: new Date(row.updated_at).getTime(),
+      })));
+      setIsLoading(false);
+    }).catch(() => setIsLoading(false));
 
-      if (!firebaseUser) {
-        setSessions([]);
-        setIsLoading(false);
-        return;
-      }
-
-      const sessionsRef = collection(firestore, 'users', firebaseUser.uid, 'chatSessions');
-      const q = query(sessionsRef, orderBy('updatedAt', 'desc'));
-
-      unsubscribeSnap = onSnapshot(q, (snapshot) => {
-        const fetchedSessions: ChatSession[] = [];
-        snapshot.forEach((doc) => {
-          fetchedSessions.push({ id: doc.id, ...doc.data() } as ChatSession);
+    // Realtime subscription
+    const channel = supabase
+      .channel(`chat-sessions-${user.uid}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_sessions', filter: `user_id=eq.${user.uid}` }, () => {
+        getChatSessions(supabase, user.uid).then(data => {
+          setSessions(data.map(row => ({
+            id: row.id, mapId: row.map_id, mapTitle: row.map_title, title: row.title,
+            messages: row.messages || [], weakTags: row.weak_tags || [], quizHistory: row.quiz_history || [],
+            createdAt: new Date(row.created_at).getTime(), updatedAt: new Date(row.updated_at).getTime(),
+          })));
         });
-        setSessions(fetchedSessions);
-        setIsLoading(false);
-      }, (error) => {
-        console.error("Error fetching chat sessions:", error);
-        setIsLoading(false);
-      });
-    });
+      })
+      .subscribe();
 
-    return () => {
-      unsubscribeAuth();
-      if (unsubscribeSnap) unsubscribeSnap();
-    };
-  }, [firestore, auth]);
+    return () => { supabase.removeChannel(channel); };
+  }, [user, isUserLoading]);
 
-  /**
-   * Saves a chat session to Firestore with a debounce.
-   */
   const saveSession = useCallback((session: ChatSession) => {
-    if (!user || !firestore) return;
-
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-
+    if (!user) return;
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     setIsSyncing(true);
     debounceTimerRef.current = setTimeout(async () => {
       try {
-        const sessionRef = doc(firestore, 'users', user.uid, 'chatSessions', session.id);
-        const { id, ...dataToSave } = session;
-        await setDoc(sessionRef, {
-          ...dataToSave,
-          updatedAt: serverTimestamp(),
-        }, { merge: true });
+        const supabase = getSupabaseClient();
+        await saveChatSession(supabase, user.uid, session);
       } catch (error) {
-        console.error("Error saving chat session:", error);
+        console.error('Error saving chat session:', error);
       } finally {
         setIsSyncing(false);
       }
     }, 1000);
-  }, [user, firestore]);
+  }, [user]);
 
-  /**
-   * Creates a new chat session.
-   */
-  const createSession = useCallback(async (topic: string, mapId: string | null = null, mapTitle: string = 'General') => {
-    if (!user || !firestore) return null;
-
+  const createSession = useCallback(async (topic: string, mapId: string | null = null, mapTitle = 'General') => {
+    if (!user) return null;
     const newId = `session-${Date.now()}`;
-    const newSession: ChatSession = {
-      id: newId,
-      mapId,
-      mapTitle,
-      title: topic,
-      messages: [],
-      weakTags: [],
-      quizHistory: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-
-    // Optimistic update
+    const newSession: ChatSession = { id: newId, mapId, mapTitle, title: topic, messages: [], weakTags: [], quizHistory: [], createdAt: Date.now(), updatedAt: Date.now() };
     setSessions(prev => [newSession, ...prev]);
     setActiveSessionId(newId);
-
-    // Save to Firestore
     try {
-      const sessionRef = doc(firestore, 'users', user.uid, 'chatSessions', newId);
-      const { id, ...dataToSave } = newSession;
-      await setDoc(sessionRef, {
-        ...dataToSave,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      // Log activity for real-time stats - use dynamic import for server action
+      const supabase = getSupabaseClient();
+      await saveChatSession(supabase, user.uid, newSession);
       try {
         const { logAdminActivityAction } = await import('@/app/actions');
-        await logAdminActivityAction({
-          type: 'CHAT_CREATED',
-          targetId: newId,
-          targetType: 'chat',
-          details: `Chat session started: ${topic}`,
-          performedBy: user.uid,
-          performedByEmail: user.email || 'anonymous',
-          metadata: {
-            mapId,
-            mapTitle
-          }
-        });
-      } catch (logLogErr) {
-        console.error('Failed to log chat creation:', logLogErr);
-      }
-    } catch (error) {
-      console.error("Error creating session:", error);
-    }
-
+        await logAdminActivityAction({ type: 'CHAT_CREATED', targetId: newId, targetType: 'chat', details: `Chat session started: ${topic}`, performedBy: user.uid, performedByEmail: user.email || 'anonymous', metadata: { mapId, mapTitle } });
+      } catch { /* non-critical */ }
+    } catch (error) { console.error('Error creating session:', error); }
     return newId;
-  }, [user, firestore]);
+  }, [user]);
 
-  /**
-   * Updates an existing session's data (optimistically) and schedules a save.
-   */
   const updateSession = useCallback((sessionId: string, updates: Partial<ChatSession>) => {
     setSessions(prev => prev.map(s => {
-      if (s.id === sessionId) {
-        const updated = { ...s, ...updates, updatedAt: Date.now() };
-        saveSession(updated);
-        return updated;
-      }
-      return s;
+      if (s.id !== sessionId) return s;
+      const updated = { ...s, ...updates, updatedAt: Date.now() };
+      saveSession(updated);
+      return updated;
     }));
   }, [saveSession]);
 
-  /**
-   * Deletes a chat session from Firestore and local state.
-   */
   const deleteSession = useCallback(async (sessionId: string) => {
-    if (!user || !firestore) return;
-
+    if (!user) return;
     try {
-      const sessionRef = doc(firestore, 'users', user.uid, 'chatSessions', sessionId);
-      await deleteDoc(sessionRef);
+      const supabase = getSupabaseClient();
+      await deleteChatSession(supabase, user.uid, sessionId);
       setSessions(prev => prev.filter(s => s.id !== sessionId));
-    } catch (error) {
-      console.error("Error deleting chat session:", error);
-    }
-  }, [user, firestore]);
+    } catch (error) { console.error('Error deleting chat session:', error); }
+  }, [user]);
 
-  return {
-    sessions,
-    activeSessionId,
-    setActiveSessionId,
-    saveSession,
-    updateSession,
-    createSession,
-    deleteSession,
-    isLoading,
-    isSyncing
-  };
+  return { sessions, activeSessionId, setActiveSessionId, saveSession, updateSession, createSession, deleteSession, isLoading, isSyncing };
 }

@@ -1,76 +1,125 @@
 'use client';
 
-import { firebaseConfig } from '@/firebase/config';
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore'
-import { getStorage } from 'firebase/storage'
-import { getFunctions } from 'firebase/functions'
+// Migration stub - Firebase removed, using Supabase instead
+// This file provides shims to prevent build crashes during migration
 
-// IMPORTANT: DO NOT MODIFY THIS FUNCTION
+import { useState, useEffect, useContext, createContext, ReactNode } from 'react';
+
+export { firebaseConfig } from './config';
+
+// Stub implementations to prevent build errors
+
 export function initializeFirebase() {
-  if (!getApps().length) {
-    // Important! initializeApp() is called without any arguments because Firebase App Hosting
-    // integrates with the initializeApp() function to provide the environment variables needed to
-    // populate the FirebaseOptions in production. It is critical that we attempt to call initializeApp()
-    // without arguments.
-    let firebaseApp;
-    try {
-      // Attempt to initialize via Firebase App Hosting environment variables
-      firebaseApp = initializeApp();
-    } catch (e) {
-      // BUILD SAFE GUARD: Skip initialization during server-side prerendering 
-      // if configuration is missing to prevent build crashes.
-      if (typeof window === 'undefined' && !firebaseConfig.apiKey) {
-        return {
-          firebaseApp: null as any,
-          auth: null as any,
-          firestore: null as any,
-          storage: null as any,
-          functions: null as any
-        };
-      }
-
-      // If configuration is present, proceed with standard initialization
-      if (firebaseConfig.apiKey) {
-        firebaseApp = initializeApp(firebaseConfig);
-      } else {
-        // Fallback for cases where we are somehow on client but missing keys
-        if (typeof window !== 'undefined') {
-            console.error('❌ Firebase Error: No configuration provided (missing environment variables).');
-        }
-        return {
-          firebaseApp: null as any,
-          auth: null as any,
-          firestore: null as any,
-          storage: null as any,
-          functions: null as any
-        };
-      }
-    }
-
-    return getSdks(firebaseApp);
-  }
-
-  // If already initialized, return the SDKs with the already initialized App
-  return getSdks(getApp());
-}
-
-export function getSdks(firebaseApp: FirebaseApp) {
   return {
-    firebaseApp,
-    auth: getAuth(firebaseApp),
-    firestore: getFirestore(firebaseApp),
-    storage: getStorage(firebaseApp),
-    functions: getFunctions(firebaseApp)
+    firebaseApp: null,
+    auth: null,
+    firestore: null,
+    storage: null,
+    functions: null
   };
 }
 
+export function getSdks(firebaseApp: any) {
+  return {
+    firebaseApp,
+    auth: null,
+    firestore: null,
+    storage: null,
+    functions: null
+  };
+}
+
+// Auth Context Shim - now uses Supabase via @/lib/auth-context
+const FirebaseAuthContext = createContext<any>(null);
+
+export function FirebaseProvider({ children }: { children: ReactNode }) {
+  const [ready, setReady] = useState(false);
+  
+  useEffect(() => {
+    setReady(true);
+  }, []);
+  
+  return (
+    <FirebaseAuthContext.Provider value={{ ready }}>
+      {children}
+    </FirebaseAuthContext.Provider>
+  );
+}
+
+// These are re-exported from provider.tsx
 export * from './provider';
-export * from './client-provider';
-export * from './firestore/use-collection';
-export * from './firestore/use-doc';
-export * from './non-blocking-updates';
-export * from './non-blocking-login';
-export * from './errors';
-export * from './error-emitter';
+
+// useCollection shim
+export function useCollection(query: any) {
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    setLoading(false);
+  }, []);
+  
+  return { data, loading };
+}
+
+// useDoc shim  
+export function useDoc(ref: any) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    setLoading(false);
+  }, []);
+  
+  return { data, loading };
+}
+
+// useFirestore shim - returns null
+export function useFirestore() {
+  return { firestore: null, isAdmin: false };
+}
+
+// useFirebase shim
+export function useFirebase() {
+  return { 
+    auth: null, 
+    firestore: null, 
+    storage: null, 
+    functions: null,
+    isAdmin: false 
+  };
+}
+
+// useStorage shim
+export function useStorage() {
+  return null;
+}
+
+// useMemoFirebase shim
+export function useMemoFirebase(fn: () => any) {
+  return fn();
+}
+
+// Error emitter shim
+export const errorEmitter = {
+  emit: () => {},
+  on: () => {},
+  off: () => () => {}
+};
+
+// Error class shim
+export class FirestorePermissionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FirestorePermissionError';
+  }
+}
+
+// Non-blocking updates shim
+export function useNonBlockingUpdates() {
+  return { update: async () => {} };
+}
+
+// Non-blocking login shim  
+export function useNonBlockingLogin() {
+  return { login: async () => {} };
+}

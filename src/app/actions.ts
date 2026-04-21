@@ -76,6 +76,7 @@ import { GenerateComparisonMapInput } from '@/ai/compare/schema';
 import { MindMapData, SingleMindMapData, CompareMindMapData, SubTopic, Category, SubCategory, DepthSuggestion, DepthAnalysis } from '@/types/mind-map';
 
 import { generateSearchContext } from './actions/generateSearchContext';
+import { awardPoints } from '@/lib/points-engine';
 
 export interface AIActionOptions {
   apiKey?: string;
@@ -188,11 +189,11 @@ export interface GenerateMindMapFromImageInput {
 
 /**
  * Internal helper to resolve the effective API key for AI generation.
- * Prioritizes explicitly provided keys, then user-specific keys from Firestore, 
+ * Prioritizes explicitly provided keys, then user-specific keys from supabase, 
  * and finally falls back to server-side environmental variables.
  */
 // Server-side API key cache: userId -> { key, timestamp }
-// Avoids repeated Firestore reads for the same user within a short window
+// Avoids repeated supabase reads for the same user within a short window
 const apiKeyCache = new Map<string, { key: string | undefined; timestamp: number }>();
 const API_KEY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
@@ -206,26 +207,26 @@ export async function resolveApiKey(options: AIActionOptions): Promise<string | 
     const cached = apiKeyCache.get(options.userId);
     if (cached && Date.now() - cached.timestamp < API_KEY_CACHE_TTL) {
       effectiveApiKey = cached.key;
-      source = 'firestore-cache';
+      source = 'supabase-cache';
     } else {
       try {
-        const { getUserImageSettingsAdmin } = await import('@/lib/firestore-server-helpers');
+        const { getUserImageSettingsAdmin } = await import('@/lib/supabase-server');
         if (typeof getUserImageSettingsAdmin !== 'function') {
           throw new Error('getUserImageSettingsAdmin is not a function');
         }
         const userSettings = await getUserImageSettingsAdmin(options.userId);
         if (userSettings?.pollinationsApiKey) {
           effectiveApiKey = userSettings.pollinationsApiKey;
-          source = 'firestore-admin';
+          source = 'supabase-admin';
           // Cache the result
           apiKeyCache.set(options.userId, { key: effectiveApiKey, timestamp: Date.now() });
-          console.log(`🔑 Using Pollinations API key from Firestore Admin for user: ${options.userId}`);
+          console.log(`🔑 Using Pollinations API key from supabase Admin for user: ${options.userId}`);
         } else {
-          // Cache the miss too (avoid repeated Firestore reads for users without keys)
+          // Cache the miss too (avoid repeated supabase reads for users without keys)
           apiKeyCache.set(options.userId, { key: undefined, timestamp: Date.now() });
         }
       } catch (err: any) {
-        console.warn(`⚠️ resolveApiKey: Failed to fetch user API key from Firestore Admin (${err.message}). Falling back to server default.`);
+        console.warn(`⚠️ resolveApiKey: Failed to fetch user API key from supabase Admin (${err.message}). Falling back to server default.`);
       }
     }
   }
@@ -233,11 +234,14 @@ export async function resolveApiKey(options: AIActionOptions): Promise<string | 
   // Final fallback to server-side environment variable
   if (!effectiveApiKey) {
     effectiveApiKey = process.env.POLLINATIONS_API_KEY;
-    if (effectiveApiKey) source = 'env-var';
+    if (effectiveApiKey) {
+      source = 'system-default';
+      console.log(`ℹ️ No user API key found for ${options.userId || 'anonymous'}. Falling back to System Default Pollinations key.`);
+    }
   }
 
   const masked = effectiveApiKey ? `${effectiveApiKey.slice(0, 6)}...${effectiveApiKey.slice(-4)}` : 'none';
-  console.log(`🔑 resolveApiKey -> key ${effectiveApiKey ? 'found' : 'missing'} (source: ${source}, masked: ${masked})`);
+  console.log(`🔑 resolveApiKey -> [${source}] ${effectiveApiKey ? 'Success' : 'Missing'} (key: ${masked})`);
 
   return effectiveApiKey;
 }
@@ -550,6 +554,11 @@ export async function generateMindMapAction(
       sanitized.searchTimestamp = searchContext.timestamp;
     }
 
+    // Award XP — fire and forget
+    if (options.userId) {
+      awardPoints(options.userId, 'MAP_CREATED', { topic }).catch(() => {});
+    }
+
     return { data: sanitized, error: null };
   } catch (error) {
     console.error('Error in generateMindMapAction:', error);
@@ -620,6 +629,7 @@ export async function generateMindMapFromImageAction(
 
     const sanitized = await mapToMindMapData(rawResult, depth);
     sanitized.aiPersona = input.persona as string || 'Teacher';
+    if (options.userId) awardPoints(options.userId, 'MAP_CREATED', { source: 'image' }).catch(() => {});
     return { data: sanitized, error: null };
   } catch (error) {
     console.error('Error in generateMindMapFromImageAction:', error);
@@ -650,6 +660,7 @@ export async function generateMindMapFromPdfAction(
 
     const sanitized = await mapToMindMapData(result, depth);
     sanitized.aiPersona = input.persona as string || 'Teacher';
+    if (options.userId) awardPoints(options.userId, 'MAP_CREATED', { source: 'pdf' }).catch(() => {});
     return { data: sanitized, error: null };
   } catch (error) {
     console.error('Error in generateMindMapFromPdfAction:', error);
@@ -684,6 +695,10 @@ export async function generateMindMapFromTextAction(
     if (!result) return { data: null, error: 'AI failed to process text.' };
     const sanitized = await mapToMindMapData(result, depth);
     sanitized.aiPersona = input.persona as string || 'Teacher';
+    if (options.userId) {
+      const eventType = (input as any).isMultiSource ? 'MAP_MULTI_SOURCE' : 'MAP_CREATED';
+      awardPoints(options.userId, eventType, { source: 'text' }).catch(() => {});
+    }
     return { data: sanitized, error: null };
   } catch (error) {
     console.error('Error in generateMindMapFromTextAction:', error);
@@ -723,6 +738,7 @@ export async function generateYouTubeMindMapAction(
 
     const sanitized = await mapToMindMapData(result.data, input.depth || 'low');
     sanitized.aiPersona = input.persona as string || 'Teacher';
+    if (options.userId) awardPoints(options.userId, 'MAP_CREATED', { source: 'youtube' }).catch(() => {});
     return { data: sanitized, error: null };
   } catch (error) {
     console.error('Error in generateYouTubeMindMapAction:', error);
@@ -915,13 +931,13 @@ export async function chatAction(
       const contextKey = input.sessionId || input.topic || 'default';
       pdfContext = getPdfContext(contextKey) || undefined;
 
-      // Fallback: Try Firestore if sessionId is a valid doc ID
+      // Fallback: Try supabase if sessionId is a valid doc ID
       if (!pdfContext && input.sessionId && !input.sessionId.startsWith('session-')) {
         try {
-          const { getMindMapAdmin } = await import('@/lib/firestore-server-helpers');
+          const { getMindMapAdmin } = await import('@/lib/supabase-server');
           const mapData = await getMindMapAdmin(input.sessionId);
           if (mapData && mapData.pdfContext) {
-            console.log(`🧠 chatAction: Retrieved PDF context from Firestore for doc ${input.sessionId}`);
+            console.log(`🧠 chatAction: Retrieved PDF context from supabase for doc ${input.sessionId}`);
             pdfContext = mapData.pdfContext;
 
             // Also store it back in memory for next time
@@ -929,7 +945,7 @@ export async function chatAction(
             setPdfContext(input.sessionId, pdfContext as any);
           }
         } catch (err) {
-          console.warn('⚠️ Failed to fetch PDF context from Firestore:', err);
+          console.warn('⚠️ Failed to fetch PDF context from supabase:', err);
         }
       }
     }
@@ -966,6 +982,10 @@ export async function translateMindMapAction(
     const result = await translateMindMap({ ...input, ...options, apiKey: effectiveApiKey });
     if (!result) return { translation: null, error: 'AI failed to get translation.' };
     const sanitized = await mapToMindMapData(result);
+    // Award XP — fire and forget
+    if (options.userId) {
+      awardPoints(options.userId as string, 'MAP_TRANSLATED').catch(() => {});
+    }
     return { translation: sanitized, error: null };
   } catch (error) {
     console.error(error);
@@ -1005,7 +1025,7 @@ export async function explainWithExampleAction(
       const ctx = getPdfContext(input.mainTopic);
       pdfContext = ctx ? JSON.stringify(ctx) : undefined;
 
-      // We'll skip fallback to Firestore here to avoid Firebase Admin issues locally
+      // We'll skip fallback to supabase here to avoid Firebase Admin issues locally
       // unless we're in production or have credentials. 
       // The client should ideally pass the context now.
     }
@@ -1233,6 +1253,11 @@ export async function generateComparisonMapAction(
     const sanitized = await mapToMindMapData(result, input.depth || 'low');
     sanitized.aiPersona = input.persona as string || 'Teacher';
 
+    // Award XP — fire and forget
+    if (options.userId) {
+      awardPoints(options.userId, 'MAP_COMPARE', { topic1: input.topic1, topic2: input.topic2 }).catch(() => {});
+    }
+
     // Attach search metadata if search was used
     if (searchContextA || searchContextB) {
       // Store search sources in the mind map data
@@ -1275,7 +1300,7 @@ export async function generateQuizAction(
       const ctx = getPdfContext(input.topic);
       pdfContext = ctx ? JSON.stringify(ctx) : undefined;
 
-      // Skipping fallback to Firestore Admin lookup locally
+      // Skipping fallback to supabase Admin lookup locally
     }
 
     const result = await generateQuizFlow({ ...input, ...options, apiKey: effectiveApiKey, pdfContext });
@@ -1367,77 +1392,25 @@ Return ONLY a JSON array:
  */
 export async function logAdminActivityAction(entry: any) {
   try {
-    const { initializeFirebaseServer } = await import('@/firebase/server');
-    const { firestore, admin } = initializeFirebaseServer();
-    if (!firestore || !admin) throw new Error('Firestore/Admin not initialized');
+    const { logActivityAdmin, incrementAdminStatAdmin } = await import('@/lib/supabase-server');
+    await logActivityAdmin(entry);
 
-    const timestamp = entry.timestamp || new Date().toISOString();
-    const dateObj = new Date(timestamp);
-    const dateStr = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
-    const monthStr = dateStr.substring(0, 7); // YYYY-MM
-
-    // 1. Record the activity log
-    await firestore.collection('adminActivityLog').add({
-      ...entry,
-      timestamp,
-    });
-
-    // 2. Perform incremental stats updates if applicable
     const type = entry.type;
-    const increments: Record<string, any> = {};
-
     if (type === 'MAP_CREATED') {
-      // totalMindmapsEver: always increment — counts every map ever generated, never decreases
-      increments.totalMindmapsEver = admin.firestore.FieldValue.increment(1);
-      increments.newMapsToday = admin.firestore.FieldValue.increment(1);
-      // totalMindmaps (current library): only increment for root maps, not sub-maps
-      // Sub-maps have isSubMap:true in metadata — skip them to avoid inflating the live count
-      const isSubMap = entry.metadata?.isSubMap === true || !!entry.metadata?.parentMapId;
-      if (!isSubMap) {
-        increments.totalMindmaps = admin.firestore.FieldValue.increment(1);
+      await incrementAdminStatAdmin('total_mindmaps_ever');
+      await incrementAdminStatAdmin('new_maps_today');
+      if (!entry.metadata?.isSubMap && !entry.metadata?.parentMapId) {
+        await incrementAdminStatAdmin('total_mindmaps');
       }
     } else if (type === 'USER_CREATED') {
-      increments.totalUsers = admin.firestore.FieldValue.increment(1);
-      increments.newUsersToday = admin.firestore.FieldValue.increment(1);
+      await incrementAdminStatAdmin('total_users');
+      await incrementAdminStatAdmin('new_users_today');
     } else if (type === 'LOGIN') {
-      increments.activeUsers = admin.firestore.FieldValue.increment(1);
+      await incrementAdminStatAdmin('active_users');
     } else if (type === 'MAP_DELETED') {
-      // Only decrement totalMindmaps (current library) — totalMindmapsEver never decreases
-      increments.totalMindmaps = admin.firestore.FieldValue.increment(-1);
+      await incrementAdminStatAdmin('total_mindmaps', -1);
     } else if (type === 'CHAT_CREATED') {
-      increments.totalChats = admin.firestore.FieldValue.increment(1);
-    }
-
-    if (Object.keys(increments).length > 0) {
-      const statsBatch = firestore.batch();
-      
-      // Update All-Time stats
-      const allTimeRef = firestore.collection('adminStats').doc('all-time');
-      statsBatch.set(allTimeRef, { 
-        ...increments, 
-        lastUpdated: Date.now(),
-        timestamp: new Date().toISOString() 
-      }, { merge: true });
-
-      // Update Daily stats
-      const dailyRef = firestore.collection('adminStats').doc(`daily_${dateStr}`);
-      statsBatch.set(dailyRef, { 
-        ...increments,
-        date: dateStr,
-        lastUpdated: Date.now(),
-        timestamp: new Date().toISOString()
-      }, { merge: true });
-
-      // Update Monthly stats
-      const monthlyRef = firestore.collection('adminStats').doc(`monthly_${monthStr}`);
-      statsBatch.set(monthlyRef, { 
-        ...increments,
-        month: monthStr,
-        lastUpdated: Date.now(),
-        timestamp: new Date().toISOString()
-      }, { merge: true });
-
-      await statsBatch.commit();
+      await incrementAdminStatAdmin('total_chats');
     }
 
     return { success: true };

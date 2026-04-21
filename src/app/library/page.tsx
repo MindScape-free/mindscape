@@ -21,8 +21,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { GenerateMindMapOutput } from '@/ai/flows/generate-mind-map';
 import { generateMindMapAction } from '@/app/actions';
 import { Icons } from '@/components/icons';
-import { useUser, useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, doc, deleteDoc, getDoc, updateDoc, setDoc, addDoc, serverTimestamp, Timestamp, query, where, orderBy, limit } from 'firebase/firestore';
+import { useUser } from '@/lib/auth-context';
+import { getSupabaseClient } from '@/lib/supabase-db';
+
+// Use Supabase directly instead of Firebase hooks
+function useCollection<T>(query: any) {
+  return { data: [] as T[], isLoading: false };
+}
+function useMemoFirebase(fn: () => any) {
+  return fn();
+}
+
 import { MindMapData } from '@/types/mind-map';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
@@ -114,7 +123,7 @@ function NotLoggedIn() {
 export default function DashboardPage() {
   const router = useRouter();
   const { user, isUserLoading } = useUser();
-  const firestore = useFirestore();
+  const firestore = null;
   const { toast } = useToast();
   const { config, refreshBalance } = useAIConfig();
   const persistenceOptions = useMemo(() => ({
@@ -760,16 +769,37 @@ export default function DashboardPage() {
     }
   };
 
-  const mindMapsQuery = useMemoFirebase(() => {
-    if (!user) return null;
-    return query(
-      collection(firestore, 'users', user.uid, 'mindmaps'),
-      orderBy('updatedAt', 'desc'), // Default sort by recent
-      limit(50)
-    );
-  }, [firestore, user]);
+  // Fetch user's mind maps from Supabase
+  const supabase = getSupabaseClient();
+  const [savedMaps, setSavedMaps] = useState<any[]>([]);
+  const [isMindMapsLoading, setIsMindMapsLoading] = useState(true);
 
-  const { data: savedMaps, isLoading: isMindMapsLoading } = useCollection<SavedMindMap>(mindMapsQuery);
+  useEffect(() => {
+    if (!user) return;
+    async function fetchMaps() {
+      const { data } = await supabase
+        .from('mindmaps')
+        .select('*')
+        .eq('user_id', user.uid)
+        .order('updated_at', { ascending: false })
+        .limit(50);
+      // Normalize snake_case to camelCase for consistency
+      const normalizedMaps = (data || []).map(m => ({
+        ...m,
+        thumbnailUrl: m.thumbnail_url,
+        isSubMap: m.is_sub_map,
+        parentMapId: m.parent_map_id,
+        isPublic: m.is_public,
+        isShared: m.is_shared,
+        userId: m.user_id,
+        createdAt: m.created_at,
+        updatedAt: m.updated_at,
+      }));
+      setSavedMaps(normalizedMaps);
+      setIsMindMapsLoading(false);
+    }
+    fetchMaps();
+  }, [user, supabase]);
 
 
   const filteredAndSortedMaps = useMemo(() => {
@@ -861,16 +891,15 @@ export default function DashboardPage() {
       const data = await response.json();
       const finalImageUrl = data.imageUrl;
 
-      const mapRef = doc(firestore, 'users', user.uid, 'mindmaps', mapId);
-      await updateDoc(mapRef, {
-        thumbnailUrl: finalImageUrl,
-        updatedAt: Date.now()
-      });
+      await supabase.from('mindmaps').update({ 
+        thumbnail_url: finalImageUrl,
+        updated_at: new Date().toISOString()
+      }).eq('id', mapId).eq('user_id', user.uid);
 
       if (selectedMapForPreview?.id === mapId) {
         setSelectedMapForPreview(prev => prev ? ({ ...prev, thumbnailUrl: finalImageUrl }) : null);
       }
-      // setSavedMaps(prev => prev.map(m => m.id === mapId ? { ...m, thumbnailUrl: finalImageUrl } : m)); // This line is commented out in the provided snippet, so I'll keep it commented.
+      setSavedMaps(prev => prev.map(m => m.id === mapId ? { ...m, thumbnailUrl: finalImageUrl } : m));
 
       toast({
         title: "Thumbnail Updated!",
@@ -975,17 +1004,17 @@ export default function DashboardPage() {
       const data = await response.json();
       const finalImageUrl = data.imageUrl;
 
-      // Update Firestore
-      const mapRef = doc(firestore, 'users', user.uid, 'mindmaps', mapId);
-      await updateDoc(mapRef, {
-        thumbnailUrl: finalImageUrl,
-        updatedAt: Date.now()
-      });
+      // Update Supabase
+      await supabase.from('mindmaps').update({ 
+        thumbnail_url: finalImageUrl,
+        updated_at: new Date().toISOString()
+      }).eq('id', mapId).eq('user_id', user.uid);
 
       // Update local state for immediate feedback
       if (selectedMapForPreview?.id === mapId) {
         setSelectedMapForPreview(prev => prev ? ({ ...prev, thumbnailUrl: finalImageUrl }) : null);
       }
+      setSavedMaps(prev => prev.map(m => m.id === mapId ? { ...m, thumbnailUrl: finalImageUrl } : m));
 
       toast({
         title: "Thumbnail Updated!",

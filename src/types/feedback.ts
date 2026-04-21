@@ -8,8 +8,8 @@ export type FeedbackStatus = "OPEN" | "IN_REVIEW" | "RESOLVED" | "REJECTED";
 export interface Feedback extends Omit<z.infer<typeof FeedbackSchema>, 'createdAt' | 'updatedAt'> {
   id: string;
   trackingId?: string;
-  createdAt: any; // Firestore Timestamp
-  updatedAt: any; // Firestore Timestamp
+  createdAt: any; // Firestore any
+  updatedAt: any; // Firestore any
 }
 
 export function getTrackingIdPrefix(type: FeedbackType): string {

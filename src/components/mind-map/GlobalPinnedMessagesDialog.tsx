@@ -1,5 +1,6 @@
 'use client';
 
+import { getSupabaseClient } from '@/lib/supabase-db';
 import { useState, useMemo, useEffect } from 'react';
 import {
   Dialog,
@@ -18,8 +19,8 @@ import { PinnedMessageChatDialog } from '@/components/chat/PinnedMessageChatDial
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { toDate } from '@/types/chat';
-import { useUser, useFirestore } from '@/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { useUser } from '@/lib/auth-context';
+// firebase/firestore removed
 
 type PinTab = 'map' | 'all';
 
@@ -59,7 +60,7 @@ export function GlobalPinnedMessagesDialog({
   const [isLoadingAllPins, setIsLoadingAllPins] = useState(false);
 
   const { user } = useUser();
-  const firestore = useFirestore();
+  const supabase = getSupabaseClient();
 
   useEffect(() => {
     if (activeTab === 'all' && !allPinnedMessages.length) {

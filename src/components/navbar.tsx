@@ -1,13 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useUser, useFirebase } from '@/firebase';
+import { useUser, useFirestore, useAuth } from '@/lib/auth-context';
 import { Button } from './ui/button';
-import { getAuth, signOut } from 'firebase/auth';
 import { usePathname, useRouter } from 'next/navigation';
-import { doc, onSnapshot } from 'firebase/firestore';
 import { useState, useEffect } from 'react';
-import {
+import { 
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -16,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { User, LogOut, Menu } from 'lucide-react';
+import { User, LogOut, Menu, Zap } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -31,16 +29,23 @@ import { cn } from '@/lib/utils';
 import { NotificationCenter } from './notification-center';
 import { useAIConfig } from '@/contexts/ai-config-context';
 import { LoginDialog } from './login-dialog';
+import { usePoints } from '@/hooks/use-points';
+import { getRankForPoints } from '@/types/points';
+import { RankBadge } from '@/components/points/rank-badge';
+import { PointsDialog } from '@/components/points/points-drawer';
 
 export function Navbar() {
   const { user, isUserLoading } = useUser();
-  const { firestore, isAdmin } = useFirebase();
+  const { isAdmin } = useFirestore();
+  const { signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const { resetConfig, pollenBalance, isBalanceLoading } = useAIConfig();
-  const [profileName, setProfileName] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [isPointsOpen, setIsPointsOpen] = useState(false);
+  const { ledger } = usePoints();
+  const rankInfo = ledger ? getRankForPoints(ledger.totalPoints) : null;
 
   useEffect(() => {
     const openLogin = () => setIsLoginOpen(true);
@@ -48,27 +53,7 @@ export function Navbar() {
     return () => window.removeEventListener('mindscape:trigger-login', openLogin);
   }, []);
 
-  // Listen to Firestore for real-time displayName updates
-  useEffect(() => {
-    if (!user || !firestore) return;
-
-    const userRef = doc(firestore, 'users', user.uid);
-    const unsubscribe = onSnapshot(userRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setProfileName(data.displayName || null);
-      }
-    }, (error) => {
-      if (error.code !== 'permission-denied') {
-        console.error('Navbar profile snapshot error: code=' + error.code);
-      }
-    });
-
-    return () => unsubscribe();
-  }, [user, firestore]);
-
-  // Use Firestore name first, then Auth name, then fallback
-  const displayName = profileName || user?.displayName || 'User';
+  const displayName = user?.displayName || 'User';
 
   const navItems = [
     { href: '/', label: 'Home' },
@@ -80,12 +65,10 @@ export function Navbar() {
   ];
 
   const handleLogout = async () => {
-    const auth = getAuth();
-    await signOut(auth);
+    await signOut();
     resetConfig();
     router.push('/');
   };
-
 
   const renderUserAuth = () => {
     if (isUserLoading) {
@@ -202,6 +185,15 @@ export function Navbar() {
 
             {/* Right Section: Auth & Profile */}
             <div className="flex flex-1 items-center justify-end gap-3">
+              {user && rankInfo && ledger && (
+                <button
+                  onClick={() => setIsPointsOpen(true)}
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all hover:scale-105 active:scale-95"
+                  style={{}} 
+                >
+                  <RankBadge rankInfo={rankInfo} totalPoints={ledger.totalPoints} size="sm" showPoints={true} />
+                </button>
+              )}
               {user && (
                 <Link
                   href="/profile?tab=lab"
@@ -282,6 +274,7 @@ export function Navbar() {
       </div>
 
       <LoginDialog open={isLoginOpen} onOpenChange={setIsLoginOpen} />
+      <PointsDialog isOpen={isPointsOpen} onClose={() => setIsPointsOpen(false)} />
     </header>
   );
 }

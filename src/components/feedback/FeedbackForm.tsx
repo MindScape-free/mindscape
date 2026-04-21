@@ -1,5 +1,6 @@
 'use client';
 
+import { getSupabaseClient } from '@/lib/supabase-db';
 import React, { useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -28,9 +29,9 @@ import {
     ArrowRight,
     Hash
 } from 'lucide-react';
-import { useFirestore, useStorage } from '@/firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+
+// Removed Firebase imports - using Supabase directly
+// firebase/storage removed
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { submitFeedbackAction } from '@/app/actions/feedback';
@@ -45,8 +46,8 @@ const CATEGORIES = [
 
 export const FeedbackForm: React.FC<{ userId?: string, userName?: string, userEmail?: string }> = ({ userId, userName, userEmail }) => {
     const { toast } = useToast();
-    const firestore = useFirestore();
-    const storage = useStorage();
+    const supabase = getSupabaseClient();
+    // storage removed
     const [step, setStep] = useState<Step>('CATEGORY');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submittedId, setSubmittedId] = useState<string | null>(null);

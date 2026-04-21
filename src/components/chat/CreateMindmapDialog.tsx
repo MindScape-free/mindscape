@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { generateMindMapAction } from '@/app/actions';
 import { MindMapData } from '@/types/mind-map';
 import { useAIConfig } from '@/contexts/ai-config-context';
-import { useUser } from '@/firebase';
+import { useUser } from '@/lib/auth-context';
 import { useActivity } from '@/contexts/activity-context';
 import { useNotifications } from '@/contexts/notification-context';
 

@@ -1,7 +1,6 @@
 'use client';
 
-import { doc, getDoc, setDoc, collection, addDoc, query, orderBy, limit, getDocs, onSnapshot, where, DocumentData } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { getSupabaseClient } from '@/lib/supabase-db';
 import { UserPlus, UserMinus, UserCheck, Shield, Ban, Unlock, Trash2, Edit, Eye, Star, Flag, Settings, Database, RefreshCw, Download, LogIn, LogOut, Key, AlertTriangle, CheckCircle, XCircle, Activity as ActivityIcon, Brain, Share2, Copy, FileDown, Image, Zap, MessageSquare, Clock, Search, Bookmark, EyeOff, Loader2, Send, Sparkles, Wand2 } from 'lucide-react';
 
 export type ActivityType =
@@ -211,11 +210,7 @@ export const FILTER_CATEGORIES: { label: string; value: ActivityCategory | 'all'
   { label: 'Moderation', value: 'moderation', types: Object.entries(ACTIVITY_CONFIG).filter(([, config]) => config.category === 'moderation').map(([type]) => type as ActivityType) },
 ];
 
-const ACTIVITY_LOG_COLLECTION = 'adminActivityLog';
-
 export function useAdminActivityLog() {
-  const firestore = useFirestore();
-
   const logAdminActivity = async (entry: Omit<AdminActivityLogEntry, 'timestamp'>): Promise<void> => {
     try {
       const { logAdminActivityAction } = await import('@/app/actions');
@@ -229,23 +224,21 @@ export function useAdminActivityLog() {
     filterType?: ActivityType | ActivityCategory | 'all',
     maxEntries: number = 100
   ): Promise<AdminActivityLogEntry[]> => {
-    if (!firestore) return [];
-
     try {
-      const q = query(
-        collection(firestore, ACTIVITY_LOG_COLLECTION),
-        orderBy('timestamp', 'desc'),
-        limit(maxEntries)
-      );
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from('admin_activity_log')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(maxEntries);
 
-      const snap = await getDocs(q);
-      let entries = snap.docs.map(d => ({ id: d.id, ...d.data() } as AdminActivityLogEntry));
+      if (error || !data) return [];
+      let entries = data.map(row => ({ id: row.id, ...row } as AdminActivityLogEntry));
 
       if (filterType && filterType !== 'all') {
         const typesToFilter = typeof filterType === 'string' && FILTER_CATEGORIES.find(c => c.value === filterType)
           ? FILTER_CATEGORIES.find(c => c.value === filterType)!.types
           : [filterType];
-
         entries = entries.filter(log => typesToFilter.includes(log.type));
       }
 
@@ -261,34 +254,18 @@ export function useAdminActivityLog() {
     filterType?: ActivityType | ActivityCategory | 'all',
     maxEntries: number = 100
   ): (() => void) => {
-    if (!firestore) return () => {};
-
-    const q = query(
-      collection(firestore, ACTIVITY_LOG_COLLECTION),
-      orderBy('timestamp', 'desc'),
-      limit(maxEntries)
-    );
-
-    return onSnapshot(q, (snap) => {
-      let entries = snap.docs.map(d => ({ id: d.id, ...d.data() } as AdminActivityLogEntry));
-
-      if (filterType && filterType !== 'all') {
-        const typesToFilter = typeof filterType === 'string' && FILTER_CATEGORIES.find(c => c.value === filterType)
-          ? FILTER_CATEGORIES.find(c => c.value === filterType)!.types
-          : [filterType];
-
-        entries = entries.filter(log => typesToFilter.includes(log.type));
-      }
-
-      callback(entries);
-    });
+    const supabase = getSupabaseClient();
+    const channel = supabase
+      .channel('admin-activity-log')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_activity_log' }, async () => {
+        const logs = await getAdminActivityLogs(filterType, maxEntries);
+        callback(logs);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   };
 
-  return {
-    logAdminActivity,
-    getAdminActivityLogs,
-    subscribeToAdminActivityLogs,
-  };
+  return { logAdminActivity, getAdminActivityLogs, subscribeToAdminActivityLogs };
 }
 
 export function formatRelativeTime(timestamp: string): string {

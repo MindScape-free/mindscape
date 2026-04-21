@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useFirebase } from '@/firebase';
-import { doc, setDoc, collection, query, getDocs, onSnapshot, orderBy, getCountFromServer } from 'firebase/firestore';
-import { updateProfile, signOut, sendPasswordResetEmail } from 'firebase/auth';
+import { useAuth, useUser } from '@/lib/auth-context';
+import { getSupabaseClient } from '@/lib/supabase-db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,10 +34,10 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { languages } from '@/lib/languages';
 import { format } from 'date-fns';
-import { syncHistoricalStatistics } from '@/lib/activity-tracker';
+import { updateUserStatistics } from '@/lib/activity-tracker';
 import { ModelSelector } from '@/components/model-selector';
 import { Eye, EyeOff, Menu } from 'lucide-react';
-import { getUserImageSettings, saveUserApiKey } from '@/lib/firestore-helpers';
+import { getUserImageSettings, saveUserApiKey } from '@/lib/supabase-db';
 import { checkPollenBalanceAction } from '@/app/actions';
 import { useAIConfig } from '@/contexts/ai-config-context';
 
@@ -92,7 +91,8 @@ interface UserProfile {
 }
 function ProfileContent() {
     const router = useRouter();
-    const { user, firestore, auth } = useFirebase();
+    const { user, signOut, resetPassword: authResetPassword } = useAuth();
+    const supabase = getSupabaseClient();
     const { pollenBalance, refreshBalance, updateConfig } = useAIConfig();
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -131,7 +131,7 @@ function ProfileContent() {
 
     // Load profile data
     useEffect(() => {
-        if (!user || !firestore) {
+        if (!user) {
             setLoading(false);
             return;
         }
@@ -141,109 +141,125 @@ function ProfileContent() {
 
         const setupListeners = async () => {
             try {
-                // Set up real-time listener for profile
-                const userRef = doc(firestore, 'users', user.uid);
-                unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
-                    if (docSnap.exists()) {
-                        const data = docSnap.data();
-                        const profileData: UserProfile = {
-                            displayName: data.displayName || user.displayName || 'ADMIN',
-                            email: data.email || user.email || '',
-                            photoURL: data.photoURL || user.photoURL,
-                            activeBadgeId: data.activeBadgeId,
-                            preferences: {
-                                preferredLanguage: data.preferences?.preferredLanguage || 'en',
-                                defaultAIPersona: data.preferences?.defaultAIPersona?.toLowerCase() || 'concise',
-                                defaultDepth: data.preferences?.defaultDepth || 'auto',
-                                defaultExplanationMode: data.preferences?.defaultExplanationMode,
-                                autoGenerateImages: data.preferences?.autoGenerateImages,
-                                deepExpansionMode: data.preferences?.deepExpansionMode || false,
-                                defaultMapView: data.preferences?.defaultMapView,
-                                autoSaveFrequency: data.preferences?.autoSaveFrequency,
-                            },
-                            statistics: {
-                                totalMapsCreated: data.statistics?.totalMapsCreated || 0,
-                                totalNestedExpansions: data.statistics?.totalNestedExpansions || 0,
-                                totalImagesGenerated: data.statistics?.totalImagesGenerated || 0,
-                                totalStudyTimeMinutes: data.statistics?.totalStudyTimeMinutes || 0,
-                                currentStreak: data.statistics?.currentStreak || 0,
-                                longestStreak: data.statistics?.longestStreak || 0,
-                                lastActiveDate: data.statistics?.lastActiveDate || '',
-                                totalNodes: data.statistics?.totalNodes || 0,
-                            },
-                            apiSettings: {
-                                provider: data.apiSettings?.provider || 'pollinations',
-                                imageProvider: data.apiSettings?.imageProvider || 'pollinations',
-                                imageModel: data.apiSettings?.imageModel || data.apiSettings?.pollinationsModel || 'flux',
-                                textModel: data.apiSettings?.textModel || 'openai',
-                                pollinationsModel: data.apiSettings?.pollinationsModel || '',
-                                pollinationsApiKey: data.apiSettings?.pollinationsApiKey || '',
-                            },
-                            goals: data.goals,
-                            activity: data.activity || {},
-                        };
-                        setProfile(profileData);
-                        setEditName(profileData.displayName);
-                        setApiKeyInput(profileData.apiSettings?.pollinationsApiKey || '');
-                        setPreferredModel(profileData.apiSettings?.imageModel || 'flux');
-                        setPreferredTextModel(profileData.apiSettings?.textModel || 'openai');
+                // Fetch user profile from Supabase
+                const { data: profileData, error: profileError } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', user.uid)
+                    .single();
 
-                        // Sync active maps count in real-time indirectly? 
-                        // Actually, it's better to just fetch it here or use a separate listener.
-                        // For now, let's keep the one-time fetch but make it more robust.
-                    } else {
-                        const defaultData: UserProfile = {
-                            displayName: user.displayName || 'ADMIN',
-                            email: user.email || '',
-                            photoURL: user.photoURL || undefined,
-                            preferences: {
-                                preferredLanguage: 'en',
-                                defaultAIPersona: 'concise',
-                                defaultDepth: 'auto',
-                                autoGenerateImages: false,
-                                deepExpansionMode: false,
-                            },
-                            apiSettings: {
-                                provider: 'pollinations',
-                                imageProvider: 'pollinations',
-                                pollinationsModel: '',
-                                pollinationsApiKey: '',
-                            },
-                            statistics: {
-                                totalMapsCreated: 0,
-                                totalNestedExpansions: 0,
-                                totalImagesGenerated: 0,
-                                totalStudyTimeMinutes: 0,
-                                currentStreak: 0,
-                                longestStreak: 0,
-                                lastActiveDate: '',
-                                totalNodes: 0,
-                            },
-                        };
-                        setProfile(defaultData);
-                        setEditName(defaultData.displayName);
-                    }
-                    setLoading(false);
-                }, (error) => {
-                    // Ignore permission errors that happen during logout
-                    if (error.code !== 'permission-denied') {
-                        console.error("Profile snapshot error:", error);
+                if (profileError && profileError.code !== 'PGRST116') {
+                    console.error("Profile fetch error:", profileError);
+                }
+
+                if (profileData) {
+                    const data = profileData;
+                    const userProfile: UserProfile = {
+                        displayName: data.display_name || user.displayName || 'ADMIN',
+                        email: data.email || user.email || '',
+                        photoURL: data.photo_url || undefined,
+                        activeBadgeId: data.active_badge_id,
+                        preferences: {
+                            preferredLanguage: data.preferences?.preferred_language || 'en',
+                            defaultAIPersona: data.preferences?.default_ai_persona?.toLowerCase() || 'concise',
+                            defaultDepth: data.preferences?.default_depth || 'auto',
+                            defaultExplanationMode: data.preferences?.default_explanation_mode,
+                            autoGenerateImages: data.preferences?.auto_generate_images,
+                            deepExpansionMode: data.preferences?.deep_expansion_mode || false,
+                            defaultMapView: data.preferences?.default_map_view,
+                            autoSaveFrequency: data.preferences?.auto_save_frequency,
+                        },
+                        statistics: {
+                            totalMapsCreated: data.statistics?.total_maps_created || 0,
+                            totalNestedExpansions: data.statistics?.total_nested_expansions || 0,
+                            totalImagesGenerated: data.statistics?.total_images_generated || 0,
+                            totalStudyTimeMinutes: data.statistics?.total_study_time_minutes || 0,
+                            currentStreak: data.statistics?.current_streak || 0,
+                            longestStreak: data.statistics?.longest_streak || 0,
+                            lastActiveDate: data.statistics?.last_active_date || '',
+                            totalNodes: data.statistics?.total_nodes || 0,
+                        },
+                        apiSettings: {
+                            provider: data.api_settings?.provider || 'pollinations',
+                            imageProvider: data.api_settings?.image_provider || 'pollinations',
+                            imageModel: data.api_settings?.image_model || 'flux',
+                            textModel: data.api_settings?.text_model || 'openai',
+                            pollinationsModel: data.api_settings?.pollinations_model || '',
+                            pollinationsApiKey: data.api_settings?.pollinations_api_key || '',
+                        },
+                        goals: data.goals,
+                        activity: data.activity || {},
+                    };
+                    setProfile(userProfile);
+                    setEditName(userProfile.displayName);
+                } else {
+                    const defaultData: UserProfile = {
+                        displayName: user.displayName || 'ADMIN',
+                        email: user.email || '',
+                        photoURL: undefined,
+                        preferences: {
+                            preferredLanguage: 'en',
+                            defaultAIPersona: 'concise',
+                            defaultDepth: 'auto',
+                            autoGenerateImages: false,
+                            deepExpansionMode: false,
+                        },
+                        apiSettings: {
+                            provider: 'pollinations',
+                            imageProvider: 'pollinations',
+                            pollinationsModel: '',
+                            pollinationsApiKey: '',
+                        },
+                        statistics: {
+                            totalMapsCreated: 0,
+                            totalNestedExpansions: 0,
+                            totalImagesGenerated: 0,
+                            totalStudyTimeMinutes: 0,
+                            currentStreak: 0,
+                            longestStreak: 0,
+                            lastActiveDate: '',
+                            totalNodes: 0,
+                        },
+                    };
+                    setProfile(defaultData);
+                    setEditName(defaultData.displayName);
+                }
+
+                // 2. Fetch API settings from user_settings table
+                getUserImageSettings(supabase, user.uid).then(settings => {
+                    if (settings) {
+                        setApiKeyInput(settings.pollinationsApiKey || '');
+                        
+                        let prefModel = settings.preferredModel || 'flux';
+                        if (prefModel === 'flux-pro' || prefModel === 'klein-large') prefModel = 'flux';
+                        setPreferredModel(prefModel);
+                        
+                        setPreferredTextModel(settings.textModel || 'openai');
+                        
+                        console.log('✅ Loaded AI settings from user_settings');
                     }
                 });
 
-                // Get active maps and sync analytics (real-time listener)
-                const mapsRef = collection(firestore, 'users', user.uid, 'mindmaps');
-                const mapsQuery = query(mapsRef, orderBy('updatedAt', 'desc'));
-                unsubscribeMaps = onSnapshot(mapsQuery, (snapshot) => {
-                    setActiveMapsCount(snapshot.size);
-                    const mapsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    setUserMaps(mapsData);
-                });
+                // Fetch user's mind maps
+                const { data: mapsData } = await supabase
+                    .from('mindmaps')
+                    .select('id, topic, created_at, updated_at')
+                    .eq('user_id', user.uid)
+                    .order('updated_at', { ascending: false });
+
+                if (mapsData) {
+                    setActiveMapsCount(mapsData.length);
+                    setUserMaps(mapsData.map((m: any) => ({ id: m.id, ...m })));
+                }
 
                 // Fetch chat count
-                getCountFromServer(collection(firestore, 'users', user.uid, 'chatSessions')).then(snap => {
-                    setChatCount(snap.data().count);
-                });
+                const { count: chatCount } = await supabase
+                    .from('chat_sessions')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('user_id', user.uid);
+                setChatCount(chatCount || 0);
+
+                setLoading(false);
 
             } catch {
                 toast({ variant: 'destructive', title: 'Error', description: 'Failed to load profile' });
@@ -253,25 +269,18 @@ function ProfileContent() {
 
         setupListeners();
 
-        // Load additional image settings
-        getUserImageSettings(firestore, user.uid).then(settings => {
-            if (settings?.preferredModel) {
-                let prefModel = settings.preferredModel;
-                if (prefModel === 'flux-pro' || prefModel === 'klein-large') prefModel = 'flux';
-                setPreferredModel(prefModel);
-            }
-        });
 
-        return () => {
-            if (unsubscribeProfile) unsubscribeProfile();
-            if (unsubscribeMaps) unsubscribeMaps();
-        };
-    }, [user, firestore, toast]);
+
+        return () => {};
+    }, [user, supabase, toast]);
 
     const savePreference = async (key: string, value: string) => {
-        if (!user || !firestore) return;
+        if (!user) return;
         try {
-            await setDoc(doc(firestore, 'users', user.uid), { preferences: { [key]: value } }, { merge: true });
+            await supabase
+                .from('users')
+                .update({ preferences: { ...profile?.preferences, [key]: value } })
+                .eq('id', user.uid);
             toast({ title: 'Saved', description: 'Preference updated.' });
         } catch {
             toast({ variant: 'destructive', title: 'Error', description: 'Failed to update preferences.' });
@@ -332,13 +341,18 @@ function ProfileContent() {
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !user || !firestore) return;
+        if (!file || !user) return;
 
         try {
             const reader = new FileReader();
             reader.onloadend = async () => {
                 const base64String = reader.result as string;
-                await setDoc(doc(firestore, 'users', user.uid), { photoURL: base64String }, { merge: true });
+                await supabase
+                    .from('users')
+                    .update({ photo_url: base64String })
+                    .eq('id', user.uid);
+                
+                setProfile(prev => prev ? { ...prev, photoURL: base64String } : prev);
                 toast({ title: 'Success', description: 'Profile picture updated.' });
             };
             reader.readAsDataURL(file);
@@ -349,15 +363,16 @@ function ProfileContent() {
     };
 
     const saveDisplayName = async () => {
-        if (!user || !firestore || !editName.trim()) return;
+        if (!user || !editName.trim()) return;
         setIsSaving(true);
         try {
-            await setDoc(doc(firestore, 'users', user.uid), { displayName: editName.trim() }, { merge: true });
-
-            // Sync with Firebase Auth
-            await updateProfile(user, { displayName: editName.trim() });
+            await supabase
+                .from('users')
+                .update({ display_name: editName.trim() })
+                .eq('id', user.uid);
 
             setIsEditing(false);
+            setProfile(prev => prev ? { ...prev, displayName: editName.trim() } : prev);
             toast({ title: 'Saved', description: 'Your name has been updated.' });
         } catch (error) {
             console.error('Error saving name:', error);
@@ -391,7 +406,7 @@ function ProfileContent() {
     }, [profile?.apiSettings?.pollinationsApiKey, user?.uid]);
 
     const handleSaveApiKey = async () => {
-        if (!user || !firestore || !apiKeyInput.trim()) {
+        if (!user || !apiKeyInput.trim()) {
             toast({ variant: 'destructive', title: 'Input Required', description: 'Please enter an API key first.' });
             return;
         }
@@ -414,7 +429,7 @@ function ProfileContent() {
             }
 
             // 2. If valid, save the key
-            await saveUserApiKey(firestore, user.uid, apiKeyInput.trim(), preferredModel, preferredTextModel);
+            await saveUserApiKey(supabase, user.uid, apiKeyInput.trim(), preferredModel, preferredTextModel);
             
             // 3. Update global balance state immediately
             await refreshBalance();
@@ -434,12 +449,12 @@ function ProfileContent() {
     };
 
     const handleSaveImageModelPreference = async (modelId: string) => {
-        if (!user || !firestore) return;
+        if (!user) return;
         setIsSavingKey(true);
         try {
             setPreferredModel(modelId);
             updateConfig({ imageModel: modelId });
-            await saveUserApiKey(firestore, user.uid, apiKeyInput, modelId, preferredTextModel);
+            await saveUserApiKey(supabase, user.uid, apiKeyInput, modelId, preferredTextModel);
             toast({ title: 'Vision Preference Saved', description: `Default image model set to ${modelId}` });
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Error', description: error.message });
@@ -449,12 +464,12 @@ function ProfileContent() {
     };
 
     const handleSaveTextModelPreference = async (modelId: string) => {
-        if (!user || !firestore) return;
+        if (!user) return;
         setIsSavingKey(true);
         try {
             setPreferredTextModel(modelId);
             updateConfig({ textModel: modelId });
-            await saveUserApiKey(firestore, user.uid, apiKeyInput, preferredModel, modelId);
+            await saveUserApiKey(supabase, user.uid, apiKeyInput, preferredModel, modelId);
             toast({ title: 'Intelligence Preference Saved', description: `Core AI model set to ${modelId}` });
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Error', description: error.message });
@@ -465,10 +480,8 @@ function ProfileContent() {
 
     const handleLogout = async () => {
         try {
-            if (auth) {
-                await signOut(auth);
-                router.push('/');
-            }
+            await signOut();
+            router.push('/');
         } catch (error) {
             console.error("Logout error:", error);
             toast({ variant: 'destructive', title: 'Error', description: 'Failed to sign out' });
@@ -476,10 +489,10 @@ function ProfileContent() {
     };
 
     const handleSyncStatus = async () => {
-        if (!user || !firestore) return;
+        if (!user) return;
         setIsSyncing(true);
         try {
-            await syncHistoricalStatistics(firestore, user.uid);
+            await updateUserStatistics(supabase, user.uid, {});
             toast({
                 title: 'Statistics Synced!',
                 description: 'Your historical activity data has been aggregated into your profile.',
@@ -519,8 +532,8 @@ function ProfileContent() {
         );
     }
 
-    const memberSince = user.metadata?.creationTime
-        ? format(new Date(user.metadata.creationTime), 'MMM yyyy')
+    const memberSince = profile?.createdAt
+        ? format(new Date(profile.createdAt), 'MMM yyyy')
         : 'New';
 
     const stats = {
@@ -621,8 +634,11 @@ function ProfileContent() {
                                     }
                                     setIsSaving(true);
                                     try {
-                                        await setDoc(doc(firestore!, 'users', user!.uid), { displayName: editName.trim() }, { merge: true });
-                                        await updateProfile(user!, { displayName: editName.trim() });
+                                        await supabase
+                                            .from('users')
+                                            .update({ display_name: editName.trim() })
+                                            .eq('id', user!.uid);
+                                            
                                         toast({ title: 'Profile saved!', description: 'Welcome to MindScape!' });
                                         setProfile((prev: any) => prev ? { ...prev, displayName: editName.trim() } : prev);
                                         router.replace('/profile');
@@ -1328,7 +1344,7 @@ function ProfileContent() {
                                                 className="h-9 px-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 text-[9px] font-black uppercase tracking-widest transition-all"
                                                 onClick={async () => {
                                                     try {
-                                                        await sendPasswordResetEmail(auth, profile.email);
+                                                        await authResetPassword(profile.email);
                                                         toast({ title: 'Reset Email Sent', description: 'Check your inbox for the password reset link.' });
                                                     } catch (err: any) {
                                                         toast({ variant: 'destructive', description: err.message });

@@ -143,7 +143,9 @@ import {
   MindMapWithId,
   SubCategoryInfo,
   ExplainableNode,
-  ExplanationMode
+  ExplanationMode,
+  NodeEnrichment,
+  ConfidenceLevel,
 } from '@/types/mind-map';
 import { categorizeMindMapAction, publishMindMapAction } from '@/app/actions/community';
 import { MindMapStatus } from '@/hooks/use-mind-map-stack';
@@ -191,10 +193,11 @@ import { toPascalCase } from '@/lib/utils';
 import { toPlainObject } from '@/lib/serialize';
 import { findMatchingCategory } from '@/lib/depth-analysis';
 
-import { addDoc, collection, getDocs, query, where, serverTimestamp, doc, updateDoc, getDoc, deleteDoc, writeBatch, setDoc, limit } from 'firebase/firestore';
-import { useFirebase } from '@/firebase';
+// firebase/firestore removed
+import { useUser } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { trackNestedExpansion, trackImageGenerated, trackMapCreated } from '@/lib/activity-tracker';
+import { useXP } from '@/contexts/xp-context';
 
 
 
@@ -308,8 +311,9 @@ export const MindMap = ({
   const mindMapRef = React.useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { toast } = useToast();
-  const { user, firestore } = useFirebase();
+  const { user } = useUser();
   const { config, refreshBalance } = useAIConfig();
+  const { awardXP } = useXP();
   const [activeTab, setActiveTab] = useState<'visual' | 'radial' | 'accordion' | 'compare'>('visual');
   const useSearch = true; // Always ON in background
 
@@ -340,8 +344,10 @@ export const MindMap = ({
     string[]
   >([]);
   const [isExplanationLoading, setIsExplanationLoading] = useState(false);
+  const [isExplanationRefreshing, setIsExplanationRefreshing] = useState(false);
   const [activeSubCategory, setActiveSubCategory] =
     useState<SubCategoryInfo | null>(null);
+  const [currentMicroQuiz, setCurrentMicroQuiz] = useState<NodeEnrichment['microQuiz'] | null>(null);
 
   const [explanationMode, setExplanationMode] =
     useLocalStorage<ExplanationMode>('explanationMode', 'Intermediate');
@@ -433,6 +439,16 @@ export const MindMap = ({
   // #10 — Quiz-adaptive deepening state
   const [deepeningTags, setDeepeningTags] = useState<string[]>([]);
 
+  // Enrichment state — keyed by node name, generated once per node
+  const [enrichments, setEnrichments] = useState<Record<string, NodeEnrichment>>(data.enrichments || {});
+  const [isEnrichmentLoading, setIsEnrichmentLoading] = useState(false);
+  const enrichmentInFlightRef = useRef<Set<string>>(new Set());
+
+  // Confidence ratings — keyed by node name
+  const [confidenceRatings, setConfidenceRatings] = useState<Record<string, ConfidenceLevel>>(data.confidenceRatings || {});
+
+  // Micro quiz answers — keyed by node name
+  const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>(data.quizAnswers || {});
 
   // State for images and expansions is initialized from data prop
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>(data.savedImages || []);
@@ -622,14 +638,19 @@ export const MindMap = ({
       const dataToNotify = toPlainObject({
         nestedExpansions: sanitizedExpansions,
         savedImages: generatedImages,
-        explanations: explanations
+        explanations: explanations,
+        enrichments: enrichments,
+        confidenceRatings: confidenceRatings,
+        quizAnswers: quizAnswers,
       });
 
-      // Check if this data is actually different from what we received in props
       const hasMeaningfulChanges =
         JSON.stringify(nestedExpansions) !== JSON.stringify(propNestedExpansions || data.nestedExpansions || []) ||
         JSON.stringify(generatedImages) !== JSON.stringify(data.savedImages || []) ||
-        JSON.stringify(explanations) !== JSON.stringify(data.explanations || {});
+        JSON.stringify(explanations) !== JSON.stringify(data.explanations || {}) ||
+        JSON.stringify(enrichments) !== JSON.stringify(data.enrichments || {}) ||
+        JSON.stringify(confidenceRatings) !== JSON.stringify(data.confidenceRatings || {}) ||
+        JSON.stringify(quizAnswers) !== JSON.stringify(data.quizAnswers || {});
 
       if (!hasMeaningfulChanges) return;
 
@@ -639,7 +660,7 @@ export const MindMap = ({
         onUpdate(dataToNotify);
       }
     }
-  }, [generatedImages, nestedExpansions, explanations, onUpdate, data.nestedExpansions, data.savedImages, data.explanations, propNestedExpansions]);
+  }, [generatedImages, nestedExpansions, explanations, enrichments, confidenceRatings, quizAnswers, onUpdate, data.nestedExpansions, data.savedImages, data.explanations, data.enrichments, data.confidenceRatings, data.quizAnswers, propNestedExpansions]);
 
 
 
@@ -705,45 +726,62 @@ export const MindMap = ({
     if (!activeSubCategory) return;
 
     // Cache Key: unique combo of category name and persona/mode
-    // We append explanationMode to keys to differentiate 'Simple' vs 'Expert' explanations for the same node
     const cacheKey = `${activeSubCategory.name}-${explanationMode}`;
 
     // 1. Check Cache
     if (explanations[cacheKey]) {
       console.log(`⚡ Using cached explanation for ${cacheKey}`);
       setExplanationDialogContent(explanations[cacheKey]);
+      setIsExplanationRefreshing(false);
       return;
     }
 
-    setIsExplanationLoading(true);
-    const { explanation, error } = await explainNodeAction({
-      subCategoryName: activeSubCategory!.name,
-      mainTopic: data.topic,
-      explanationMode: explanationMode,
-      targetLanguage: selectedLanguage,
-      usePdfContext: useFileAware,
-      pdfContext: (data as any).pdfContext ? JSON.stringify((data as any).pdfContext) : undefined
-    }, providerOptions);
-
-    // Refresh balance after AI operation
-    refreshBalance();
-
-    if (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Explanation Failed',
-        description: error,
-      });
-    } else if (explanation) {
-      setExplanationDialogContent(explanation.explanationPoints);
-
-      // 2. Save to State (triggers auto-save)
-      setExplanations(prev => ({
-        ...prev,
-        [cacheKey]: explanation.explanationPoints
-      }));
+    // Track if we're refreshing (content exists) vs initial load
+    const isRefreshing = explanationDialogContent.length > 0;
+    
+    if (isRefreshing) {
+      setIsExplanationRefreshing(true);
+    } else {
+      setIsExplanationLoading(true);
     }
-    setIsExplanationLoading(false);
+
+    try {
+      const { explanation, error } = await explainNodeAction({
+        subCategoryName: activeSubCategory!.name,
+        mainTopic: data.topic,
+        explanationMode: explanationMode,
+        targetLanguage: selectedLanguage,
+        usePdfContext: useFileAware,
+        pdfContext: (data as any).pdfContext ? JSON.stringify((data as any).pdfContext) : undefined
+      }, providerOptions);
+
+      if (error) {
+        toast({
+          variant: 'destructive',
+          title: 'Explanation Failed',
+          description: error,
+        });
+      } else if (explanation) {
+        setExplanationDialogContent(explanation.explanationPoints);
+
+        // Award XP for completing explanation
+        awardXP('EXPLANATION_COMPLETED', { node: activeSubCategory!.name, mode: explanationMode }).catch(() => {});
+
+        // 2. Save to State (triggers auto-save)
+        setExplanations(prev => ({
+          ...prev,
+          [cacheKey]: explanation.explanationPoints
+        }));
+
+        // Refresh balance after AI operation
+        refreshBalance();
+      }
+    } catch (err) {
+      console.error('Explanation fetch error:', err);
+    } finally {
+      setIsExplanationLoading(false);
+      setIsExplanationRefreshing(false);
+    }
   };
 
   useEffect(() => {
@@ -848,18 +886,41 @@ export const MindMap = ({
     // Start shimmer on matched branches
     setDeepeningTags(sectionsToProcess.map(s => s.tag));
 
+    // Pre-compute the anchor: if quizTopic matches a specific node in the map,
+    // lock all new nodes into that node's parent category instead of fuzzy-matching concept tags.
+    const findNodeAnchor = (topic: string, subTopics: any[]): { subTopicIndex: number; categoryIndex: number } | null => {
+      const norm = (s: string) => s.toLowerCase().trim();
+      const t = norm(topic);
+      for (let si = 0; si < subTopics.length; si++) {
+        // Match at SubTopic level
+        if (norm(subTopics[si].name) === t) return { subTopicIndex: si, categoryIndex: 0 };
+        for (let ci = 0; ci < subTopics[si].categories.length; ci++) {
+          const cat = subTopics[si].categories[ci];
+          // Match at Category level
+          if (norm(cat.name) === t) return { subTopicIndex: si, categoryIndex: ci };
+          // Match at SubCategory level → inject into its parent category
+          if (cat.subCategories?.some((sc: any) => norm(sc.name) === t))
+            return { subTopicIndex: si, categoryIndex: ci };
+        }
+      }
+      return null;
+    };
+
+    const nodeAnchor = findNodeAnchor(quizTopic, subTopicsRef.current);
+
     for (const section of sectionsToProcess) {
       // Always read the LATEST subTopics from the ref, not the stale closure
       const currentSubTopics = subTopicsRef.current;
 
-      // Find the best matching category using the 4-level matcher
-      const match = findMatchingCategory(section.tag, currentSubTopics);
+      // If quizTopic maps to a specific node, use that anchor.
+      // Otherwise fall back to concept-tag fuzzy matching.
+      const match = nodeAnchor ?? findMatchingCategory(section.tag, currentSubTopics);
       const targetCat = currentSubTopics[match.subTopicIndex]?.categories[match.categoryIndex];
       const existingNodes = targetCat?.subCategories.map((sc: any) => sc.name) ?? [];
 
       const { data: newNodes, error } = await generateQuizDepthNodesAction({
         mainTopic: quizTopic,
-        sectionName: section.tag,
+        sectionName: nodeAnchor ? (targetCat?.name ?? section.tag) : section.tag,
         existingNodes,
         quizScore: section.score,
         persona: aiPersona,
@@ -928,6 +989,7 @@ export const MindMap = ({
   const handleSubCategoryClick = (subCategory: SubCategoryInfo) => {
     setActiveSubCategory(subCategory);
     setExplanationDialogContent([]);
+    setCurrentMicroQuiz(null);
 
     // Check if we have ANY explanation cached for this node
     const availableModes: ExplanationMode[] = ['Beginner', 'Intermediate', 'Expert'].filter(mode => {
@@ -938,23 +1000,43 @@ export const MindMap = ({
     setAvailableModes(availableModes);
 
     if (availableModes.length > 0) {
-      // If content exists, don't show initial selection
       setIsExplanationInitialSelection(false);
-
-      // If current mode isn't available but others are, switch to an available one
       const currentModeAvailable = availableModes.includes(explanationMode);
       if (!currentModeAvailable) {
         setExplanationMode(availableModes[0]);
       } else {
-        // Just trigger content loading from cache
         setExplanationDialogContent(explanations[`${subCategory.name}-${explanationMode}`]);
       }
     } else {
-      // No cached data at all, show selection
       setIsExplanationInitialSelection(true);
     }
 
     setIsExplanationDialogOpen(true);
+
+    // Award XP for opening explanation
+    awardXP('EXPLANATION_OPENED', { node: subCategory.name }).catch(() => {});
+
+    // Fire-and-forget enrichment fetch — only if not already cached or in-flight
+    const enrichKey = subCategory.name;
+    if (!enrichments[enrichKey] && !enrichmentInFlightRef.current.has(enrichKey)) {
+      enrichmentInFlightRef.current.add(enrichKey);
+      setIsEnrichmentLoading(true);
+      import('@/app/actions/enrich-node').then(({ enrichNodeAction }) => {
+        enrichNodeAction(
+          { nodeName: subCategory.name, nodeDescription: subCategory.description, mainTopic: data.topic },
+          providerOptions
+        ).then(({ data: enrichData }) => {
+          enrichmentInFlightRef.current.delete(enrichKey);
+          if (enrichData) {
+            setEnrichments(prev => ({ ...prev, [enrichKey]: enrichData }));
+          }
+          setIsEnrichmentLoading(false);
+        }).catch(() => {
+          enrichmentInFlightRef.current.delete(enrichKey);
+          setIsEnrichmentLoading(false);
+        });
+      });
+    }
   };
 
   const handleInitialLevelSelect = (mode: ExplanationMode) => {
@@ -1074,6 +1156,9 @@ export const MindMap = ({
       };
 
       setGeneratedImages(prev => prev.map(img => img.id === generationId ? newImage : img));
+
+      // Award XP for image generation
+      awardXP('IMAGE_GENERATED', { model: settings.model, node: labNode.name }).catch(() => {});
 
       if (firestore && user) {
         try {
@@ -1542,12 +1627,42 @@ export const MindMap = ({
         title={activeSubCategory?.name || ''}
         content={explanationDialogContent}
         isLoading={isExplanationLoading}
+        isContentRefreshing={isExplanationRefreshing}
         onExplainInChat={onExplainInChat}
         explanationMode={explanationMode}
         onExplanationModeChange={isExplanationInitialSelection ? handleInitialLevelSelect : setExplanationMode}
         showInitialSelection={isExplanationInitialSelection}
         availableModes={availableModes}
         isGlobalBusy={status !== 'idle'}
+        enrichment={activeSubCategory ? {
+          ...(enrichments[activeSubCategory.name] || {}),
+          microQuiz: currentMicroQuiz || enrichments[activeSubCategory.name]?.microQuiz || null
+        } : null}
+        isEnrichmentLoading={isEnrichmentLoading && !!(activeSubCategory && !enrichments[activeSubCategory.name])}
+        confidenceRating={activeSubCategory ? (confidenceRatings[activeSubCategory.name] || null) : null}
+        onConfidenceChange={(level) => {
+          if (!activeSubCategory) return;
+          const key = activeSubCategory.name;
+          setConfidenceRatings(prev => ({ ...prev, [key]: level }));
+          awardXP('CONFIDENCE_RATED', { node: key, level }).catch(() => {});
+        }}
+        quizAnswer={activeSubCategory ? (quizAnswers[activeSubCategory.name] || null) : null}
+        onQuizAnswer={(answer) => {
+          if (!activeSubCategory) return;
+          setQuizAnswers(prev => ({ ...prev, [activeSubCategory.name]: answer }));
+        }}
+        onGenerateSubMap={(topic) => onGenerateNewMap(topic, activeSubCategory?.name, `${data.topic} > ${activeSubCategory?.name}`, 'background')}
+        onRegenerateQuiz={async () => {
+          if (!activeSubCategory) return;
+          const { regenerateMicroQuiz } = await import('@/ai/flows/regenerate-micro-quiz');
+          const newQuiz = await regenerateMicroQuiz(
+            activeSubCategory.name,
+            activeSubCategory.description,
+            data.topic,
+            providerOptions.apiKey
+          );
+          setCurrentMicroQuiz(newQuiz);
+        }}
       />
 
 

@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
-import { useUser, useFirestore } from '@/firebase';
+import { getSupabaseClient } from '@/lib/supabase-db';
+import { useUser } from '@/lib/auth-context';
 import { PinnedMessage, ChatMessage } from '@/types/chat';
 import { useToast } from '@/hooks/use-toast';
 
@@ -18,7 +18,7 @@ export function useMindMapPinnedMessages({
   onPinsUpdate,
 }: UseMindMapPinnedMessagesOptions) {
   const { user } = useUser();
-  const firestore = useFirestore();
+  const firestore = null;
   const { toast } = useToast();
 
   const persistPins = useCallback(async (updatedPins: PinnedMessage[]) => {

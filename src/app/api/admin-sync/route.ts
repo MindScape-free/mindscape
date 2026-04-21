@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { initializeFirebaseServer } from '@/firebase/server';
-import { getAuth } from 'firebase-admin/auth';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
+// firebase-admin/auth removed
 import { format, subHours, subDays } from 'date-fns';
 
-const ADMIN_UID = 'ldTOigUhGqX5x8UAOj1ouTZIyfm1';
+const ADMIN_UID = '765cd0a0-6201-41d2-ac8d-ff99b4941289';
 
 async function verifyAdmin(request: Request): Promise<{ authorized: boolean; uid?: string; error?: string }> {
   try {
@@ -13,7 +13,7 @@ async function verifyAdmin(request: Request): Promise<{ authorized: boolean; uid
     }
 
     const idToken = authHeader.substring(7);
-    const { app } = initializeFirebaseServer();
+    const { app } = { firestore: getSupabaseAdmin() };
     
     if (!app) {
       return { authorized: false, error: 'Firebase not initialized' };
@@ -166,7 +166,7 @@ export async function POST(request: Request) {
   );
 
   try {
-    const { app, firestore } = initializeFirebaseServer();
+    const { app, firestore } = { firestore: getSupabaseAdmin() };
     if (!app || !firestore) {
       return NextResponse.json({ success: false, error: 'Firebase not initialized.' }, { status: 500 });
     }

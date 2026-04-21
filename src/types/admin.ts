@@ -59,7 +59,7 @@ export interface PrecomputedStats {
   activeUsers: number;
   healthScore: number;
   mapAnalytics: typeof DEFAULT_MAP_ANALYTICS;
-  timestamp: string;
+  any: string;
   lastUpdated: number;
 }
 

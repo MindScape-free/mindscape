@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { initializeFirebaseServer } from '@/firebase/server';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { DEFAULT_MAP_ANALYTICS } from '@/types/admin';
-import { getAuth } from 'firebase-admin/auth';
+// firebase-admin/auth removed
 
-const ADMIN_UID = 'ldTOigUhGqX5x8UAOj1ouTZIyfm1';
+const ADMIN_UID = '765cd0a0-6201-41d2-ac8d-ff99b4941289';
 
 async function verifyAdmin(request: Request): Promise<{ authorized: boolean; uid?: string; error?: string }> {
   try {
@@ -16,7 +16,7 @@ async function verifyAdmin(request: Request): Promise<{ authorized: boolean; uid
     const idToken = authHeader.substring(7);
     console.log('[DashboardAPI] Token length:', idToken.length);
     
-    const { app } = initializeFirebaseServer();
+    const { app } = { firestore: getSupabaseAdmin() };
     
     if (!app) {
       return { authorized: false, error: 'Firebase not initialized' };
@@ -99,7 +99,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const since = url.searchParams.get('since') || undefined;
 
-    const { admin, app, firestore } = initializeFirebaseServer();
+    const { admin, app, firestore } = { firestore: getSupabaseAdmin() };
     if (!app || !firestore || !admin) {
       console.error('[DashboardAPI] Firebase initialization failed:', { app: !!app, firestore: !!firestore, admin: !!admin });
       return NextResponse.json({ error: 'Firebase not initialized.' }, { status: 500 });

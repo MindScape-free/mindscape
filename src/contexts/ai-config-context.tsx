@@ -3,8 +3,8 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { AIProvider } from '@/ai/client-dispatcher';
-import { useUser, useFirestore } from '@/firebase';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { useUser } from '@/lib/auth-context';
+import { getSupabaseClient } from '@/lib/supabase-db';
 import { checkPollenBalanceAction } from '@/app/actions';
 
 interface AIConfig {
@@ -42,7 +42,7 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
     const [storedConfig, setStoredConfig] = useLocalStorage<AIConfig>('mindscape-ai-config', DEFAULT_CONFIG);
     const [config, setConfig] = useState<AIConfig>(DEFAULT_CONFIG);
     const { user } = useUser();
-    const firestore = useFirestore();
+    const firestore = null;
 
     const [hydrated, setHydrated] = useState(false);
     const [pollenBalance, setPollenBalance] = useState<number | null>(null);
@@ -59,11 +59,10 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
         });
     }, [setStoredConfig]);
 
-    // Track if we're currently syncing from Firestore to prevent loops
-    const isSyncingFromFirestore = React.useRef(false);
+    // Track if we're currently syncing from Supabase to prevent loops
+    const isSyncingFromSupabase = React.useRef(false);
     const lastStoredConfigRef = React.useRef<string>('');
     const configRef = React.useRef<AIConfig>(DEFAULT_CONFIG);
-    const remoteFromUserDocRef = React.useRef<Partial<AIConfig>>({});
     const remoteFromSettingsRef = React.useRef<Partial<AIConfig>>({});
 
     // Keep configRef in sync with config state
@@ -143,8 +142,8 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
 
     // Sync state with local storage on mount and when storage changes
     useEffect(() => {
-        // Only sync from localStorage if the change didn't come from Firestore
-        if (!isSyncingFromFirestore.current && storedConfig) {
+        // Only sync from localStorage if the change didn't come from Supabase
+        if (!isSyncingFromSupabase.current && storedConfig) {
             const storedConfigStr = JSON.stringify(storedConfig);
             if (storedConfigStr !== lastStoredConfigRef.current) {
                 lastStoredConfigRef.current = storedConfigStr;
@@ -155,105 +154,81 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
             }
         }
         // Reset the flag after processing
-        isSyncingFromFirestore.current = false;
+        isSyncingFromSupabase.current = false;
     }, [storedConfig]);
 
-    // Sync with Firestore on user login - REAL-TIME LISTENER
+    // Sync with Supabase on user login - REAL-TIME LISTENER
     useEffect(() => {
-        if (!user || !firestore) return;
+        if (!user) return;
 
+        const supabase = getSupabaseClient();
         console.log('🔄 Setting up AI config listener for user:', user.uid);
 
-        const applyRemoteConfig = () => {
+        const applyRemoteConfig = (remoteConfig: Partial<AIConfig>) => {
             const merged = {
                 ...configRef.current,
-                ...remoteFromUserDocRef.current,
-                ...remoteFromSettingsRef.current,
+                ...remoteConfig,
             };
             const newConfigStr = JSON.stringify(merged);
             if (newConfigStr !== lastStoredConfigRef.current) {
                 lastStoredConfigRef.current = newConfigStr;
-                isSyncingFromFirestore.current = true;
+                isSyncingFromSupabase.current = true;
                 setConfig(merged);
                 setStoredConfig(merged);
-                console.log('✅ AI Config synced from Firestore');
+                console.log('✅ AI Config synced from Supabase');
             }
-            // Always fetch balance after Firestore sync if key is present,
-            // regardless of whether config changed (handles page refresh case)
+            // Always fetch balance after sync if key is present
             if (merged.pollinationsApiKey) {
                 refreshBalance(merged.pollinationsApiKey);
             }
         };
 
-        // Listen to legacy /users/{uid} apiSettings (for backwards compatibility)
-        const userRef = doc(firestore, 'users', user.uid);
-        const unsubscribeUserDoc = onSnapshot(userRef, (snap) => {
-            const data = snap.data();
-            const settings = data?.apiSettings;
-            const remoteConfig: Partial<AIConfig> = {};
+        // 1. Initial fetch
+        const fetchSettings = async () => {
+            const { data, error } = await supabase
+                .from('user_settings')
+                .select('pollinations_api_key, image_model, text_model')
+                .eq('user_id', user.uid)
+                .single();
 
-            if (settings) {
-                if (settings.provider) remoteConfig.provider = settings.provider;
-                if (settings.apiKey) remoteConfig.apiKey = settings.apiKey;
-                if (settings.pollinationsApiKey) remoteConfig.pollinationsApiKey = settings.pollinationsApiKey;
-                
-                // Intelligent Migration for legacy settings
-                if (settings.pollinationsModel) {
-                    remoteConfig.pollinationsModel = settings.pollinationsModel;
-                    const isImageModel = ['flux', 'qwen-vl', 'turbo', 'vision'].some(m => settings.pollinationsModel.toLowerCase().includes(m));
-                    if (isImageModel) {
-                        remoteConfig.imageModel = settings.pollinationsModel;
-                    } else {
-                        remoteConfig.textModel = settings.pollinationsModel;
-                    }
+            if (!error && data) {
+                applyRemoteConfig({
+                    pollinationsApiKey: data.pollinations_api_key || '',
+                    imageModel: data.image_model || '',
+                    textModel: data.text_model || '',
+                });
+            }
+            setHydrated(true);
+        };
+
+        fetchSettings();
+
+        // 2. Realtime subscription
+        const channel = supabase
+            .channel(`public:user_settings:user_id=eq.${user.uid}`)
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'user_settings', 
+                filter: `user_id=eq.${user.uid}` 
+            }, (payload) => {
+                console.log('🔔 AI Config Realtime update:', payload);
+                const data = payload.new as any;
+                if (data) {
+                    applyRemoteConfig({
+                        pollinationsApiKey: data.pollinations_api_key || '',
+                        imageModel: data.image_model || '',
+                        textModel: data.text_model || '',
+                    });
                 }
-                if (settings.textModel) remoteConfig.textModel = settings.textModel;
-                if (settings.imageModel) remoteConfig.imageModel = settings.imageModel;
-            } else {
-                // If snap exists but no apiSettings, clear any stale keys
-                remoteConfig.apiKey = '';
-                remoteConfig.pollinationsApiKey = '';
-            }
+            })
+            .subscribe();
 
-            remoteFromUserDocRef.current = remoteConfig;
-            applyRemoteConfig();
-            setHydrated(true);
-        }, (error) => {
-            console.error("Failed to sync AI config from Firestore (user doc)", error);
-            setHydrated(true);
-        });
-
-
-        // Listen to new /users/{uid}/settings/imageGeneration (preferred storage place)
-        const settingsRef = doc(firestore, 'users', user.uid, 'settings', 'imageGeneration');
-        const unsubscribeSettings = onSnapshot(settingsRef, (snap) => {
-            const data = snap.data();
-            const remoteConfig: Partial<AIConfig> = {};
-
-            if (data) {
-                if (data.pollinationsApiKey) remoteConfig.pollinationsApiKey = data.pollinationsApiKey;
-                if (data.preferredModel) remoteConfig.imageModel = data.preferredModel;
-                if (data.imageModel) remoteConfig.imageModel = data.imageModel;
-                if (data.textModel) remoteConfig.textModel = data.textModel;
-            }
-
-            remoteFromSettingsRef.current = remoteConfig;
-            applyRemoteConfig();
-            setHydrated(true);
-        }, (error) => {
-            console.error("Failed to sync AI config from Firestore (settings doc)", error);
-            setHydrated(true);
-        });
-
-    // Balance updates are now event-driven (triggered after AI actions)
-    // No more background SSE/Polling stream needed
-
-    return () => {
-        console.log('🔄 Cleaning up AI config listener');
-        unsubscribeUserDoc();
-        unsubscribeSettings();
-    };
-    }, [user, firestore, setStoredConfig, refreshBalance]);
+        return () => {
+            console.log('🔄 Cleaning up AI config listener');
+            supabase.removeChannel(channel);
+        };
+    }, [user, setStoredConfig, refreshBalance]);
 
     return (
         <AIConfigContext.Provider value={{ config, updateConfig, resetConfig, pollenBalance, isBalanceLoading, refreshBalance }}>

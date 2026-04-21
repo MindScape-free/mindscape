@@ -7,6 +7,7 @@ interface UseTextToSpeechOptions {
   onError?: (error: string) => void;
   onStart?: () => void;
   onEnd?: () => void;
+  onGenerated?: () => void; // called once after successful generation
 }
 
 export function useTextToSpeech(options: UseTextToSpeechOptions = {}) {
@@ -60,6 +61,9 @@ export function useTextToSpeech(options: UseTextToSpeechOptions = {}) {
 
       setIsPlaying(true);
       await audio.play();
+
+      // Fire onGenerated after successful audio creation
+      options.onGenerated?.();
     } catch (error: any) {
       console.error('TTS Error:', error);
       options.onError?.(error.message || 'Failed to generate audio');

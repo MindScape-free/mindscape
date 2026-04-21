@@ -26,6 +26,8 @@ interface StreamInput {
   pdfContext?: { summary: string; concepts: { title: string; description: string }[] };
   usePdfContext?: boolean;
   sessionId?: string;
+  model?: string;
+  apiKey?: string;
 }
 
 export function useStreamingChat(options: StreamingChatOptions = {}): StreamingChatResult {

@@ -3,8 +3,8 @@
 import { useEffect, useRef } from 'react';
 import { useAIConfig } from '@/contexts/ai-config-context';
 import { useToast } from '@/hooks/use-toast';
-import { useUser, useFirestore } from '@/firebase';
-import { saveUserApiKey } from '@/lib/firestore-helpers';
+import { useUser } from '@/lib/auth-context';
+import { getSupabaseClient, saveUserApiKey } from '@/lib/supabase-db';
 
 /**
  * PollinationsAuthHandler component
@@ -14,7 +14,7 @@ export function PollinationsAuthHandler() {
     const { updateConfig, config } = useAIConfig();
     const { toast } = useToast();
     const { user } = useUser();
-    const firestore = useFirestore();
+    const supabase = getSupabaseClient();
     const isProcessing = useRef(false);
 
     useEffect(() => {
@@ -29,26 +29,19 @@ export function PollinationsAuthHandler() {
             const params = new URLSearchParams(hash);
             const apiKey = params.get('api_key');
 
-            if (apiKey && user && firestore) {
+            if (apiKey && user) {
                 isProcessing.current = true;
                 console.log('🌸 Pollinations API Key detected in hash');
 
                 try {
-                    // Update the config context (saves to localStorage)
-                    // This is now memoized in the context
                     updateConfig({
                         pollinationsApiKey: apiKey,
                         provider: 'pollinations'
                     });
 
-                    // Clear the hash from the URL IMMEDIATELY without refresh
-                    // This prevents handleHash from re-triggering if the effect re-runs
                     window.history.replaceState(null, '', window.location.pathname + window.location.search);
 
-                    // Use the centralized helper to persist to Firestore (both locations)
-                    await saveUserApiKey(firestore, user.uid, apiKey, config.pollinationsModel || 'flux');
-
-                    console.log('✅ Pollinations API key saved to Firestore via helper');
+                    await saveUserApiKey(supabase, user.uid, apiKey, config.pollinationsModel || 'flux');
 
                     // Show success toast
                     toast({
@@ -74,7 +67,7 @@ export function PollinationsAuthHandler() {
         // Also listen for hash changes
         window.addEventListener('hashchange', handleHash);
         return () => window.removeEventListener('hashchange', handleHash);
-    }, [updateConfig, toast, user, firestore]);
+    }, [updateConfig, toast, user, supabase]);
 
     return null;
 }

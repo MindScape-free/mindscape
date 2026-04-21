@@ -12,13 +12,14 @@ const ChatStreamInputSchema = z.object({
   usePdfContext: z.boolean().optional(),
   sessionId: z.string().optional(),
   apiKey: z.string().optional(),
+  model: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const input = ChatStreamInputSchema.parse(body);
-    const { apiKey: effectiveApiKey, topic, persona, history, question, attachments, pdfContext } = input;
+    const { apiKey: effectiveApiKey, topic, persona, history, question, attachments, pdfContext, model: requestedModel } = input;
 
     const apiKey = effectiveApiKey || process.env.POLLINATIONS_API_KEY;
 
@@ -155,7 +156,7 @@ Provide your response as plain text (no JSON wrapper). Stream the response word 
             },
             body: JSON.stringify({
               messages,
-              model: 'openai',
+              model: requestedModel || 'openai',
               stream: true,
               max_tokens: 8192,
             })

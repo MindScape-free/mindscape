@@ -41,8 +41,7 @@ import { ModelSelector } from '@/components/model-selector';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useUser, useFirestore } from '@/firebase';
-import { getUserImageSettings } from '@/lib/firestore-helpers';
+import { useAIConfig } from '@/contexts/ai-config-context';
 
 interface ImageGenerationDialogProps {
     isOpen: boolean;
@@ -149,8 +148,7 @@ export function ImageGenerationDialog({
     const [colorPalette, setColorPalette] = useState<string>('none');
     const [lighting, setLighting] = useState<string>('none');
 
-    const { user } = useUser();
-    const firestore = useFirestore();
+    const { config } = useAIConfig();
 
     // Sync prompt with initialPrompt when it changes
     React.useEffect(() => {
@@ -163,20 +161,12 @@ export function ImageGenerationDialog({
             setColorPalette('none');
             setLighting('none');
 
-            // Load user's preferred model
-            if (user && firestore) {
-                getUserImageSettings(firestore, user.uid).then(settings => {
-                    if (settings?.preferredModel) {
-                        let prefModel = settings.preferredModel;
-                        if (prefModel === 'flux-pro' || prefModel === 'klein-large' || prefModel === 'klein') prefModel = 'flux';
-                        setModel(prefModel);
-                    }
-                });
-            } else {
-                setModel('flux');
-            }
+            // Use imageModel from AIConfigContext (already synced from supabase)
+            const savedModel = config.imageModel || 'flux';
+            const normalized = (savedModel === 'flux-pro' || savedModel === 'klein-large' || savedModel === 'klein') ? 'flux' : savedModel;
+            setModel(normalized);
         }
-    }, [initialPrompt, isOpen, user, firestore]);
+    }, [initialPrompt, isOpen, config.imageModel]);
 
     const handleEnhance = async () => {
         const enhanced = await onEnhancePrompt(prompt, selectedStyle, composition, mood, colorPalette, lighting);

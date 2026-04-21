@@ -3,13 +3,13 @@
 import React from 'react';
 import { FeedbackForm } from '@/components/feedback/FeedbackForm';
 import { FeedbackFeed } from '@/components/feedback/FeedbackFeed';
-import { useFirebase } from '@/firebase';
+import { useUser } from '@/lib/auth-context';
 import { MessageSquare } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 
 export default function FeedbackPage() {
-    const { user } = useFirebase();
+    const { user } = useUser();
 
     return (
         <div className="min-h-screen bg-[#0D0D0D] text-[#EAEAEA] font-sans selection:bg-primary/30 overflow-x-hidden">

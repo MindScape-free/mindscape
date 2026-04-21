@@ -9,6 +9,7 @@ import { MindMapData, NestedExpansionItem, MindMapWithId } from '@/types/mind-ma
 import { PinnedMessage } from '@/types/chat';
 import { NeuralLoader } from '@/components/loading/neural-loader';
 import { safeGetItem, safeRemoveItem } from '@/lib/storage';
+import { useXP } from '@/contexts/xp-context';
 import dynamic from 'next/dynamic';
 
 const ChatPanel = dynamic(() => import('@/components/chat-panel').then(mod => mod.ChatPanel), {
@@ -41,11 +42,8 @@ import {
   TooltipProvider,
 } from '@/components/ui/tooltip';
 import type { GenerateMindMapOutput } from '@/ai/flows/generate-mind-map';
-import {
-  useUser,
-  useFirestore,
-} from '@/firebase';
-import { collection, getDocs, query, where, doc, getDoc, limit, increment, updateDoc, serverTimestamp, setDoc, deleteDoc } from 'firebase/firestore';
+import { useUser } from '@/lib/auth-context';
+import { getSupabaseClient } from '@/lib/supabase-db';
 import {
   generateMindMapAction,
   generateMindMapFromImageAction,
@@ -75,8 +73,9 @@ function MindMapPageContent() {
   const { params, navigateToMap, changeLanguage, regenerate, clearRegenFlag, getParamKey, router } = useMindMapRouter();
   const { toast } = useToast();
   const { user, isUserLoading } = useUser();
-  const firestore = useFirestore();
+  const supabase = getSupabaseClient();
   const { config, refreshBalance } = useAIConfig();
+  const { awardXP } = useXP();
 
   const [mode, setMode] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -317,9 +316,8 @@ function MindMapPageContent() {
             currentMode = 'saved';
             let topicToRegen = params.topic || (mindMapsRef.current.find((m: any) => m.id === effectiveMapId)?.topic);
             if (!topicToRegen && user) {
-              const docRef = doc(firestore, 'users', user.uid, 'mindmaps', effectiveMapId);
-              const snap = await getDoc(docRef);
-              topicToRegen = snap.data()?.topic;
+              const { data: mapRow } = await supabase.from('mindmaps').select('topic').eq('id', effectiveMapId).eq('user_id', user.uid).single();
+              topicToRegen = mapRow?.topic;
             }
 
             if (!topicToRegen) throw new Error("Could not determine topic for regeneration.");
@@ -345,104 +343,29 @@ function MindMapPageContent() {
           } else if (effectiveMapId) {
             currentMode = 'saved';
 
-            // Priority 1: Explicit shared or public params
-            if (params.sharedMapId) {
-              const tryIds = [params.sharedMapId];
-              if (!params.sharedMapId.startsWith('share_')) tryIds.push(`share_${params.sharedMapId}`);
-              
-              for (const id of tryIds) {
-                const sharedDocRef = doc(firestore, 'sharedMindmaps', id);
-                const sharedSnap = await getDoc(sharedDocRef);
-                if (sharedSnap.exists()) {
-                  result.data = { ...sharedSnap.data(), id: sharedSnap.id } as any;
-                  break;
-                }
+            // Shared map
+            if (params.sharedMapId || params.mapId?.startsWith('share_')) {
+              const shareId = params.sharedMapId || params.mapId!;
+              const { data: row } = await supabase.from('shared_mindmaps').select('*').eq('id', shareId).single();
+              if (row) result.data = { ...row, ...(row.content || {}), id: row.id } as any;
+            } else if (params.publicMapId || params.mapId?.startsWith('public_')) {
+              const pubId = params.publicMapId || params.mapId!;
+              const { data: row } = await supabase.from('public_mindmaps').select('*').eq('id', pubId).single();
+              if (row) {
+                result.data = { ...row, ...(row.content || {}), id: row.id } as any;
+                await supabase.from('public_mindmaps').update({ public_views: (row.public_views || 0) + 1 }).eq('id', pubId);
               }
-            } else if (params.publicMapId) {
-              const tryIds = [params.publicMapId];
-              if (!params.publicMapId.startsWith('public_')) tryIds.push(`public_${params.publicMapId}`);
-
-              for (const id of tryIds) {
-                const publicDocRef = doc(firestore, 'publicMindmaps', id);
-                const publicSnap = await getDoc(publicDocRef);
-                if (publicSnap.exists()) {
-                  const publicData = publicSnap.data();
-                  result.data = { ...publicData, id: publicSnap.id } as any;
-                  const ownerId = publicData?.ownerId || publicData?.userId;
-                  if (ownerId) {
-                    const userMapRef = doc(firestore, 'users', ownerId, 'mindmaps', id);
-                    const userMapSnap = await getDoc(userMapRef);
-                    if (userMapSnap.exists()) {
-                      await updateDoc(userMapRef, { publicViews: increment(1) });
-                    }
-                  }
-                  await updateDoc(publicDocRef, { publicViews: increment(1) });
-                  break;
-                }
-              }
-            }
-            // Priority 2: mapId with share_ or public_ prefix (common for shared links)
-            else if (params.mapId?.startsWith('share_')) {
-              const sharedDocRef = doc(firestore, 'sharedMindmaps', params.mapId);
-              const sharedSnap = await getDoc(sharedDocRef);
-              if (sharedSnap.exists()) {
-                result.data = { ...sharedSnap.data(), id: sharedSnap.id } as any;
-              }
-            } else if (params.mapId?.startsWith('public_')) {
-              const publicDocRef = doc(firestore, 'publicMindmaps', params.mapId);
-              const publicSnap = await getDoc(publicDocRef);
-              if (publicSnap.exists()) {
-                const publicData = publicSnap.data();
-                result.data = { ...publicData, id: publicSnap.id } as any;
-                const ownerId = publicData?.ownerId || publicData?.userId;
-                if (ownerId) {
-                  const userMapRef = doc(firestore, 'users', ownerId, 'mindmaps', params.mapId);
-                  const userMapSnap = await getDoc(userMapRef);
-                  if (userMapSnap.exists()) {
-                    await updateDoc(userMapRef, { publicViews: increment(1) });
-                  }
-                }
-                await updateDoc(publicDocRef, { publicViews: increment(1) });
-              }
-            }
-            // Priority 3: Private mind map (requires user or explicit ownerId for admins)
-            else if ((user || params.ownerId) && params.mapId) {
+            } else if ((user || params.ownerId) && params.mapId) {
               const targetUid = params.ownerId || user?.uid;
               if (targetUid) {
-                const docRef = doc(firestore, 'users', targetUid, 'mindmaps', params.mapId);
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                  const meta = docSnap.data();
-                  if (meta.hasSplitContent) {
-                    const contentRef = doc(firestore, 'users', targetUid, 'mindmaps', params.mapId, 'content', 'tree');
-                    const contentSnap = await getDoc(contentRef);
-                    if (contentSnap.exists()) {
-                      result.data = { ...contentSnap.data(), ...meta, id: docSnap.id } as any;
-                    } else {
-                      result.data = { ...meta, id: docSnap.id } as any;
-                    }
-                  } else {
-                    result.data = { ...meta, id: docSnap.id } as any;
-                  }
-                }
+                const { data: row } = await supabase.from('mindmaps').select('*').eq('id', params.mapId).eq('user_id', targetUid).single();
+                if (row) result.data = { ...row, ...(row.content || {}), id: row.id } as any;
               }
             }
-            
-            // Priority 4: Final fallback for public/shared maps if mapId was provided but not found in user's private collection
+            // Fallback: try public_mindmaps
             if (!result.data && params.mapId) {
-              // Try publicMindmaps first
-              const publicDocRef = doc(firestore, 'publicMindmaps', params.mapId);
-              const publicSnap = await getDoc(publicDocRef);
-              if (publicSnap.exists()) {
-                result.data = { ...publicSnap.data(), id: publicSnap.id } as any;
-              } else {
-                // Try sharedMindmaps
-                const sharedDocRef = doc(firestore, 'sharedMindmaps', params.mapId);
-                const sharedSnap = await getDoc(sharedDocRef);
-                if (sharedSnap.exists()) {
-                  result.data = { ...sharedSnap.data(), id: sharedSnap.id } as any;
-                }
-              }
+              const { data: row } = await supabase.from('public_mindmaps').select('*').eq('id', params.mapId).single();
+              if (row) result.data = { ...row, ...(row.content || {}), id: row.id } as any;
             }
 
             if (!result.data && !result.error) {
@@ -696,18 +619,15 @@ function MindMapPageContent() {
     };
 
     fetchMindMapData();
-  }, [getParamKey, user, isUserLoading, handleSaveMap, toast, firestore, params, config, aiPersona, setMindMaps, setActiveMindMapIndexState, activeMindMapIndex, navigateToMap, isLoading, handleUpdateCurrentMap, setActiveMindMapIndex]);
+  }, [getParamKey, user, isUserLoading, handleSaveMap, toast, params, config, aiPersona, setMindMaps, setActiveMindMapIndexState, activeMindMapIndex, navigateToMap, isLoading, handleUpdateCurrentMap, setActiveMindMapIndex]);
 
 
   // Track views for community maps
   useEffect(() => {
-    if (mindMap?.id && (mindMap as any).isPublic && firestore) {
-      const publicDocRef = doc(firestore, 'publicMindmaps', mindMap.id);
-      updateDoc(publicDocRef, {
-        views: increment(1)
-      }).catch(err => console.warn("Failed to increment views:", err));
+    if (mindMap?.id && (mindMap as any).isPublic) {
+      supabase.from('public_mindmaps').update({ views: supabase.rpc('increment', { x: 1 }) }).eq('id', mindMap.id).catch(() => {});
     }
-  }, [mindMap?.id, (mindMap as any)?.isPublic, firestore]);
+  }, [mindMap?.id, (mindMap as any)?.isPublic]);
 
 
   // 4. Auto-Save Effect
@@ -741,94 +661,41 @@ function MindMapPageContent() {
 
   // Fetch complete map hierarchy (root + all sub-maps)
   const fetchMapHierarchy = useCallback(async (currentMapData: MindMapData) => {
-    if (!user || !firestore) return;
-
+    if (!user) return;
     try {
       const currentMapId = (currentMapData as any).id;
       if (!currentMapId) return;
-
       let rootMapId = currentMapId;
       let rootMapData: { id: string; topic: string; icon?: string } | null = null;
-
-      // Step 1: Find the root parent by traversing up
       if ((currentMapData as any).parentMapId) {
         let parentId = (currentMapData as any).parentMapId;
         let iterations = 0;
-        const maxIterations = 10; // Prevent infinite loops
-
-        while (parentId && iterations < maxIterations) {
-          const parentRef = doc(firestore, 'users', user.uid, 'mindmaps', parentId);
-          const parentSnap = await getDoc(parentRef);
-
-          if (parentSnap.exists()) {
-            const parentData = parentSnap.data();
-            rootMapId = parentId;
-            rootMapData = {
-              id: parentId,
-              topic: parentData.topic || 'Untitled',
-              icon: parentData.icon
-            };
-
-            // Check if this parent also has a parent
-            parentId = parentData.parentMapId;
-          } else {
-            break;
-          }
+        while (parentId && iterations < 10) {
+          const { data: p } = await supabase.from('mindmaps').select('id,topic,icon,parent_map_id').eq('id', parentId).eq('user_id', user.uid).single();
+          if (p) { rootMapId = parentId; rootMapData = { id: parentId, topic: p.topic || 'Untitled', icon: p.icon }; parentId = p.parent_map_id; }
+          else break;
           iterations++;
         }
       } else {
-        // Current map is the root
-        rootMapData = {
-          id: currentMapId,
-          topic: currentMapData.topic,
-          icon: currentMapData.icon
-        };
+        rootMapData = { id: currentMapId, topic: currentMapData.topic, icon: currentMapData.icon };
       }
-
-      // Step 2: Fetch all sub-maps that belong to this family tree recursively
       const allSubMaps: NestedExpansionItem[] = [];
       const visitedIds = new Set<string>();
-
       const fetchDescendants = async (parentId: string, parentName: string, currentDepth: number) => {
-        const subMapsQuery = query(
-          collection(firestore, 'users', user.uid, 'mindmaps'),
-          where('parentMapId', '==', parentId)
-        );
-        const subMapsSnap = await getDocs(subMapsQuery);
-
-        const childPromises = subMapsSnap.docs.map(async (d) => {
-          if (visitedIds.has(d.id)) return;
-          visitedIds.add(d.id);
-
-          const subMapData = { ...d.data(), id: d.id } as MindMapWithId;
-          allSubMaps.push({
-            id: d.id,
-            topic: subMapData.topic,
-            parentName: parentName,
-            icon: subMapData.icon || 'file-text',
-            subCategories: [],
-            createdAt: typeof subMapData.createdAt === 'number' ? subMapData.createdAt : Date.now(),
-            depth: currentDepth,
-            fullData: subMapData,
-            status: 'completed'
-          });
-
-          // Recursively fetch children of this map
-          await fetchDescendants(d.id, subMapData.topic, currentDepth + 1);
-        });
-
-        await Promise.all(childPromises);
+        const { data: children } = await supabase.from('mindmaps').select('id,topic,icon,created_at,content,parent_map_id').eq('user_id', user.uid).eq('parent_map_id', parentId);
+        if (!children) return;
+        for (const child of children) {
+          if (visitedIds.has(child.id)) continue;
+          visitedIds.add(child.id);
+          const subMapData = { ...child, ...(child.content || {}), id: child.id } as MindMapWithId;
+          allSubMaps.push({ id: child.id, topic: child.topic, parentName, icon: child.icon || 'file-text', subCategories: [], createdAt: new Date(child.created_at).getTime(), depth: currentDepth, fullData: subMapData, status: 'completed' });
+          await fetchDescendants(child.id, child.topic, currentDepth + 1);
+        }
       };
-
-      if (rootMapId) {
-        await fetchDescendants(rootMapId, rootMapData?.topic || 'Parent', 1);
-      }
-
+      if (rootMapId) await fetchDescendants(rootMapId, rootMapData?.topic || 'Parent', 1);
       setMapHierarchy({ rootMap: rootMapData, allSubMaps });
-    } catch (error) {
-      console.error('Error fetching map hierarchy:', error);
-    }
-  }, [user, firestore]);
+    } catch (error) { console.error('Error fetching map hierarchy:', error); }
+  }, [user]);
 
   // Update hierarchy when mindMap changes
   useEffect(() => {
@@ -843,6 +710,26 @@ function MindMapPageContent() {
       setUseFileAwareContext(true);
     }
   }, [mindMap]);
+
+  // Study time tracking — award XP every 10 min of active canvas time
+  useEffect(() => {
+    let seconds = 0;
+    let visible = !document.hidden;
+    const onVisibility = () => { visible = !document.hidden; };
+    document.addEventListener('visibilitychange', onVisibility);
+    const interval = setInterval(() => {
+      if (visible) {
+        seconds += 10;
+        if (seconds % 600 === 0) {
+          awardXP('STUDY_TIME_CANVAS').catch(() => {});
+        }
+      }
+    }, 10000);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [awardXP]);
 
   const onMapUpdate = useCallback((updatedData: Partial<MindMapData> | ((prev: MindMapData) => Partial<MindMapData>)) => {
     const currentMap = mindMapRef.current;
@@ -861,11 +748,11 @@ function MindMapPageContent() {
 
     if (hasActualChanges) {
       // If subTopics changed (quiz deepening), update mindMapRef IMMEDIATELY
-      // before scheduling the React state update. This prevents the Firestore
+      // before scheduling the React state update. This prevents the supabase
       // real-time listener from overwriting new nodes with stale local data.
       if ('subTopics' in resolved) {
         const mergedMap = { ...currentMap, ...resolved } as MindMapData;
-        // Update ref FIRST so the Firestore listener has the correct data when it fires
+        // Update ref FIRST so the supabase listener has the correct data when it fires
         mindMapRef.current = mergedMap;
         handleUpdateCurrentMap(resolved);
         setHasUnsavedChanges(true);
@@ -950,13 +837,14 @@ function MindMapPageContent() {
 
       await expandNode(subTopic, nodeId || `sub-${Date.now()}`, { mode, parentDepth: parentAbsoluteDepth, branchDepth });
       refreshBalance();
+      awardXP('SUB_MAP_CREATED', { topic: subTopic }).catch(() => {});
       if (mode === 'foreground') {
         toast({ title: "Sub-Map Generated", description: `Created detailed map for "${subTopic}".` });
       }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Generation Failed", description: error.message });
     }
-  }, [user, firestore, expandNode, mindMaps.length, setMindMaps, setActiveMindMapIndex, toast, mindMap?.id, mapHierarchy]);
+  }, [user, expandNode, mindMaps.length, setMindMaps, setActiveMindMapIndex, toast, mindMap?.id, mapHierarchy]);
 
   const handleDeleteNestedMap = useCallback(async (id: string) => {
     if (!mindMap) return;
@@ -980,18 +868,9 @@ function MindMapPageContent() {
       }
     }
 
-    // Delete the sub-map in Firestore
-    if (user && firestore) {
-      try {
-        const subMapRef = doc(firestore, 'users', user.uid, 'mindmaps', id);
-        await deleteDoc(subMapRef);
-      } catch (err) {
-        console.error("Failed to delete sub-map:", err);
-      }
-    }
-
+    if (user) await supabase.from('mindmaps').delete().eq('id', id).eq('user_id', user.uid).catch(console.error);
     toast({ title: "Nested Map Deleted", description: "The link has been removed." });
-  }, [mindMap, handleUpdateCurrentMap, handleSaveMap, toast, user, firestore]);
+  }, [mindMap, handleUpdateCurrentMap, handleSaveMap, toast, user]);
 
   const handleRegenerateNestedMap = useCallback(async (topic: string, id: string) => {
     if (!mindMap) return;
@@ -1032,22 +911,13 @@ function MindMapPageContent() {
 
     let finalMapData = mapData || { id: expansionId };
     const mapIdToFetch = mapData?.id || expansionId;
-    if (mapIdToFetch && user && firestore) {
+    if (mapIdToFetch && user) {
       try {
-        const snap = await getDoc(doc(firestore, 'users', user.uid, 'mindmaps', mapIdToFetch));
-        if (snap.exists()) {
-          finalMapData = { ...snap.data(), id: snap.id };
-        } else if (!mapData) {
-          // If we couldn't fetch and have no fallback data, show error
-          toast({ variant: "destructive", title: "Cannot Open Map", description: "This map could not be found." });
-          return;
-        }
+        const { data: row } = await supabase.from('mindmaps').select('*').eq('id', mapIdToFetch).eq('user_id', user.uid).single();
+        if (row) finalMapData = { ...row, ...(row.content || {}), id: row.id };
+        else if (!mapData) { toast({ variant: "destructive", title: "Cannot Open Map", description: "This map could not be found." }); return; }
       } catch (e) {
-        console.warn("Error fetching sub-map data.", e);
-        if (!mapData) {
-          toast({ variant: "destructive", title: "Cannot Open Map", description: "Failed to load map data." });
-          return;
-        }
+        if (!mapData) { toast({ variant: "destructive", title: "Cannot Open Map", description: "Failed to load map data." }); return; }
       }
     }
 
@@ -1064,52 +934,25 @@ function MindMapPageContent() {
     }
 
     navigateToMap(finalMapData.id || '', finalMapData.topic);
-  }, [mindMaps, navigateToMap, toast, setMindMaps, setActiveMindMapIndex, user, firestore]);
+  }, [mindMaps, navigateToMap, toast, setMindMaps, setActiveMindMapIndex, user]);
 
   const handleShare = useCallback(async () => {
-    if (!mindMap || isSharing || !firestore) return;
-
+    if (!mindMap || isSharing) return;
     setIsSharing(true);
     try {
-      // 1. Generate a stable share ID based on the original mapId
       const shareId = `share_${mindMap.id}`;
-
-      // 2. Prepare the snapshot data (flat document)
-      const snapshot = {
-        ...toPlainObject(mindMap),
-        id: shareId,
-        originalMapId: mindMap.id,
-        originalAuthorId: user?.uid || 'anonymous',
-        isShared: true,
-        sharedAt: Date.now(),
-        updatedAt: serverTimestamp(),
-      };
-
-      // 3. Save directly via Client SDK
-      // This uses the user's active session and avoids Server Action auth issues
-      await setDoc(doc(firestore, 'sharedMindmaps', shareId), snapshot);
-
-      // 4. Construct and copy the link
-      const baseUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
-      const shareUrl = `${baseUrl}/canvas?mapId=${shareId}`;
-
-      await navigator.clipboard.writeText(shareUrl);
-
-      toast({
-        title: "Link Copied!",
-        description: "Anyone with this link can now view this mind map.",
-      });
+      await supabase.from('shared_mindmaps').upsert({
+        id: shareId, original_map_id: mindMap.id, original_author_id: user?.uid || 'anonymous',
+        content: toPlainObject(mindMap), is_shared: true,
+        shared_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      }, { onConflict: 'id' });
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+      await navigator.clipboard.writeText(`${baseUrl}/canvas?mapId=${shareId}`);
+      toast({ title: "Link Copied!", description: "Anyone with this link can now view this mind map." });
     } catch (err: any) {
-      console.error('Error sharing mind map:', err);
-      toast({
-        variant: "destructive",
-        title: "Sharing Failed",
-        description: err.message || "Failed to generate share link.",
-      });
-    } finally {
-      setIsSharing(false);
-    }
-  }, [mindMap, isSharing, firestore, user, toast]);
+      toast({ variant: "destructive", title: "Sharing Failed", description: err.message || "Failed to generate share link." });
+    } finally { setIsSharing(false); }
+  }, [mindMap, isSharing, user, toast]);
 
   if (isLoading) return <NeuralLoader />;
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { getSupabaseClient } from '@/lib/supabase-db';
 import React, { useState } from 'react';
 import { Feedback } from '@/types/feedback';
 import { AdminActivityLogEntry } from '@/ai/schemas/feedback-schema';
@@ -41,8 +42,8 @@ const safeFormat = (date: any, fmt: string) => {
   return format(d, fmt);
 };
 import { useToast } from '@/hooks/use-toast';
-import { useFirebase } from '@/firebase';
-import { doc, updateDoc, serverTimestamp, arrayUnion } from 'firebase/firestore';
+import { useUser } from '@/lib/auth-context';
+// firebase/firestore removed
 
 interface FeedbackCardsProps {
   data: Feedback[];
@@ -53,7 +54,7 @@ interface FeedbackCardsProps {
 
 export const FeedbackCards: React.FC<FeedbackCardsProps> = ({ data, onRefresh, adminUserId, isLoading }) => {
   const { toast } = useToast();
-  const { firestore } = useFirebase();
+  const supabase = getSupabaseClient();
   const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);

@@ -34,7 +34,7 @@ import {
     Search,
     FileText,
     Pin,
-    Trash2
+    Trash2,
 } from 'lucide-react';
 import {
     Select,

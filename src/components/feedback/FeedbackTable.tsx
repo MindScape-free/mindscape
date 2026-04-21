@@ -1,5 +1,6 @@
 'use client';
 
+import { getSupabaseClient } from '@/lib/supabase-db';
 import React, { useState } from 'react';
 import { Feedback } from '@/types/feedback';
 import { FeedbackBadge } from './FeedbackBadge';
@@ -54,8 +55,8 @@ const safeFormat = (date: any, fmt: string) => {
 };
 import { updateFeedbackAction } from '@/app/actions/feedback';
 import { useToast } from '@/hooks/use-toast';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { useFirebase } from '@/firebase';
+// firebase/firestore removed
+import { useUser } from '@/lib/auth-context';
 
 interface FeedbackTableProps {
     data: Feedback[];
@@ -70,7 +71,7 @@ export const FeedbackTable: React.FC<FeedbackTableProps> = ({ data, onRefresh, a
     const [isUpdating, setIsUpdating] = useState(false);
     const [adminNotes, setAdminNotes] = useState('');
 
-    const { firestore } = useFirebase();
+    const supabase = getSupabaseClient();
 
     const handleUpdateStatus = async (id: string, status: string) => {
         setIsUpdating(true);

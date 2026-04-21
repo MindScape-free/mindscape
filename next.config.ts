@@ -9,8 +9,8 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.pollinations.ai https://cdnjs.cloudflare.com https://apis.google.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https://placehold.co https://picsum.photos https://image.pollinations.ai https://gen.pollinations.ai https://*.firebaseapp.com https://*.googleusercontent.com",
-      "connect-src 'self' https://gen.pollinations.ai https://r.jina.ai https://*.firebaseio.com https://*.googleapis.com https://www.googleapis.com https://apis.google.com wss://*.firebaseio.com",
+      "img-src 'self' data: blob: https://placehold.co https://picsum.photos https://image.pollinations.ai https://gen.pollinations.ai https://pollinations.ai https://*.pollinations.ai https://*.firebaseapp.com https://*.googleusercontent.com https://grainy-gradients.vercel.app",
+      "connect-src 'self' https://dnwsjvxitcndeqepovvo.supabase.co wss://dnwsjvxitcndeqepovvo.supabase.co https://dnwsjvxitcndeqepovvo.supabase.co/auth/v1 https://gen.pollinations.ai https://image.pollinations.ai https://pollinations.ai https://*.pollinations.ai https://r.jina.ai https://*.firebaseio.com https://*.googleapis.com https://www.googleapis.com https://apis.google.com wss://*.firebaseio.com",
       "frame-src 'self' blob: data: https:",
       "child-src 'self' blob: data: https:",
       "frame-ancestors 'none'",
@@ -67,6 +67,10 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 'gen.pollinations.ai',
+      },
+      {
+        protocol: 'https',
+        hostname: 'grainy-gradients.vercel.app',
       },
     ],
   },

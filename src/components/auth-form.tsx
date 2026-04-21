@@ -4,39 +4,31 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  updateProfile,
-  GoogleAuthProvider,
-  signInWithPopup,
-  sendPasswordResetEmail,
-} from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Mail, User, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
-import { useAuth } from '@/firebase';
+import { useAuth as useSupabaseAuth } from '@/lib/auth-context';
 import { Icons } from '@/components/icons';
 import { useAdminActivityLog } from '@/lib/admin-utils';
 
 const AUTH_ERRORS: Record<string, string> = {
-  'auth/invalid-email': 'Please enter a valid email address',
-  'auth/user-not-found': 'No account found with this email',
-  'auth/wrong-password': 'Incorrect password',
-  'auth/email-already-in-use': 'An account with this email already exists',
-  'auth/weak-password': 'Password should be at least 6 characters',
-  // Firebase SDK v9+ consolidates user-not-found + wrong-password into this:
-  'auth/invalid-credential': 'Invalid email or password',
-  'auth/popup-closed-by-user': 'Sign-in was cancelled',
-  'auth/account-exists-with-different-credential': 'An account already exists with a different sign-in method',
-  'auth/network-request-failed': 'Network error. Please check your connection',
-  'auth/too-many-requests': 'Too many attempts. Please try again later',
+  'invalid_email': 'Please enter a valid email address',
+  'invalid_login': 'Invalid email or password',
+  'user_already_exists': 'An account with this email already exists',
+  'weak_password': 'Password should be at least 6 characters',
+  'popup_closed_by_user': 'Sign-in was cancelled',
+  'network_error': 'Network error. Please check your connection',
+  'rate_limit': 'Too many attempts. Please try again later',
 };
 
 function getAuthErrorMessage(error: any): string {
-  if (!error?.code) return 'An unexpected error occurred';
-  return AUTH_ERRORS[error.code] || error.message || 'An unexpected error occurred';
+  if (!error) return 'An unexpected error occurred';
+  const message = error.message || '';
+  if (message.includes('Invalid login')) return AUTH_ERRORS.invalid_login;
+  if (message.includes('already been registered')) return AUTH_ERRORS.user_already_exists;
+  if (message.includes('email')) return AUTH_ERRORS.invalid_email;
+  return message || 'An unexpected error occurred';
 }
 
 function ErrorMessage({ error }: { error: string }) {
@@ -59,7 +51,6 @@ export function AuthForm({ onSuccess }: { onSuccess?: () => void }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [username, setUsername] = useState('');
-  // Separate loading states so Google popup doesn't disable the email form
   const [isEmailLoading, setIsEmailLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
@@ -67,7 +58,7 @@ export function AuthForm({ onSuccess }: { onSuccess?: () => void }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const auth = useAuth();
+  const { signIn, signUp, signInWithGoogle, resetPassword, user } = useSupabaseAuth();
   const router = useRouter();
   const { toast } = useToast();
   const { logAdminActivity } = useAdminActivityLog();
@@ -82,7 +73,6 @@ export function AuthForm({ onSuccess }: { onSuccess?: () => void }) {
     e.preventDefault();
     if (!email || !password) return;
 
-    // Confirm password check for sign-up
     if (isSignUp && password !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -93,31 +83,38 @@ export function AuthForm({ onSuccess }: { onSuccess?: () => void }) {
 
     try {
       if (isSignUp) {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        if (username.trim()) {
-          await updateProfile(userCredential.user, { displayName: username.trim() });
-        }
+        const { error: signUpError } = await signUp(email, password, username.trim() || undefined);
         
-        // Log for admin activity
+        if (signUpError) {
+          setError(getAuthErrorMessage(signUpError));
+          setIsEmailLoading(false);
+          return;
+        }
+
         await logAdminActivity({
           type: 'USER_CREATED',
-          targetId: userCredential.user.uid,
+          targetId: user?.id || 'unknown',
           targetType: 'user',
-          performedBy: userCredential.user.uid,
+          performedBy: user?.id || 'unknown',
           performedByEmail: email,
           details: `New user registered: ${username.trim() || email}`
         });
 
         toast({ title: 'Account created successfully!' });
       } else {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const { error: signInError } = await signIn(email, password);
         
-        // Log login activity
+        if (signInError) {
+          setError(getAuthErrorMessage(signInError));
+          setIsEmailLoading(false);
+          return;
+        }
+
         await logAdminActivity({
           type: 'LOGIN',
-          targetId: userCredential.user.uid,
+          targetId: user?.id || 'unknown',
           targetType: 'user',
-          performedBy: userCredential.user.uid,
+          performedBy: user?.id || 'unknown',
           performedByEmail: email,
           details: `Admin/User login: ${email}`
         });
@@ -126,15 +123,7 @@ export function AuthForm({ onSuccess }: { onSuccess?: () => void }) {
       }
       onSuccess ? onSuccess() : router.back();
     } catch (err: any) {
-      // Firebase SDK v9+ returns auth/invalid-credential for both wrong-password
-      // and user-not-found. We handle both codes for backwards compatibility.
-      if (!isSignUp && (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential')) {
-        // Switch to sign-up mode pre-filled rather than navigating to /signup
-        // (no /signup page is linked from the dialog flow)
-        setError(getAuthErrorMessage(err));
-      } else {
-        setError(getAuthErrorMessage(err));
-      }
+      setError(getAuthErrorMessage(err));
     } finally {
       setIsEmailLoading(false);
     }
@@ -143,39 +132,20 @@ export function AuthForm({ onSuccess }: { onSuccess?: () => void }) {
   const handleGoogleLogin = async () => {
     setError(null);
     setIsGoogleLoading(true);
+    console.log('[Google Login] Starting OAuth flow...');
     try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const tokenResponse = (result as any)._tokenResponse;
-      const isNewUser = tokenResponse?.isNewUser;
-
-      if (isNewUser || !result.user.displayName) {
-        // Log new user via Google
-        await logAdminActivity({
-          type: 'USER_CREATED',
-          targetId: result.user.uid,
-          targetType: 'user',
-          performedBy: result.user.uid,
-          performedByEmail: result.user.email || 'google-user',
-          details: `New user registered via Google: ${result.user.email}`
-        });
-        toast({ title: 'Welcome to MindScape!' });
-        onSuccess ? onSuccess() : router.push('/profile?setup=true');
-      } else {
-        // Log Google login
-        await logAdminActivity({
-          type: 'LOGIN',
-          targetId: result.user.uid,
-          targetType: 'user',
-          performedBy: result.user.uid,
-          performedByEmail: result.user.email || 'google-user',
-          details: `Google login: ${result.user.email}`
-        });
-        toast({ title: 'Welcome back!' });
-        onSuccess ? onSuccess() : router.back();
+      const result = await signInWithGoogle();
+      console.log('[Google Login] Result:', result);
+      
+      if (result.error) {
+        console.error('[Google Login] Error:', result.error);
+        if (!result.error.message?.includes('popup')) {
+          setError(getAuthErrorMessage(result.error));
+        }
       }
     } catch (err: any) {
-      if (err.code !== 'auth/popup-closed-by-user') {
+      console.error('[Google Login] Catch error:', err);
+      if (!err.message?.includes('popup')) {
         setError(getAuthErrorMessage(err));
       }
     } finally {
@@ -189,12 +159,21 @@ export function AuthForm({ onSuccess }: { onSuccess?: () => void }) {
 
     setIsEmailLoading(true);
     try {
-      await sendPasswordResetEmail(auth, email);
-      toast({
-        title: 'Reset email sent',
-        description: 'Check your email for the password reset link.',
-      });
-      setIsResettingPassword(false);
+      const { error: resetError } = await resetPassword(email);
+      
+      if (resetError) {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: getAuthErrorMessage(resetError),
+        });
+      } else {
+        toast({
+          title: 'Reset email sent',
+          description: 'Check your email for the password reset link.',
+        });
+        setIsResettingPassword(false);
+      }
     } catch (err: any) {
       toast({
         variant: 'destructive',

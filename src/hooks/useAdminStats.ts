@@ -2,7 +2,7 @@
 
 import useSWR, { mutate } from 'swr';
 import { useCallback } from 'react';
-import { useFirebase } from '@/firebase';
+import { useUser } from '@/lib/auth-context';
 
 const API_BASE = '/api/admin/stats';
 
@@ -78,16 +78,12 @@ export function useAdminStats(options?: {
   refreshInterval?: number;
   revalidateOnFocus?: boolean;
 }) {
-  const { auth, user } = useFirebase();
+  const { session, user } = useAuth();
   const { refreshInterval = 60000, revalidateOnFocus = false } = options || {};
 
   const getToken = useCallback(async (): Promise<string | null> => {
-    try {
-      return await auth?.currentUser?.getIdToken() || null;
-    } catch {
-      return null;
-    }
-  }, [auth]);
+    return session?.access_token || null;
+  }, [session]);
 
   const fetcher = useCallback(async (): Promise<StatsResponse> => {
     const token = await getToken();
@@ -128,16 +124,11 @@ export function useAdminMindmaps(options?: {
   limit?: number;
   initialData?: MindmapListItem[];
 }) {
-  const { limit = 20 } = options || {};
-  const { auth } = useFirebase();
+  const { session } = useAuth();
 
   const getToken = useCallback(async (): Promise<string | null> => {
-    try {
-      return await auth?.currentUser?.getIdToken() || null;
-    } catch {
-      return null;
-    }
-  }, [auth]);
+    return session?.access_token || null;
+  }, [session]);
 
   const fetcher = useCallback(async (): Promise<MindmapsResponse> => {
     const token = await getToken();

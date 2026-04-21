@@ -1,49 +1,26 @@
-import { initializeFirebaseServer } from '@/firebase/server';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
 import type { Feedback } from '@/types/feedback';
 
-/**
- * Get all feedback using Firebase Admin SDK.
- */
-export async function getAllFeedbackAdmin(
-    limit: number = 50,
-    orderByField: string = 'createdAt',
-    orderDirection: 'desc' | 'asc' = 'desc'
-): Promise<Feedback[]> {
-    try {
-        const { firestore } = initializeFirebaseServer();
-        if (!firestore) return [];
-
-        const snapshot = await firestore
-            .collection('feedback')
-            .orderBy(orderByField, orderDirection)
-            .limit(limit)
-            .get();
-
-        return snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        })) as Feedback[];
-    } catch (error) {
-        console.error('Error in getAllFeedbackAdmin:', error);
-        return [];
-    }
+export async function getAllFeedbackAdmin(limit = 50, orderByField = 'created_at', orderDirection: 'desc' | 'asc' = 'desc'): Promise<Feedback[]> {
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase.from('feedback').select('*').order(orderByField, { ascending: orderDirection === 'asc' }).limit(limit);
+    if (error) throw error;
+    return (data || []) as Feedback[];
+  } catch (error) {
+    console.error('Error in getAllFeedbackAdmin:', error);
+    return [];
+  }
 }
 
-/**
- * Get specific feedback by ID.
- */
 export async function getFeedbackByIdAdmin(feedbackId: string): Promise<Feedback | null> {
-    try {
-        const { firestore } = initializeFirebaseServer();
-        if (!firestore) return null;
-
-        const doc = await firestore.collection('feedback').doc(feedbackId).get();
-        if (doc.exists) {
-            return { id: doc.id, ...doc.data() } as Feedback;
-        }
-        return null;
-    } catch (error) {
-        console.error('Error in getFeedbackByIdAdmin:', error);
-        return null;
-    }
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase.from('feedback').select('*').eq('id', feedbackId).single();
+    if (error || !data) return null;
+    return data as Feedback;
+  } catch (error) {
+    console.error('Error in getFeedbackByIdAdmin:', error);
+    return null;
+  }
 }

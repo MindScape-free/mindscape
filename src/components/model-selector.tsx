@@ -6,12 +6,19 @@ import { Badge } from '@/components/ui/badge';
 import { Sparkles, Zap, Crown, Palette, Monitor, Cloud, Brain, BrainCircuit, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+function formatPollenCount(cost: number): string {
+    if (cost <= 0) return 'Free';
+    const imagesPerPollen = 1 / cost;
+    if (imagesPerPollen >= 1000000) return `${(imagesPerPollen / 1000000).toFixed(0)}M`;
+    if (imagesPerPollen >= 1000) return `${(imagesPerPollen / 1000).toFixed(0)}K`;
+    return Math.round(imagesPerPollen).toString();
+}
+
 export const FALLBACK_MODELS = [
     {
         value: 'flux',
         label: 'Flux Schnell',
         cost: 0.001,
-        badge: 'Fast',
         icon: Zap,
         description: 'Flux Schnell - High Quality & Rapid Speed (Instant)',
         isNew: false,
@@ -23,7 +30,6 @@ export type ModelItem = {
     value: string;
     label: string;
     cost: number;
-    badge: string;
     icon: any;
     description: string;
     isNew: boolean;
@@ -71,11 +77,10 @@ function mapModelsToUI(apiModels: any[], type: 'text' | 'image'): ModelItem[] {
             value: name,
             label,
             cost,
-            badge: type === 'text' ? (m.feature || 'Pro') : (cost < 0.005 ? 'Fast' : cost < 0.02 ? 'HD' : 'Pro'),
             icon: Icon,
             description: m.description || `${label} - Pollinations AI Model`,
             isNew: m.isNew ?? false,
-            pollenApprox: type === 'text' ? 'Free' : (cost > 0 ? `${Math.round(1 / cost)}K`.replace('0K', '1K') : 'Free'),
+            pollenApprox: type === 'text' ? 'Free' : (cost > 0 ? formatPollenCount(cost) : 'Free'),
             type
         };
     });
@@ -151,7 +156,7 @@ export function ModelSelector({
                             value={model.value}
                             className="focus:bg-zinc-900 focus:text-white transition-all duration-200 border-l-2 border-l-transparent focus:border-l-violet-500 rounded-none cursor-pointer"
                         >
-                            <div className="grid grid-cols-[24px_180px_100px_80px] items-center gap-4 py-2 px-1 w-full">
+                            <div className={cn("grid items-center gap-4 py-2 px-1 w-full", type === 'image' ? 'grid-cols-[24px_180px_100px_80px]' : 'grid-cols-[24px_1fr_80px]')}>
                                 <Icon className="w-4 h-4 text-zinc-400 shrink-0 group-hover:text-violet-400 transition-colors" />
 
                                 <div className="flex flex-col min-w-0 text-left">
@@ -170,14 +175,15 @@ export function ModelSelector({
                                     </span>
                                 </div>
 
-                                <div className="flex flex-col items-center justify-center gap-0.5">
-                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">
-                                        {type === 'text' ? model.badge : model.pollenApprox}
-                                    </span>
-                                    <span className="text-[8px] text-zinc-600 font-black uppercase tracking-tighter">
-                                        {type === 'text' ? 'Engine' : 'Images'}
-                                    </span>
-                                </div>
+                                {type === 'image' && (
+                                    <div className="flex flex-col items-center justify-center gap-0.5">
+                                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">
+                                            {model.pollenApprox}
+                                        </span>
+                                        <span className="text-[8px] text-zinc-600 font-black uppercase tracking-tighter">imgs/🌸</span>
+                                    </div>
+                                )}
+                                {type === 'text' && <div />}
 
                                 <div className="flex justify-end pr-1">
                                     <div className="nm-inset-glow px-2 py-0.5 rounded-lg bg-zinc-900/50 border border-white/5">

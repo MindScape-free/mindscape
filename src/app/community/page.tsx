@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Rocket, Filter, SortAsc, Users, Sparkles } from 'lucide-react';
@@ -20,8 +20,9 @@ import {
     DropdownMenuContent,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, limit, where } from 'firebase/firestore';
+import { useUser } from '@/lib/auth-context';
+import { getSupabaseClient } from '@/lib/supabase-db';
+
 import { MindMapWithId } from '@/types/mind-map';
 import { CommunityCard } from '@/components/community/community-card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -32,24 +33,32 @@ type SortOption = 'recent' | 'views';
 
 export default function CommunityPage() {
     const router = useRouter();
-    const firestore = useFirestore();
+    const supabase = getSupabaseClient();
 
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [sortOption, setSortOption] = useState<SortOption>('recent');
+    const [publicMaps, setPublicMaps] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const publicMapsQuery = useMemoFirebase(() => {
-        let q = collection(firestore, 'publicMindmaps');
-
-        // Sorting
-        if (sortOption === 'recent') {
-            return query(q, orderBy('updatedAt', 'desc'), limit(50));
-        } else {
-            return query(q, orderBy('views', 'desc'), limit(50));
+    useEffect(() => {
+        async function fetchPublicMaps() {
+            setIsLoading(true);
+            let query = supabase.from('public_mindmaps').select('*').eq('is_public', true);
+            
+            if (sortOption === 'recent') {
+                query = query.order('updated_at', { ascending: false });
+            } else {
+                query = query.order('views', { ascending: false });
+            }
+            
+            const { data } = await query.limit(50);
+            setPublicMaps(data || []);
+            setIsLoading(false);
         }
-    }, [firestore, sortOption]);
-
-    const { data: publicMaps, isLoading } = useCollection<MindMapWithId>(publicMapsQuery);
+        
+        fetchPublicMaps();
+    }, [sortOption, supabase]);
 
     // Categories extraction
     const categories = useMemo(() => {

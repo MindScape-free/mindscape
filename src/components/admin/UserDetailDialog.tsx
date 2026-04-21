@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useFirebase } from '@/firebase';
+import { useUser, useFirestore } from '@/lib/auth-context';
 import { useAdminActivityLog } from '@/lib/admin-utils';
-import { doc, deleteDoc, collection, getCountFromServer, getDocs, query, orderBy } from 'firebase/firestore';
+// firebase/firestore removed
 import { format } from 'date-fns';
 import { formatDistanceToNow } from 'date-fns';
 import { 
@@ -58,7 +58,8 @@ interface UserDetailDialogProps {
 }
 
 export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted, rank }: UserDetailDialogProps) {
-  const { firestore, user: adminUser } = useFirebase();
+  const { firestore: supabase } = useFirestore();
+  const { user: adminUser } = useUser();
   const { logAdminActivity } = useAdminActivityLog();
   const [chatCount, setChatCount] = useState<number | null>(null);
   const [userMaps, setUserMaps] = useState<any[]>([]);
@@ -70,11 +71,14 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
   const [analyticsView, setAnalyticsView] = useState<'current' | 'allTime'>('current');
 
   const handleDeleteUser = useCallback(async () => {
-    if (!firestore || !user) return;
+    if (!supabase || !user) return;
     setIsDeleting(true);
     try {
       const userEmail = user.email || user.id;
-      await deleteDoc(doc(firestore, 'users', user.id));
+      // Use Supabase delete
+      const { error } = await supabase.from('users').delete().eq('id', user.id);
+      if (error) throw error;
+
       await logAdminActivity({
         type: 'USER_DELETED',
         targetId: user.id,
@@ -90,7 +94,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
       setIsDeleting(false);
       setShowDeleteConfirm(false);
     }
-  }, [firestore, user, adminUser, logAdminActivity, onClose, onUserDeleted]);
+  }, [supabase, user, adminUser, logAdminActivity, onClose, onUserDeleted]);
 
   const handleCopyId = useCallback(() => {
     if (!user?.id) return;
@@ -100,17 +104,37 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
   }, [user?.id]);
 
   useEffect(() => {
-    if (isOpen && user && firestore) {
+    if (isOpen && user && supabase) {
       const fetchData = async () => {
         setIsLoadingMaps(true);
         try {
-          const chatsSnap = await getCountFromServer(collection(firestore, `users/${user.id}/chatSessions`));
-          setChatCount(chatsSnap.data().count);
+          // 1. Get chat count using Supabase count
+          const { count, error: countError } = await supabase
+            .from('chat_sessions')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id);
+          
+          if (!countError) setChatCount(count);
 
-          const mapsRef = collection(firestore, `users/${user.id}/mindmaps`);
-          const q = query(mapsRef, orderBy('updatedAt', 'desc'));
-          const snapshot = await getDocs(q);
-          setUserMaps(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          // 2. Get mindmaps using Supabase select
+          const { data: mapsData, error: mapsError } = await supabase
+            .from('mindmaps')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('updated_at', { ascending: false });
+          
+          if (mapsError) throw mapsError;
+
+          setUserMaps((mapsData || []).map(m => ({
+            ...m,
+            // Map snake_case to camelCase for the UI
+            createdAt: m.created_at,
+            updatedAt: m.updated_at,
+            nodeCount: m.node_count,
+            publicViews: m.public_views,
+            aiPersona: m.ai_persona,
+            shortTitle: m.short_title
+          })));
         } catch (e) {
           console.error('Error fetching profile detail:', e);
         } finally {
@@ -122,7 +146,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
       setChatCount(null);
       setUserMaps([]);
     }
-  }, [isOpen, user, firestore]);
+  }, [isOpen, user, supabase]);
 
   if (!user) return null;
 
@@ -130,7 +154,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
   const userCreatedAt = (() => {
     if (!user.createdAt) return null;
     try {
-      const d = user.createdAt.toDate ? user.createdAt.toDate() : new Date(user.createdAt);
+      const d = new Date(user.createdAt);
       return isNaN(d.getTime()) ? null : d;
     } catch (e) {
       return null;
@@ -190,7 +214,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
                   )}
                   {(() => {
                     const now = new Date();
-                    const createdAt = user.createdAt?.toDate?.() || (user.createdAt ? new Date(user.createdAt) : null);
+                    const createdAt = user.createdAt ? new Date(user.createdAt) : null;
                     const createdHoursAgo = createdAt ? Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60)) : null;
                     const lastActive = user.statistics?.lastActiveDate;
                     const lastActiveDate = lastActive ? new Date(lastActive) : null;

@@ -1,4 +1,4 @@
-import { initializeFirebaseServer } from '@/firebase/server';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
 
 export interface ActivityLogEntry {
   type: string;
@@ -13,9 +13,9 @@ export interface ActivityLogEntry {
 }
 
 export async function logAdminActivity(entry: ActivityLogEntry): Promise<{ success: boolean; error?: string }> {
-  const { admin, firestore } = initializeFirebaseServer();
+  const { admin, supabase } = { supabase: getSupabaseAdmin() };
 
-  if (!firestore || !admin) {
+  if (!supabase || !admin) {
     console.error('[ActivityService] Firebase Admin not available');
     return { success: false, error: 'Firebase Admin not initialized' };
   }
@@ -26,44 +26,44 @@ export async function logAdminActivity(entry: ActivityLogEntry): Promise<{ succe
     const dateStr = dateObj.toISOString().split('T')[0];
     const monthStr = dateStr.substring(0, 7);
 
-    await firestore.collection('adminActivityLog').add({
+    await supabase.collection('adminActivityLog').add({
       ...entry,
       timestamp,
-      createdAt: admin.firestore.Timestamp.now(),
+      createdAt: admin.supabase.Timestamp.now(),
     });
 
     const type = entry.type;
     const increments: Record<string, any> = {};
 
     if (type === 'MAP_CREATED') {
-      increments.totalMindmapsEver = admin.firestore.FieldValue.increment(1);
-      increments.newMapsToday = admin.firestore.FieldValue.increment(1);
+      increments.totalMindmapsEver = admin.supabase.FieldValue.increment(1);
+      increments.newMapsToday = admin.supabase.FieldValue.increment(1);
       const isSubMap = entry.metadata?.isSubMap === true || !!entry.metadata?.parentMapId;
       if (!isSubMap) {
-        increments.totalMindmaps = admin.firestore.FieldValue.increment(1);
+        increments.totalMindmaps = admin.supabase.FieldValue.increment(1);
       }
     } else if (type === 'USER_CREATED') {
-      increments.totalUsers = admin.firestore.FieldValue.increment(1);
-      increments.newUsersToday = admin.firestore.FieldValue.increment(1);
+      increments.totalUsers = admin.supabase.FieldValue.increment(1);
+      increments.newUsersToday = admin.supabase.FieldValue.increment(1);
     } else if (type === 'LOGIN') {
-      increments.activeUsers = admin.firestore.FieldValue.increment(1);
+      increments.activeUsers = admin.supabase.FieldValue.increment(1);
     } else if (type === 'MAP_DELETED') {
-      increments.totalMindmaps = admin.firestore.FieldValue.increment(-1);
+      increments.totalMindmaps = admin.supabase.FieldValue.increment(-1);
     } else if (type === 'CHAT_CREATED') {
-      increments.totalChats = admin.firestore.FieldValue.increment(1);
+      increments.totalChats = admin.supabase.FieldValue.increment(1);
     }
 
     if (Object.keys(increments).length > 0) {
-      const statsBatch = firestore.batch();
+      const statsBatch = supabase.batch();
       
-      const allTimeRef = firestore.collection('adminStats').doc('all-time');
+      const allTimeRef = supabase.collection('adminStats').doc('all-time');
       statsBatch.set(allTimeRef, { 
         ...increments, 
         lastUpdated: Date.now(),
         timestamp: new Date().toISOString() 
       }, { merge: true });
 
-      const dailyRef = firestore.collection('adminStats').doc(`daily_${dateStr}`);
+      const dailyRef = supabase.collection('adminStats').doc(`daily_${dateStr}`);
       statsBatch.set(dailyRef, { 
         ...increments,
         date: dateStr,
@@ -71,7 +71,7 @@ export async function logAdminActivity(entry: ActivityLogEntry): Promise<{ succe
         timestamp: new Date().toISOString()
       }, { merge: true });
 
-      const monthlyRef = firestore.collection('adminStats').doc(`monthly_${monthStr}`);
+      const monthlyRef = supabase.collection('adminStats').doc(`monthly_${monthStr}`);
       statsBatch.set(monthlyRef, { 
         ...increments,
         month: monthStr,
@@ -95,15 +95,15 @@ export async function getActivityLogs(options: {
   type?: string;
   userId?: string;
 } = {}): Promise<{ logs: any[]; lastDoc: any; hasMore: boolean }> {
-  const { admin, firestore } = initializeFirebaseServer();
+  const { admin, supabase } = { supabase: getSupabaseAdmin() };
 
-  if (!firestore || !admin) {
+  if (!supabase || !admin) {
     return { logs: [], lastDoc: null, hasMore: false };
   }
 
   const { limit = 50, startAfter, type, userId } = options;
 
-  let query: any = firestore
+  let query: any = supabase
     .collection('adminActivityLog')
     .orderBy('timestamp', 'desc')
     .limit(limit);
@@ -117,7 +117,7 @@ export async function getActivityLogs(options: {
   }
 
   if (startAfter) {
-    const docSnap = await firestore.collection('adminActivityLog').doc(startAfter).get();
+    const docSnap = await supabase.collection('adminActivityLog').doc(startAfter).get();
     if (docSnap.exists) {
       query = query.startAfter(docSnap);
     }

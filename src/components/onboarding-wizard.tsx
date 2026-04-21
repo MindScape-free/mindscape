@@ -12,10 +12,11 @@ import {
     LogIn,
     CheckCircle2,
     ArrowLeft,
-    ShieldCheck
+    ShieldCheck,
+    TrendingUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useUser } from '@/firebase';
+import { useUser } from '@/lib/auth-context';
 import { useAIConfig } from '@/contexts/ai-config-context';
 import { useRouter, usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -128,8 +129,8 @@ export function OnboardingWizard() {
                     {/* Progress Bar */}
                     <div className="absolute top-0 left-0 w-full h-1 bg-white/5 z-20">
                         <motion.div
-                            initial={{ width: '33%' }}
-                            animate={{ width: `${(step / 3) * 100}%` }}
+                            initial={{ width: '25%' }}
+                            animate={{ width: `${(step / 4) * 100}%` }}
                             className="h-full bg-gradient-to-r from-primary via-purple-500 to-accent shadow-[0_0_10px_rgba(139,92,246,0.5)]"
                         />
                     </div>
@@ -289,8 +290,68 @@ export function OnboardingWizard() {
                                         <Button onClick={handleBack} variant="ghost" className="flex-1 h-12 text-zinc-500 hover:text-white rounded-xl">
                                             <ArrowLeft className="mr-2 w-4 h-4" /> Back
                                         </Button>
-                                        <Button onClick={handleDismiss} className="flex-[2] h-12 bg-white text-black hover:bg-zinc-200 rounded-xl font-black transition-all active:scale-[0.98]">
-                                            Go to Dashboard
+                                        <Button onClick={handleNext} className="flex-[2] h-12 bg-white text-black hover:bg-zinc-200 rounded-xl font-black transition-all active:scale-[0.98]">
+                                            Continue
+                                        </Button>
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {step === 4 && (
+                                <motion.div
+                                    key="step4"
+                                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                    className="space-y-7"
+                                >
+                                    <div className="space-y-4 text-center">
+                                        <div className="w-16 h-16 rounded-[1.5rem] bg-primary/10 flex items-center justify-center border border-primary/20 mx-auto shadow-xl">
+                                            <TrendingUp className="w-8 h-8 text-primary" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <DialogTitle className="text-3xl font-black text-white tracking-tight">Earn XP for Everything</DialogTitle>
+                                            <DialogDescription className="text-zinc-400 text-sm leading-relaxed max-w-[300px] mx-auto">
+                                                Every action you take earns XP. Level up through 10 ranks as you learn.
+                                            </DialogDescription>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {[
+                                            { label: 'Create mind map', xp: '+20 XP', color: 'text-violet-400 bg-violet-500/10' },
+                                            { label: 'Complete quiz', xp: '+15 XP', color: 'text-emerald-400 bg-emerald-500/10' },
+                                            { label: 'Daily login', xp: '+5 XP', color: 'text-blue-400 bg-blue-500/10' },
+                                            { label: '7-day streak', xp: '+30 XP', color: 'text-amber-400 bg-amber-500/10' },
+                                        ].map((item) => (
+                                            <div key={item.label} className="flex items-center gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                                                <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', item.color.split(' ')[1])}>
+                                                    <Zap className={cn('w-3.5 h-3.5', item.color.split(' ')[0])} />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-[10px] text-zinc-400 truncate">{item.label}</p>
+                                                    <p className={cn('text-xs font-black', item.color.split(' ')[0])}>{item.xp}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="p-3 rounded-xl bg-primary/8 border border-primary/15 flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
+                                            <Zap className="w-4 h-4 text-primary" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-black text-white">You start as a Spark</p>
+                                            <p className="text-[10px] text-zinc-500">Level 1 — 10 ranks to MindMaster</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-4">
+                                        <Button onClick={handleBack} variant="ghost" className="flex-1 h-12 text-zinc-500 hover:text-white rounded-xl">
+                                            <ArrowLeft className="mr-2 w-4 h-4" /> Back
+                                        </Button>
+                                        <Button onClick={handleDismiss} className="flex-[2] h-12 bg-primary hover:bg-primary/90 text-white rounded-xl font-black transition-all active:scale-[0.98] gap-2">
+                                            Start Earning <Zap className="w-4 h-4" />
                                         </Button>
                                     </div>
                                 </motion.div>

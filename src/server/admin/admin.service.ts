@@ -1,4 +1,4 @@
-import { initializeFirebaseServer } from '@/firebase/server';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
 
 export interface AdminStats {
   totalCreated: number;
@@ -41,9 +41,9 @@ function sanitizeTimestamp(value: any): number {
 }
 
 export async function getAdminStats(): Promise<AdminStats> {
-  const { firestore } = initializeFirebaseServer();
+  const { supabase } = { supabase: getSupabaseAdmin() };
   
-  if (!firestore) {
+  if (!supabase) {
     throw new Error('Firebase not initialized');
   }
 
@@ -55,7 +55,7 @@ export async function getAdminStats(): Promise<AdminStats> {
   let totalNodes = 0;
 
   try {
-    const snapshot = await firestore.collectionGroup('mindmaps').get();
+    const snapshot = await supabase.collectionGroup('mindmaps').get();
     
     snapshot.forEach((doc: any) => {
       const data = doc.data();
@@ -93,9 +93,9 @@ export async function getAdminStats(): Promise<AdminStats> {
 }
 
 async function getAdminStatsFallback(): Promise<AdminStats> {
-  const { firestore } = initializeFirebaseServer();
+  const { supabase } = { supabase: getSupabaseAdmin() };
   
-  if (!firestore) {
+  if (!supabase) {
     throw new Error('Firebase not initialized');
   }
 
@@ -106,12 +106,12 @@ async function getAdminStatsFallback(): Promise<AdminStats> {
   let privateCount = 0;
   let totalNodes = 0;
 
-  const usersSnap = await firestore.collection('users').get();
+  const usersSnap = await supabase.collection('users').get();
   
   await Promise.all(
     usersSnap.docs.map(async (userDoc: any) => {
       try {
-        const mapsSnap = await firestore
+        const mapsSnap = await supabase
           .collection('users')
           .doc(userDoc.id)
           .collection('mindmaps')
@@ -162,15 +162,15 @@ export async function getMindmapsList(options: {
   lastDoc: any;
   hasMore: boolean;
 }> {
-  const { firestore } = initializeFirebaseServer();
+  const { supabase } = { supabase: getSupabaseAdmin() };
   
-  if (!firestore) {
+  if (!supabase) {
     throw new Error('Firebase not initialized');
   }
 
   const { limit = 20, startAfterDoc, startAfterTime, filterDeleted = true } = options;
 
-  let query: any = firestore
+  let query: any = supabase
     .collectionGroup('mindmaps')
     .orderBy('createdAt', 'desc')
     .limit(limit);
@@ -227,15 +227,15 @@ export async function getMindmapsByUser(userId: string, options: {
   limit?: number;
   includeDeleted?: boolean;
 } = {}): Promise<MindmapListItem[]> {
-  const { firestore } = initializeFirebaseServer();
+  const { supabase } = { supabase: getSupabaseAdmin() };
   
-  if (!firestore) {
+  if (!supabase) {
     throw new Error('Firebase not initialized');
   }
 
   const { limit = 100, includeDeleted = false } = options;
 
-  let query: any = firestore
+  let query: any = supabase
     .collection('users')
     .doc(userId)
     .collection('mindmaps')

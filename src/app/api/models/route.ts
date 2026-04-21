@@ -39,25 +39,26 @@ export async function GET(req: Request) {
         fetch('https://gen.pollinations.ai/image/models').then(r => r.json())
       ]);
 
-      // Process Text Models
+      // Process Text Models — only text-output, non-paid
       if (Array.isArray(textRes.data)) {
         textCache = textRes.data
-          .filter((m: any) => !m.paid_only)
+          .filter((m: any) => !m.paid_only && m.output_modalities?.includes('text') && !m.output_modalities?.includes('image') && !m.output_modalities?.includes('audio') && !m.output_modalities?.includes('video'))
           .map((m: any) => ({
             id: m.id,
             description: m.description || m.id,
-            feature: m.modality === 'text' ? 'creative' : 'specialized',
+            feature: m.reasoning ? 'reasoning' : m.tools ? 'creative' : 'fast',
             isFree: true
           }));
       }
 
-      // Process Image Models
+      // Process Image Models — only image-output, non-paid
       if (Array.isArray(imageRes)) {
         imageCache = imageRes
-          .filter((m: any) => !m.paid_only)
+          .filter((m: any) => !m.paid_only && m.output_modalities?.includes('image'))
           .map((m: any) => ({
             id: m.name,
             description: m.description || m.name,
+            cost: parseFloat(m.pricing?.completionImageTokens ?? '0.04'),
             quality: 'high',
             isFree: true
           }));

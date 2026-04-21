@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, lazy, Suspense, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useFirebase } from '@/firebase';
+import { useAuth } from '@/lib/auth-context';
 import { 
   Users, 
   ShieldAlert, 
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { collection, query, orderBy, limit, getDocs, doc, onSnapshot, startAfter } from 'firebase/firestore';
+
 import { formatDistanceToNow, format, differenceInMinutes } from 'date-fns';
 import { AdminStats } from '@/types/chat';
 import { useAdminActivityLog, AdminActivityLogEntry, ActivityCategory } from '@/lib/admin-utils';
@@ -34,7 +34,8 @@ import { FeedbackCards } from '@/components/feedback/FeedbackCards';
 import { Feedback } from '@/types/feedback';
 
 export default function AdminDashboard() {
-  const { user, isAdmin, isUserLoading, firestore, auth } = useFirebase();
+  const { user, isAdmin, isUserLoading, supabase, session } = useAuth();
+
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
@@ -56,7 +57,7 @@ export default function AdminDashboard() {
   const [extraUsers, setExtraUsers] = useState<any[]>([]);
   const [isExtraUsersLoading, setIsExtraUsersLoading] = useState(false);
 
-  const { logAdminActivity } = useAdminActivityLog();
+  const { logAdminActivity, subscribeToAdminActivityLogs } = useAdminActivityLog();
   
   const { 
     data: dashboardData, 
@@ -68,56 +69,60 @@ export default function AdminDashboard() {
   const listenerIdsRef = useRef<string[]>([]);
 
   useEffect(() => {
-    if (!firestore) return;
+    if (!supabase) return;
 
     const ids: string[] = [];
 
-    const usersQ = query(collection(firestore, 'users'), limit(500));
-    const usersUnsub = onSnapshot(usersQ, (snapshot) => {
-      if (snapshot.empty) return;
-      const users = snapshot.docs.map(d => {
-        const data = d.data();
-        return {
-          id: d.id,
-          ...data,
-          createdAt: toISOTimestamp(data.createdAt),
-        };
-      });
-      setLiveUsers(users);
-    }, (err) => {
-      console.warn('⚠️ Users listener error (index may be missing):', err.message);
-    });
-    ids.push(globalListenerManager.register('admin/users', usersUnsub));
-
-    const logsQ = query(
-      collection(firestore, 'adminActivityLog'),
-      orderBy('timestamp', 'desc'),
-      limit(100)
-    );
-    const logsUnsub = onSnapshot(logsQ, (snapshot) => {
-      const logs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    // 1. Live Logs Subscriber
+    const logsUnsub = subscribeToAdminActivityLogs((logs) => {
       setLiveLogs(logs);
-    }, (error) => {
-      console.error('❌ Real-time logs error:', error);
-    });
+    }, 'all', 100);
     ids.push(globalListenerManager.register('admin/logs', logsUnsub));
 
-    const statsRef = doc(firestore, 'adminStats', 'all-time');
-    const statsUnsub = onSnapshot(statsRef, (snap) => {
-      if (!snap.exists()) return;
-      const data = snap.data();
-      setStats(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          totalUsers: data.totalUsers || prev.totalUsers,
-          totalMindmaps: data.totalMindmaps || prev.totalMindmaps,
-          totalMindmapsEver: data.totalMindmapsEver || prev.totalMindmapsEver,
-          totalChats: data.totalChats || prev.totalChats,
-        };
-      });
-    });
-    ids.push(globalListenerManager.register('admin/stats', statsUnsub));
+    // 2. Stats Live Listener
+    const statsChannel = supabase
+      .channel('admin-stats-live')
+      .on('postgres_changes', { 
+        event: 'UPDATE', 
+        schema: 'public', 
+        table: 'admin_stats',
+        filter: 'period=eq.all-time'
+      }, (payload) => {
+        const data = payload.new;
+        setStats(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            totalUsers: data.totalUsers || prev.totalUsers,
+            totalMindmaps: data.totalMindmaps || prev.totalMindmaps,
+            totalMindmapsEver: data.totalMindmapsEver || prev.totalMindmapsEver,
+            totalChats: data.totalChats || prev.totalChats,
+          };
+        });
+      })
+      .subscribe();
+    
+    ids.push(globalListenerManager.register('admin/stats', () => {
+      supabase.removeChannel(statsChannel);
+    }));
+
+    // 3. Optional Users real-time update (polling or simple listener)
+    // Since we handle user data via bundle, we can just listen for new user inserts
+    const usersChannel = supabase
+      .channel('admin-users-live')
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'users'
+      }, () => {
+        // Refresh dashboard on new user
+        refreshBundle();
+      })
+      .subscribe();
+    
+    ids.push(globalListenerManager.register('admin/users', () => {
+      supabase.removeChannel(usersChannel);
+    }));
 
     listenerIdsRef.current = ids;
 
@@ -125,7 +130,7 @@ export default function AdminDashboard() {
       ids.forEach(id => globalListenerManager.unregister(id));
       listenerIdsRef.current = [];
     };
-  }, [firestore]);
+  }, [supabase, subscribeToAdminActivityLogs, refreshBundle]);
 
   const activityLogs = useMemo(() => {
     const logMap = new Map();
@@ -135,7 +140,7 @@ export default function AdminDashboard() {
   }, [bundle?.logs, liveLogs]);
 
   const loadMoreUsersFromFirebase = async () => {
-    if (!firestore || isExtraUsersLoading) return;
+    if (!supabase || isExtraUsersLoading) return;
     
     const allUsers = [...(bundle?.users || []), ...extraUsers];
     const sorted = sortByTimestamp(allUsers, u => u.createdAt, 'desc');
@@ -150,23 +155,20 @@ export default function AdminDashboard() {
       const lastTimestamp = normalizeTimestamp(lastUser.createdAt);
       const lastId = lastUser.id;
 
-      const q = query(
-        collection(firestore, 'users'),
-        orderBy('createdAt', 'desc'),
-        orderBy('__name__', 'desc'),
-        startAfter(lastTimestamp, lastId),
-        limit(100)
-      );
+      const { data: newUsersData, error: fetchError } = await supabase
+        .from('users')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .lt('created_at', lastUser.createdAt)
+        .limit(100);
 
-      const snapshot = await getDocs(q);
-      const newUsers = snapshot.docs.map(d => {
-        const data = d.data();
-        return {
-          id: d.id,
-          ...data,
-          createdAt: toISOTimestamp(data.createdAt),
-        };
-      });
+      if (fetchError) throw fetchError;
+
+      const newUsers = (newUsersData || []).map(row => ({
+        id: row.id,
+        ...row,
+        createdAt: row.created_at, // Map snake_case to camelCase if needed by UI
+      }));
       
       setExtraUsers(prev => {
         const existingIds = new Set(prev.map(u => u.id));
@@ -260,10 +262,10 @@ export default function AdminDashboard() {
   }, [isUserLoading, isAdmin, router]);
 
   const handleForceRefresh = async () => {
-    if (!auth) return;
+    if (!session) return;
     setIsSyncing(true);
     try {
-      const token = await auth.currentUser?.getIdToken();
+      const token = session.access_token;
       const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
       
       const syncRes = await fetch('/api/admin-sync', { method: 'POST', headers });

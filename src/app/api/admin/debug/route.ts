@@ -1,30 +1,30 @@
 import { NextResponse } from 'next/server';
-import { initializeFirebaseServer } from '@/firebase/server';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
 
 export async function GET() {
   try {
-    const { admin, app, firestore } = initializeFirebaseServer();
+    const { admin, app, supabase } = { supabase: getSupabaseAdmin() };
     
-    if (!app || !firestore || !admin) {
+    if (!app || !supabase || !admin) {
       return NextResponse.json({ 
         success: false, 
         error: 'Firebase not initialized',
-        details: { app: !!app, firestore: !!firestore, admin: !!admin }
+        details: { app: !!app, supabase: !!supabase, admin: !!admin }
       }, { status: 500 });
     }
 
     // Test fetching users
-    const usersSnap = await firestore.collection('users').limit(10).get();
+    const usersSnap = await supabase.collection('users').limit(10).get();
     const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     
     // Test fetching stats
-    const statsDoc = await firestore.collection('adminStats').doc('all-time').get();
+    const statsDoc = await supabase.collection('adminStats').doc('all-time').get();
     const stats = statsDoc.exists ? statsDoc.data() : null;
     
     // Test fetching logs
-    const logsSnap = await firestore.collection('adminActivityLog').limit(5).get();
+    const logsSnap = await supabase.collection('adminActivityLog').limit(5).get();
     const logs = logsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
     return NextResponse.json({
