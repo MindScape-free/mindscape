@@ -111,6 +111,9 @@ export const metadata: Metadata = {
   alternates: {
     canonical: baseUrl,
   },
+  verification: {
+    google: '9496b274cc4aa95e',
+  },
 };
 
 function BackgroundGlow() {
