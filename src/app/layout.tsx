@@ -56,9 +56,61 @@ const orbitron = localFont({
   display: 'swap',
 });
 
+const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://mindscape-free.vercel.app';
+
 export const metadata: Metadata = {
-  title: 'MindScape',
-  description: 'Generate beautiful, multi-layered mind maps for any topic.',
+  metadataBase: new URL(baseUrl),
+  title: {
+    default: 'MindScape - AI Mental Wellness & Knowledge Mapping',
+    template: '%s | MindScape'
+  },
+  description: 'MindScape transforms unstructured ideas into clear, explorable knowledge through intelligent AI-powered visualization. Generate beautiful mind maps from any topic, PDF, or video.',
+  keywords: ['AI Mind Map', 'Mind Mapping', 'Visual Learning', 'Knowledge Graph', 'Study Tool', 'Brainstorming AI', 'MindScape'],
+  authors: [{ name: 'MindScape Team' }],
+  creator: 'MindScape',
+  publisher: 'MindScape',
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: baseUrl,
+    siteName: 'MindScape',
+    title: 'MindScape - AI Mental Wellness & Knowledge Mapping',
+    description: 'Transform your thoughts into structured knowledge with AI-powered mind maps.',
+    images: [
+      {
+        url: '/MindScape-Logo.png',
+        width: 1200,
+        height: 630,
+        alt: 'MindScape - AI Mind Mapping',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'MindScape - AI Mental Wellness & Knowledge Mapping',
+    description: 'Transform your thoughts into structured knowledge with AI-powered mind maps.',
+    images: ['/MindScape-Logo.png'],
+    creator: '@mindscape',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+  alternates: {
+    canonical: baseUrl,
+  },
 };
 
 function BackgroundGlow() {
@@ -69,6 +121,8 @@ function BackgroundGlow() {
   );
 }
 
+import { StructuredData } from '@/components/seo/structured-data';
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -78,6 +132,8 @@ export default function RootLayout({
     <html lang="en" className={cn('dark', spaceGrotesk.variable, orbitron.variable)} suppressHydrationWarning>
       <head>
         <link rel="icon" href="/MindScape-Logo.png" sizes="any" />
+        <StructuredData type="Organization" data={{}} />
+        <StructuredData type="WebSite" data={{}} />
       </head>
       <body className={cn('min-h-screen w-full overflow-x-hidden', 'bg-[#0D0D0D] text-[#EAEAEA]')} suppressHydrationWarning>
           <AuthProvider>
