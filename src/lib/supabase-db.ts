@@ -4,9 +4,21 @@ let clientInstance: SupabaseClient | null = null;
 
 export function getSupabaseClient(): SupabaseClient {
   if (clientInstance) return clientInstance;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
-  console.log('[Supabase] Creating client singleton, URL:', url);
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+  if (!url || !key) {
+    if (typeof window === 'undefined') {
+      console.warn('[Supabase] Environment variables missing during server-side execution/build.');
+    }
+    // Return a dummy client or handle as needed. 
+    // To prevent crashes during build, we can return a proxy or just throw a more descriptive error that's caught.
+    // However, most of our code expects a real client.
+    // For build time, we can return a dummy.
+    return createClient('https://placeholder.supabase.co', 'placeholder', { auth: { persistSession: false } });
+  }
+
+  console.log('[Supabase] Creating client singleton');
   clientInstance = createClient(url, key, {
     auth: {
       persistSession: true,
@@ -19,8 +31,13 @@ export function getSupabaseClient(): SupabaseClient {
 // Export for use in auth context
 export function getSupabaseClientWithOptions(options?: { persistSession?: boolean }) {
   if (clientInstance) return clientInstance;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+  if (!url || !key) {
+    return createClient('https://placeholder.supabase.co', 'placeholder', { auth: { persistSession: false } });
+  }
+
   clientInstance = createClient(url, key, {
     auth: {
       persistSession: options?.persistSession ?? true,

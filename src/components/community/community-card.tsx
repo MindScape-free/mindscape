@@ -1,19 +1,16 @@
 'use client';
 
-import { getSupabaseClient } from '@/lib/supabase-db';
 import React, { useState } from 'react';
+import { useAuth } from '@/lib/auth-context';
 import { Clock, Eye, User, MoreVertical, Trash2 } from 'lucide-react';
 import { MindMapWithId } from '@/types/mind-map';
 import { formatShortDistanceToNow } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
-import { useUser } from '@/lib/auth-context';
-// firebase/firestore removed
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { DepthBadge } from '@/components/mind-map/depth-badge';
-import { ModeBadge } from '@/components/mind-map/mode-badge';
 
 import {
     DropdownMenu,
@@ -38,8 +35,7 @@ interface CommunityCardProps {
 }
 
 export const CommunityCard = ({ map, onClick }: CommunityCardProps) => {
-    const supabase = getSupabaseClient();
-    const { user } = useUser();
+    const { supabase, isAdmin: isUserAdmin, user } = useAuth();
     const { toast } = useToast();
 
     const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false);
@@ -47,17 +43,15 @@ export const CommunityCard = ({ map, onClick }: CommunityCardProps) => {
 
     const updatedAt = typeof map.updatedAt === 'number'
         ? new Date(map.updatedAt)
-        : (map.updatedAt as any)?.toDate?.() || new Date();
+        : new Date(map.updatedAt || Date.now());
 
     // Check if current user can remove this map (original author or admin)
-    const adminId = '765cd0a0-6201-41d2-ac8d-ff99b4941289';
-    const isAdmin = user && user.uid === adminId;
-    const canRemove = user && (user.uid === map.originalAuthorId || isAdmin);
+    const canRemove = user && (user.id === map.originalAuthorId || isUserAdmin);
 
     const handleRemoveFromCommunity = async (e: React.MouseEvent) => {
         e.stopPropagation();
 
-        if (!user || !firestore) {
+        if (!user || !supabase) {
             toast({
                 variant: 'destructive',
                 title: 'Authentication Required',
@@ -69,11 +63,14 @@ export const CommunityCard = ({ map, onClick }: CommunityCardProps) => {
         setIsRemoving(true);
 
         try {
-            // Get the public map document to verify ownership
-            const publicMapRef = doc(firestore, 'publicMindmaps', map.id!);
-            const publicMapSnap = await getDoc(publicMapRef);
+            // Check if map exists in public_mindmaps
+            const { data: publicMap, error: fetchErr } = await supabase
+                .from('public_mindmaps')
+                .select('original_author_id')
+                .eq('id', map.id)
+                .single();
 
-            if (!publicMapSnap.exists()) {
+            if (fetchErr || !publicMap) {
                 toast({
                     variant: 'destructive',
                     title: 'Map Not Found',
@@ -83,10 +80,8 @@ export const CommunityCard = ({ map, onClick }: CommunityCardProps) => {
                 return;
             }
 
-            const mapData = publicMapSnap.data();
-
             // Authorization check - original author or admin
-            if (mapData.originalAuthorId !== user.uid && !isAdmin) {
+            if (publicMap.original_author_id !== user.id && !isUserAdmin) {
                 toast({
                     variant: 'destructive',
                     title: 'Unauthorized',
@@ -96,18 +91,24 @@ export const CommunityCard = ({ map, onClick }: CommunityCardProps) => {
                 return;
             }
 
-            // Delete from publicMindmaps collection
-            await deleteDoc(publicMapRef);
+            // Delete from public_mindmaps table
+            const { error: deleteErr } = await supabase
+                .from('public_mindmaps')
+                .delete()
+                .eq('id', map.id);
 
-            // Log activity for removing from community
+            if (deleteErr) throw deleteErr;
+
+            // Log activity
             try {
-                await addDoc(collection(firestore, 'adminActivityLog'), {
+                const { logAdminActivityAction } = await import('@/app/actions');
+                await logAdminActivityAction({
                     type: 'MAP_REMOVED',
                     targetId: map.id!,
                     targetType: 'mindmap',
                     details: `Map "${map.topic || 'Untitled'}" removed from community`,
-                    performedBy: user.uid,
-                    timestamp: new Date().toISOString(),
+                    performedBy: user.id,
+                    performedByEmail: user.email || 'anonymous',
                     metadata: {
                         topic: map.topic,
                         authorId: map.originalAuthorId
@@ -117,20 +118,18 @@ export const CommunityCard = ({ map, onClick }: CommunityCardProps) => {
                 console.warn('Failed to log MAP_REMOVED activity:', logError);
             }
 
-            // Update the original map in user's library to set isPublic = false
+            // Update the original map in mindmaps table to set is_public = false
             try {
-                const userMapRef = doc(firestore, 'users', user.uid, 'mindmaps', map.id!);
-                const userMapSnap = await getDoc(userMapRef);
-
-                if (userMapSnap.exists()) {
-                    await updateDoc(userMapRef, {
-                        isPublic: false,
-                        updatedAt: Date.now()
-                    });
-                }
+                await supabase
+                    .from('mindmaps')
+                    .update({
+                        is_public: false,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', map.id)
+                    .eq('user_id', user.id);
             } catch (error) {
-                console.warn('Could not update original map in user library:', error);
-                // Don't fail the entire operation if this update fails
+                console.warn('Could not update original map status:', error);
             }
 
             toast({

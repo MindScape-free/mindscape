@@ -23,7 +23,7 @@ const NestedSubCategorySchema: z.ZodType<any> = z.lazy(() =>
         topic: z.string().describe('The expanded topic name'),
         icon: z.string(),
         subCategories: z.array(z.lazy(() => NestedSubCategorySchema)),
-        createdAt: z.number().optional(),
+        createdAt: z.union([z.number(), z.string(), z.date()]).optional(),
       })
       .optional()
       .describe('Nested sub-mindmap expansion for this category'),
@@ -49,7 +49,7 @@ const SubCategorySchema = z.object({
       topic: z.string().describe('The expanded topic name'),
       icon: z.string(),
       subCategories: z.array(NestedSubCategorySchema),
-      createdAt: z.number().optional(),
+      createdAt: z.union([z.number(), z.string(), z.date()]).optional(),
     })
     .optional()
     .describe('Nested sub-mindmap expansion for this category'),
@@ -104,7 +104,7 @@ export const NestedExpansionItemSchema = z.object({
     icon: z.string(),
     tags: z.array(z.string()).optional(),
   })),
-  createdAt: z.number(),
+  createdAt: z.union([z.number(), z.string(), z.date()]),
   depth: z.number(),
   path: z.string().optional(),
   status: z.enum(['generating', 'completed', 'failed']).optional(),

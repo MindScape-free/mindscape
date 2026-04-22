@@ -72,7 +72,7 @@ const PRINCIPLES = [
     {
         number: '02',
         title: 'Your data, your maps',
-        body: 'Maps are stored in your Firestore account. You can export, share, or delete everything at any time. We do not train on your content.',
+        body: 'Maps are stored in your Supabase account. You can export, share, or delete everything at any time. We do not train on your content.',
     },
     {
         number: '03',
@@ -197,8 +197,8 @@ export default function AboutPage() {
                             ['Framework', 'Next.js 16 App Router'],
                             ['Language', 'TypeScript (strict)'],
                             ['Styling', 'Tailwind CSS + Framer Motion'],
-                            ['Database', 'Firebase Firestore'],
-                            ['Auth', 'Firebase Auth'],
+                            ['Database', 'Supabase Postgres'],
+                            ['Auth', 'Supabase Auth'],
                             ['AI Provider', 'Pollinations.ai (free models)'],
                             ['AI Models', 'Gemini, GPT-4o, Claude, DeepSeek'],
                             ['Deployment', 'Vercel'],

@@ -126,7 +126,7 @@ export const LeafNodeCard = memo(function LeafNodeCard({
                             {existingExpansion && <Badge variant="outline" className="text-[10px] h-4 py-0 px-1.5 border-emerald-500/30 text-emerald-400 font-medium bg-emerald-500/5">Expanded</Badge>}
                             {node.timestamp !== undefined && videoId && (
                                 <a
-                                    href={`https://youtu.be/${videoId}?t=${Math.floor(node.timestamp)}`}
+                                    href={`https://youtu.be/${videoId}?t=${Math.floor(Number(node.timestamp))}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     onClick={(e) => e.stopPropagation()}
@@ -134,7 +134,7 @@ export const LeafNodeCard = memo(function LeafNodeCard({
                                 >
                                     <Badge variant="secondary" className="text-[10px] h-4 py-0 px-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30 flex items-center gap-1 cursor-pointer transition-colors">
                                         <LucideIcons.Play className="w-2 h-2 fill-current" />
-                                        {Math.floor(node.timestamp / 60)}:{(node.timestamp % 60).toString().padStart(2, '0')}
+                                        {Math.floor(Number(node.timestamp) / 60)}:{(Number(node.timestamp) % 60).toString().padStart(2, '0')}
                                     </Badge>
                                 </a>
                             )}

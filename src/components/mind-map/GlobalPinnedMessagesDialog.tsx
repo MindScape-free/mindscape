@@ -1,6 +1,5 @@
 'use client';
 
-import { getSupabaseClient } from '@/lib/supabase-db';
 import { useState, useMemo, useEffect } from 'react';
 import {
   Dialog,
@@ -12,15 +11,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { PinnedMessage } from '@/types/chat';
+import { PinnedMessage, toDate } from '@/types/chat';
 import { MindMapData } from '@/types/mind-map';
 import { Pin, Copy, Check, Search, ChevronDown, ChevronUp, Bot, User, Trash2, MessageCircle, Loader2, Map, X, MessageSquare, PinOff } from 'lucide-react';
 import { PinnedMessageChatDialog } from '@/components/chat/PinnedMessageChatDialog';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
-import { toDate } from '@/types/chat';
-import { useUser } from '@/lib/auth-context';
-// firebase/firestore removed
+import { useAuth } from '@/lib/auth-context';
 
 type PinTab = 'map' | 'all';
 
@@ -59,8 +56,7 @@ export function GlobalPinnedMessagesDialog({
   const [allPinnedMessages, setAllPinnedMessages] = useState<PinnedMessage[]>([]);
   const [isLoadingAllPins, setIsLoadingAllPins] = useState(false);
 
-  const { user } = useUser();
-  const supabase = getSupabaseClient();
+  const { user, supabase } = useAuth();
 
   useEffect(() => {
     if (activeTab === 'all' && !allPinnedMessages.length) {
@@ -69,16 +65,17 @@ export function GlobalPinnedMessagesDialog({
   }, [activeTab]);
 
   const fetchAllPinnedMessages = async () => {
-    if (!user || !firestore) return;
+    if (!user || !supabase) return;
     setIsLoadingAllPins(true);
     try {
-      const q = query(collection(firestore, 'users', user.uid, 'pinnedMessages'));
-      const snapshot = await getDocs(q);
-      const pins: PinnedMessage[] = [];
-      snapshot.forEach(doc => {
-        pins.push({ id: doc.id, ...doc.data() } as PinnedMessage);
-      });
-      setAllPinnedMessages(pins);
+      const { data, error } = await supabase
+        .from('users')
+        .select('global_pinned_messages')
+        .eq('id', user.id)
+        .single();
+      
+      if (error) throw error;
+      setAllPinnedMessages(data.global_pinned_messages || []);
     } catch (error) {
       console.error('Failed to fetch all pinned messages:', error);
     } finally {
@@ -200,7 +197,7 @@ export function GlobalPinnedMessagesDialog({
                   onClick={onClose}
                   className="h-8 w-8 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>
@@ -338,7 +335,7 @@ export function GlobalPinnedMessagesDialog({
                               onClick={() => onUnpin(pin.id)}
                               className="h-7 w-7 text-zinc-600 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg"
                             >
-                              <X className="h-3.5 w-3.5" />
+                              <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
                         </div>
@@ -418,7 +415,7 @@ export function GlobalPinnedMessagesDialog({
                   onClick={() => setSelectedPin(null)}
                   className="h-8 w-8 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </DialogHeader>

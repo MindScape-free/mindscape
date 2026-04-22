@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-js';
+import { createClient, SupabaseClient, User, Session, AuthChangeEvent } from '@supabase/supabase-js';
 
 export interface UserProfile {
   uid: string;
@@ -21,7 +21,6 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
-  firestore: SupabaseClient | null;
   isAdmin: boolean;
 }
 
@@ -35,7 +34,6 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
   signInWithGoogle: async () => ({ error: null }),
   resetPassword: async () => ({ error: null }),
-  firestore: null,
   isAdmin: false,
 });
 
@@ -48,10 +46,6 @@ export function useUser() {
   return { user, isUserLoading };
 }
 
-export function useFirestore() {
-  const { firestore, isAdmin } = useContext(AuthContext);
-  return { firestore, isAdmin };
-}
 
 interface AuthWrapperProps {
   children: ReactNode;
@@ -84,9 +78,9 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
           setUser({
             uid: userData.id,
             id: userData.id,
-            email: userData.email,
+            email: userData.email || null,
             displayName: userData.user_metadata?.username as string | null || userData.email?.split('@')[0] || null,
-            user_metadata: userData.user_metadata,
+            user_metadata: userData.user_metadata as Record<string, unknown> || {},
           });
           setSession(session);
           
@@ -96,15 +90,15 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
         setIsUserLoading(false);
       });
 
-      const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+      const { data: { subscription } } = client.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
         if (session?.user) {
           const userData = session.user;
           setUser({
             uid: userData.id,
             id: userData.id,
-            email: userData.email,
+            email: userData.email || null,
             displayName: userData.user_metadata?.username as string | null || userData.email?.split('@')[0] || null,
-            user_metadata: userData.user_metadata,
+            user_metadata: userData.user_metadata as Record<string, unknown> || {},
           });
           setSession(session);
           
@@ -189,7 +183,6 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
       signOut, 
       signInWithGoogle, 
       resetPassword,
-      firestore: supabase,
       isAdmin 
     }}>
       {children}

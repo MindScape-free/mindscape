@@ -20,7 +20,7 @@ export function useChatPersistence() {
     const supabase = getSupabaseClient();
     setIsLoading(true);
 
-    getChatSessions(supabase, user.uid).then(data => {
+    getChatSessions(supabase, user.id).then(data => {
       setSessions(data.map(row => ({
         id: row.id,
         mapId: row.map_id,
@@ -37,9 +37,9 @@ export function useChatPersistence() {
 
     // Realtime subscription
     const channel = supabase
-      .channel(`chat-sessions-${user.uid}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_sessions', filter: `user_id=eq.${user.uid}` }, () => {
-        getChatSessions(supabase, user.uid).then(data => {
+      .channel(`chat-sessions-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_sessions', filter: `user_id=eq.${user.id}` }, () => {
+        getChatSessions(supabase, user.id).then(data => {
           setSessions(data.map(row => ({
             id: row.id, mapId: row.map_id, mapTitle: row.map_title, title: row.title,
             messages: row.messages || [], weakTags: row.weak_tags || [], quizHistory: row.quiz_history || [],
@@ -59,7 +59,7 @@ export function useChatPersistence() {
     debounceTimerRef.current = setTimeout(async () => {
       try {
         const supabase = getSupabaseClient();
-        await saveChatSession(supabase, user.uid, session);
+        await saveChatSession(supabase, user.id, session);
       } catch (error) {
         console.error('Error saving chat session:', error);
       } finally {
@@ -76,10 +76,10 @@ export function useChatPersistence() {
     setActiveSessionId(newId);
     try {
       const supabase = getSupabaseClient();
-      await saveChatSession(supabase, user.uid, newSession);
+      await saveChatSession(supabase, user.id, newSession);
       try {
         const { logAdminActivityAction } = await import('@/app/actions');
-        await logAdminActivityAction({ type: 'CHAT_CREATED', targetId: newId, targetType: 'chat', details: `Chat session started: ${topic}`, performedBy: user.uid, performedByEmail: user.email || 'anonymous', metadata: { mapId, mapTitle } });
+        await logAdminActivityAction({ type: 'CHAT_CREATED', targetId: newId, targetType: 'chat', details: `Chat session started: ${topic}`, performedBy: user.id, performedByEmail: user.email || 'anonymous', metadata: { mapId, mapTitle } });
       } catch { /* non-critical */ }
     } catch (error) { console.error('Error creating session:', error); }
     return newId;
@@ -98,7 +98,7 @@ export function useChatPersistence() {
     if (!user) return;
     try {
       const supabase = getSupabaseClient();
-      await deleteChatSession(supabase, user.uid, sessionId);
+      await deleteChatSession(supabase, user.id, sessionId);
       setSessions(prev => prev.filter(s => s.id !== sessionId));
     } catch (error) { console.error('Error deleting chat session:', error); }
   }, [user]);

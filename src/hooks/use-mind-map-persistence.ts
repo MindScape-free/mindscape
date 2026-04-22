@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useUser } from '@/lib/auth-context';
+import { useAuth } from '@/lib/auth-context';
 import { MindMapData } from '@/types/mind-map';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
@@ -17,7 +17,7 @@ interface PersistenceOptions {
 }
 
 export function useMindMapPersistence(options: PersistenceOptions = {}) {
-  const { user } = useUser();
+  const { user, supabase } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const isSavingRef = useRef(false);
@@ -33,32 +33,29 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
   // Load user preferences
   useEffect(() => {
     let isCancelled = false;
-    if (!user) return;
-    const supabase = getSupabaseClient();
-    getUserProfile(supabase, user.uid).then(profile => {
+    if (!user || !supabase) return;
+    getUserProfile(supabase, user.id).then(profile => {
       if (isCancelled) return;
       if (profile?.preferences?.defaultAIPersona) setAiPersona(profile.preferences.defaultAIPersona);
     });
     return () => { isCancelled = true; };
-  }, [user]);
+  }, [user, supabase]);
 
   const updatePersona = useCallback(async (newPersona: string) => {
     setAiPersona(newPersona);
-    if (!user) return;
-    const supabase = getSupabaseClient();
-    const { data: profile } = await supabase.from('users').select('preferences').eq('id', user.uid).single();
-    await updateUserField(supabase, user.uid, {
+    if (!user || !supabase) return;
+    const { data: profile } = await supabase.from('users').select('preferences').eq('id', user.id).single();
+    await updateUserField(supabase, user.id, {
       preferences: { ...(profile?.preferences || {}), defaultAIPersona: newPersona },
     });
-  }, [user]);
+  }, [user, supabase]);
 
   // Real-time sync via Supabase Realtime
   const onRemoteUpdateRef = useRef(options.onRemoteUpdate);
   useEffect(() => { onRemoteUpdateRef.current = options.onRemoteUpdate; }, [options.onRemoteUpdate]);
 
   const subscribeToMap = useCallback((mapId: string, currentMap: MindMapData | undefined, isIdle: boolean) => {
-    if (!user || !mapId || !isIdle) return () => {};
-    const supabase = getSupabaseClient();
+    if (!user || !supabase || !mapId || !isIdle) return () => {};
     const channel = supabase
       .channel(`mindmap-${mapId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'mindmaps', filter: `id=eq.${mapId}` }, (payload) => {
@@ -72,10 +69,10 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user]);
+  }, [user, supabase]);
 
   const saveMap = useCallback(async (mapToSave: MindMapData, existingId?: string, isSilent = false) => {
-    if (!mapToSave || !user || isSavingRef.current) return;
+    if (!mapToSave || !user || !supabase || isSavingRef.current) return;
     if (mapToSave.mode === 'compare' && !mapToSave.compareData) { console.warn('Refused to save empty comparison map'); return; }
     if (mapToSave.mode !== 'compare' && (!mapToSave.subTopics || mapToSave.subTopics.length === 0)) { console.warn('Refused to save empty mind map'); return; }
 
@@ -83,7 +80,6 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
     const targetId = existingId || mapToSave.id || null;
 
     try {
-      const supabase = getSupabaseClient();
       const safeTopic = mapToSave.topic || 'mind map topic';
       const summary = mapToSave.summary || `A detailed mind map exploration of ${safeTopic}.`;
 
@@ -115,7 +111,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
       const metadataToSave = {
         topic: safeTopic,
         summary,
-        user_id: user.uid,
+        user_id: user.id,
         mode: mapToSave.mode || 'single',
         depth: mapToSave.depth || 'medium',
         ai_persona: mapAiPersona || aiPersona || 'Teacher',
@@ -142,7 +138,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
         originalPdfFileContent: originalPdfFileContent || null,
       };
 
-      const finalId = await saveMindMap(supabase, user.uid, targetId, metadataToSave, contentToSave);
+      const finalId = await saveMindMap(supabase, user.id, targetId, metadataToSave, contentToSave);
 
       // Background thumbnail generation
       if (!mapToSave.thumbnailUrl) {
@@ -151,7 +147,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
             const response = await fetch('/api/generate-image', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ prompt: `Cinematic conceptual illustration of ${safeTopic}, dark premium background, purple and gold accents, 8k quality, no text`, model: 'flux', width: 512, height: 288, userId: user.uid, userApiKey: options.userApiKey }),
+              body: JSON.stringify({ prompt: `Cinematic conceptual illustration of ${safeTopic}, dark premium background, purple and gold accents, 8k quality, no text`, model: 'flux', width: 512, height: 288, userId: user.id, userApiKey: options.userApiKey }),
             });
             if (response.ok) {
               const data = await response.json();
@@ -165,13 +161,13 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
         // New map — log activity
         try {
           const { logAdminActivityAction } = await import('@/app/actions');
-          await logAdminActivityAction({ type: 'MAP_CREATED', targetId: finalId, targetType: 'mindmap', details: `Mindmap created: ${safeTopic}`, performedBy: user.uid, performedByEmail: user.email || 'anonymous', metadata: { persona: metadataToSave.ai_persona, nodeCount, mode: mapToSave.mode, isSubMap: metadataToSave.is_sub_map } });
+          await logAdminActivityAction({ type: 'MAP_CREATED', targetId: finalId, targetType: 'mindmap', details: `Mindmap created: ${safeTopic}`, performedBy: user.id, performedByEmail: user.email || 'anonymous', metadata: { persona: metadataToSave.ai_persona, nodeCount, mode: mapToSave.mode, isSubMap: metadataToSave.is_sub_map } });
         } catch (e) { console.error('Failed to log map creation:', e); }
 
-        const mapAchievements = await trackMapCreated(supabase, user.uid, { mode: mapToSave.mode, sourceFileType: mapToSave.sourceFileType, nodeCount, aiPersona: mapToSave.aiPersona || aiPersona });
+        const mapAchievements = await trackMapCreated(supabase, user.id, { mode: mapToSave.mode, sourceFileType: mapToSave.sourceFileType, nodeCount, aiPersona: mapToSave.aiPersona || aiPersona });
         showAchievementToasts(mapAchievements);
-        if (nodes?.length > 0) showAchievementToasts(await trackNodesAdded(supabase, user.uid, nodes.length));
-        if (metadataToSave.is_sub_map) showAchievementToasts(await trackNestedExpansion(supabase, user.uid));
+        if (nodes?.length > 0) showAchievementToasts(await trackNodesAdded(supabase, user.id, nodes.length));
+        if (metadataToSave.is_sub_map) showAchievementToasts(await trackNestedExpansion(supabase, user.id));
       }
 
       if (!isSilent) toast({ title: targetId ? 'Map Updated!' : 'Map Auto-Saved!', description: `Mind map "${safeTopic}" has been ${targetId ? 'updated' : 'saved'}.` });
@@ -182,17 +178,16 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
     } finally {
       isSavingRef.current = false;
     }
-  }, [user, toast, aiPersona, options.userApiKey]);
+  }, [user, supabase, toast, aiPersona, options.userApiKey]);
 
   // Track study time every 5 minutes
   useEffect(() => {
-    if (!user) return;
-    const supabase = getSupabaseClient();
+    if (!user || !supabase) return;
     const intervalId = setInterval(() => {
-      trackStudyTime(supabase, user.uid, 5).catch(console.error);
+      trackStudyTime(supabase, user.id, 5).catch(console.error);
     }, 5 * 60 * 1000);
     return () => clearInterval(intervalId);
-  }, [user]);
+  }, [user, supabase]);
 
   const setupAutoSave = useCallback((mindMap: MindMapData | undefined, hasUnsavedChanges: boolean, isSelfReference: boolean, persistFn: (silent: boolean) => void) => {
     if (!user || !mindMap || isSelfReference || !hasUnsavedChanges) return () => {};

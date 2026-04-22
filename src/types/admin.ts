@@ -51,16 +51,15 @@ export interface MapAnalytics {
   userStats: UserContributionStats[];
 }
 
-// Precomputed stats stored in Firestore
+// Precomputed stats for dashboard
 export interface PrecomputedStats {
   totalUsers: number;
   totalMindmaps: number;
   totalChats: number;
   activeUsers: number;
   healthScore: number;
-  mapAnalytics: typeof DEFAULT_MAP_ANALYTICS;
-  any: string;
-  lastUpdated: number;
+  mapAnalytics: MapAnalytics;
+  lastUpdated: string | number;
 }
 
 export interface DashboardMetrics {

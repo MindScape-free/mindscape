@@ -26,13 +26,13 @@ export function useMapSharing() {
     try {
       const { publishMindMapAction } = await import('@/app/actions/community');
       const result = await publishMindMapAction(options.mapId, {
-        originalAuthorId: user.uid,
+        originalAuthorId: user.id,
         authorName: user.displayName || 'Anonymous',
         topic: options.topic,
         summary: options.summary,
         publicCategories: options.categories || [],
         isPublic: true,
-      }, user.uid);
+      }, user.id);
 
       if (result.success) {
         const supabase = getSupabaseClient();
@@ -51,7 +51,7 @@ export function useMapSharing() {
     setIsSharing(true);
     try {
       const { removeFromCommunityAction } = await import('@/app/actions/community');
-      const result = await removeFromCommunityAction(mapId, user.uid);
+      const result = await removeFromCommunityAction(mapId, user.id);
       if (result.success) {
         const supabase = getSupabaseClient();
         await updateMindMapField(supabase, mapId, { is_public: false });

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useUser, useFirestore } from '@/lib/auth-context';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/lib/auth-context';
 import { useAdminActivityLog } from '@/lib/admin-utils';
 // firebase/firestore removed
 import { format } from 'date-fns';
@@ -15,9 +16,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toDate } from '@/types/chat';
+import { MindMapData } from '@/types/mind-map';
 import {
   Map as MapIcon,
   Clock,
+  Activity,
   Eye,
   Trash2,
   X,
@@ -58,11 +61,10 @@ interface UserDetailDialogProps {
 }
 
 export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted, rank }: UserDetailDialogProps) {
-  const { firestore: supabase } = useFirestore();
-  const { user: adminUser } = useUser();
+  const { supabase, isAdmin, user: adminUser } = useAuth();
   const { logAdminActivity } = useAdminActivityLog();
   const [chatCount, setChatCount] = useState<number | null>(null);
-  const [userMaps, setUserMaps] = useState<any[]>([]);
+  const [userMaps, setUserMaps] = useState<MindMapData[]>([]);
   const [isLoadingMaps, setIsLoadingMaps] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -71,7 +73,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
   const [analyticsView, setAnalyticsView] = useState<'current' | 'allTime'>('current');
 
   const handleDeleteUser = useCallback(async () => {
-    if (!supabase || !user) return;
+    if (!supabase || !user || !isAdmin) return;
     setIsDeleting(true);
     try {
       const userEmail = user.email || user.id;
@@ -84,7 +86,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
         targetId: user.id,
         targetType: 'user',
         details: `User deleted: ${userEmail}`,
-        performedBy: adminUser?.uid,
+        performedBy: adminUser?.id,
       });
       onUserDeleted?.();
       onClose();
@@ -94,7 +96,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
       setIsDeleting(false);
       setShowDeleteConfirm(false);
     }
-  }, [supabase, user, adminUser, logAdminActivity, onClose, onUserDeleted]);
+  }, [supabase, user, adminUser, isAdmin, logAdminActivity, onClose, onUserDeleted]);
 
   const handleCopyId = useCallback(() => {
     if (!user?.id) return;
@@ -133,7 +135,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
             nodeCount: m.node_count,
             publicViews: m.public_views,
             aiPersona: m.ai_persona,
-            shortTitle: m.short_title
+            shortTitle: m.short_title || m.title || m.topic
           })));
         } catch (e) {
           console.error('Error fetching profile detail:', e);
@@ -182,385 +184,351 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
     : 0;
 
   return (
-    <div 
-      className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className={`fixed inset-0 z-50 bg-black/40 backdrop-blur-md transition-opacity duration-500 flex items-center justify-center p-4 lg:p-10 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       onClick={onClose}
     >
-      <div 
-        className="absolute top-20 left-1/2 -translate-x-1/2 bg-zinc-900 max-w-6xl w-full h-[calc(100vh-96px)] rounded-[2rem] overflow-hidden text-white flex flex-col shadow-2xl border border-white/10"
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0, y: 30 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        className="relative bg-[#09090b]/80 max-w-6xl w-full h-full max-h-[900px] rounded-[3.5rem] overflow-hidden text-white flex flex-col shadow-[0_0_100px_rgba(0,0,0,0.5)] border border-white/10 backdrop-blur-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="relative flex items-center justify-between p-6 border-b border-white/5 shrink-0 bg-white/5 backdrop-blur-md">
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-violet-600/10 rounded-full blur-[120px] -mr-64 -mt-64 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px] -ml-64 -mb-64 pointer-events-none" />
 
-          <div className="flex items-center gap-5">
+        {/* Header */}
+        <div className="relative flex items-center justify-between p-10 border-b border-white/5 shrink-0 z-10">
+          <div className="flex items-center gap-8">
             <div className="relative group/avatar">
-              <div className="absolute -inset-1.5 bg-gradient-to-br from-violet-500 to-indigo-500 rounded-[1.2rem] opacity-20 group-hover:opacity-40 transition-opacity blur-sm" />
-              <Avatar className="h-16 w-16 rounded-[1.1rem] border border-white/10 relative z-10 shadow-2xl">
-                <AvatarImage src={user.photoURL} />
-                <AvatarFallback className="bg-zinc-900 text-lg font-black text-violet-400">
+              <motion.div 
+                animate={{ rotate: 360 }}
+                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                className="absolute -inset-2 bg-gradient-to-br from-violet-500/30 via-transparent to-indigo-500/30 rounded-[2rem] opacity-50 blur-md" 
+              />
+              <Avatar className="h-24 w-24 rounded-[1.8rem] border-2 border-white/10 relative z-10 shadow-2xl transition-transform duration-500 group-hover/avatar:scale-105">
+                <AvatarImage src={user.photoURL} className="object-cover" />
+                <AvatarFallback className="bg-zinc-900 text-2xl font-black text-violet-400">
                   {(user.displayName || user.email?.split('@')[0] || '??').substring(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
+              <div className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full bg-zinc-950 flex items-center justify-center border-2 border-white/10 z-20">
+                <div className="h-3 w-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)] animate-pulse" />
+              </div>
             </div>
+            
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h2 className="text-2xl font-black text-white tracking-tighter">{user.displayName || user.email?.split('@')[0] || 'User'}</h2>
+              <div className="flex items-center gap-4 mb-2">
+                <h2 className="text-4xl font-black text-white tracking-tighter">{user.displayName || user.email?.split('@')[0] || 'Explorer'}</h2>
                 <div className="flex items-center gap-2">
                   {rank && (
-                    <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-black px-2 py-0.5">
-                      RANK #{rank}
+                    <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-lg shadow-amber-500/10">
+                      Top #{rank}
                     </Badge>
                   )}
-                  {(() => {
-                    const now = new Date();
-                    const createdAt = user.createdAt ? new Date(user.createdAt) : null;
-                    const createdHoursAgo = createdAt ? Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60)) : null;
-                    const lastActive = user.statistics?.lastActiveDate;
-                    const lastActiveDate = lastActive ? new Date(lastActive) : null;
-                    const hoursSinceActive = lastActiveDate ? Math.floor((now.getTime() - lastActiveDate.getTime()) / (1000 * 60 * 60)) : null;
-                    
-                    if (createdHoursAgo !== null && createdHoursAgo <= 48) {
-                      return (
-                        <Badge className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-black px-2 py-0.5 uppercase tracking-widest">
-                          New
-                        </Badge>
-                      );
-                    }
-                    if (hoursSinceActive !== null && hoursSinceActive <= 48) {
-                      return (
-                        <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-black px-2 py-0.5 uppercase tracking-widest">
-                          Active
-                        </Badge>
-                      );
-                    }
-                    return null;
-                  })()}
+                  <Badge className="bg-white/5 border-white/10 text-zinc-500 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-[0.2em]">
+                    Identity Verified
+                  </Badge>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <p className="text-xs font-bold text-zinc-500">{user.email}</p>
-                <div className="w-1 h-1 rounded-full bg-zinc-800" />
-                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/5 border border-white/5">
-                  <span className="text-[10px] font-mono text-zinc-400 truncate max-w-[120px]">{user.id}</span>
-                  <button onClick={handleCopyId} className="shrink-0 p-0.5 hover:bg-white/10 rounded transition-colors" title="Copy ID">
-                    {copiedId ? <Check className="h-2.5 w-2.5 text-emerald-400" /> : <Copy className="h-2.5 w-2.5 text-zinc-500" />}
+              
+              <div className="flex items-center gap-5">
+                <p className="text-sm font-bold text-zinc-500 tracking-tight">{user.email}</p>
+                <div className="w-1.5 h-1.5 rounded-full bg-white/10" />
+                <div className="flex items-center gap-2 group/id">
+                  <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-tighter bg-white/[0.03] px-2 py-0.5 rounded-md border border-white/5 group-hover/id:border-white/20 transition-colors">{user.id}</span>
+                  <button onClick={handleCopyId} className="p-1 hover:bg-white/10 rounded-lg transition-all text-zinc-600 hover:text-white">
+                    {copiedId ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
                   </button>
                 </div>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col items-end mr-2">
-              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Health Score</span>
-              <div className="flex items-center gap-3">
-                <div className="relative h-12 w-12">
-                  <svg className="h-12 w-12 -rotate-90">
-                    <circle
-                      cx="24"
-                      cy="24"
-                      r="20"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      fill="transparent"
-                      className="text-white/5"
-                    />
-                    <circle
-                      cx="24"
-                      cy="24"
-                      r="20"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      fill="transparent"
-                      strokeDasharray={2 * Math.PI * 20}
-                      strokeDashoffset={2 * Math.PI * 20 * (1 - userHealthScore / 100)}
-                      strokeLinecap="round"
-                      className={`${userHealthScore > 80 ? 'text-emerald-500' : userHealthScore > 50 ? 'text-amber-500' : 'text-red-500'} transition-all duration-1000 ease-out`}
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-[10px] font-black">{userHealthScore}</span>
-                  </div>
+
+          <div className="flex items-center gap-4">
+            <div className="flex flex-col items-end mr-6">
+              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em] mb-3">Integrity Score</span>
+              <div className="relative h-16 w-16">
+                <svg className="h-16 w-16 -rotate-90 drop-shadow-[0_0_10px_rgba(var(--accent-rgb),0.3)]">
+                  <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-white/5" />
+                  <motion.circle 
+                    initial={{ strokeDashoffset: 176 }}
+                    animate={{ strokeDashoffset: 176 * (1 - userHealthScore / 100) }}
+                    transition={{ duration: 1.5, ease: "easeOut" }}
+                    cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" strokeDasharray="176" strokeLinecap="round" 
+                    className={`${userHealthScore > 80 ? 'text-emerald-500' : userHealthScore > 50 ? 'text-amber-500' : 'text-red-500'}`} 
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-sm font-black tracking-tighter">{userHealthScore}</span>
                 </div>
-                <div className="h-8 w-px bg-white/10" />
               </div>
             </div>
+
+            <div className="h-10 w-px bg-white/5 mx-2" />
+
             {!showDeleteConfirm ? (
-              <button
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={() => setShowDeleteConfirm(true)}
-                className="p-3 rounded-xl bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 text-red-400 transition-all hover:scale-105 active:scale-95"
-                title="Delete User"
+                className="p-4 rounded-2xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 transition-all shadow-xl shadow-red-500/5 group"
+                title="Deactivate Subject"
               >
-                <Trash2 className="h-5 w-5" />
-              </button>
+                <Trash2 className="h-6 w-6 group-hover:rotate-6 transition-transform" />
+              </motion.button>
             ) : (
-              <div className="flex items-center gap-2 bg-red-500/10 p-1.5 rounded-xl border border-red-500/20 animate-in fade-in zoom-in-95">
+              <div className="flex items-center gap-3 bg-red-500/10 p-2 rounded-2xl border border-red-500/20 animate-in fade-in zoom-in-95">
                 <button
                   onClick={handleDeleteUser}
                   disabled={isDeleting}
-                  className="px-4 py-2 text-[10px] font-black bg-red-500 hover:bg-red-600 text-white rounded-lg transition-all shadow-lg shadow-red-500/20"
+                  className="px-6 py-2.5 text-[10px] font-black bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all shadow-xl shadow-red-500/20 uppercase tracking-widest"
                 >
-                  {isDeleting ? 'Deleting...' : 'Delete Permanently'}
+                  {isDeleting ? 'Erasing...' : 'Confirm Wipe'}
                 </button>
                 <button
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="px-4 py-2 text-[10px] font-black bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all"
+                  className="px-4 py-2.5 text-[10px] font-black bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all uppercase tracking-widest"
                 >
-                  Cancel
+                  Abort
                 </button>
               </div>
             )}
-            <button
+            
+            <motion.button
+              whileHover={{ rotate: 90, scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
               onClick={onClose}
-              className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-zinc-400 transition-all group"
+              className="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white transition-all shadow-2xl"
             >
-              <X className="h-5 w-5 group-hover:rotate-90 transition-transform duration-300" />
-            </button>
+              <X className="h-6 w-6" />
+            </motion.button>
           </div>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
-          {/* Stats Grid - High Fidelity Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-10 space-y-10 relative z-10">
+          {/* Stats Grid - Premium Refinement */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
             {[
-              { label: 'Total Created', value: stats.totalMapsCreated || 0, icon: MapIcon, color: 'violet', tooltip: 'All-time total including deleted' },
-              { label: 'Current Maps', value: userMaps.length, icon: MapIcon, color: 'indigo', tooltip: 'Maps currently in system' },
-              { label: 'Avg Nodes', value: avgNodesPerMap, icon: Layers, color: 'blue', tooltip: 'Average nodes per current map' },
-              { label: 'Total Nodes', value: currentTotalNodes, icon: Layers, color: 'cyan', tooltip: 'Total nodes in current maps' },
-              { label: 'Images', value: stats.totalImagesGenerated || 0, icon: ImageIcon, color: 'emerald' },
-              { label: 'Chats', value: chatCount ?? '-', icon: BarChart3, color: 'yellow' },
-              { label: 'Streak', value: `${stats.currentStreak || 0}d`, icon: Zap, color: 'orange' },
-              { label: 'Study Time', value: `${Math.floor((stats.totalStudyTimeMinutes || 0) / 60)}h ${(stats.totalStudyTimeMinutes || 0) % 60}m`, icon: Clock, color: 'pink' },
-              { label: 'Joined', value: userCreatedAt ? format(userCreatedAt, 'dd/MM/yy') : '-', icon: UserRound, color: 'indigo' },
-              { label: 'Last Active', value: stats.lastActiveDate 
-                ? (stats.lastActiveDate.includes('T') 
-                    ? format(new Date(stats.lastActiveDate), 'dd/MM HH:mm')
-                    : format(new Date(stats.lastActiveDate + 'T12:00:00'), 'dd/MM/yy'))
-                : '-', icon: Globe, color: 'violet' },
+              { label: 'Total Sync', value: stats.totalMapsCreated || 0, icon: MapIcon, color: 'violet', trend: '+12%' },
+              { label: 'Active Mind', value: userMaps.length, icon: Brain, color: 'indigo' },
+              { label: 'Avg Density', value: avgNodesPerMap, icon: Layers, color: 'blue' },
+              { label: 'Total Mass', value: currentTotalNodes, icon: Zap, color: 'emerald' },
+              { label: 'Generations', value: stats.totalImagesGenerated || 0, icon: ImageIcon, color: 'pink' },
+              { label: 'Dialogues', value: chatCount ?? '-', icon: BarChart3, color: 'yellow' },
+              { label: 'Vigor Streak', value: `${stats.currentStreak || 0}d`, icon: Flame, color: 'orange' },
+              { label: 'Cognitive Time', value: `${Math.floor((stats.totalStudyTimeMinutes || 0) / 60)}h`, icon: Clock, color: 'sky' },
+              { label: 'Origin Date', value: userCreatedAt ? format(userCreatedAt, 'dd/MM/yy') : '-', icon: UserRound, color: 'violet' },
+              { label: 'Last Signal', value: stats.lastActiveDate 
+                ? format(new Date(stats.lastActiveDate), 'dd MMM')
+                : '-', icon: Globe, color: 'indigo' },
             ].map((stat, idx) => (
-              <div 
-                key={stat.label} 
-                className="relative overflow-hidden p-5 rounded-3xl bg-zinc-900/40 border border-white/5 transition-all duration-300 hover:border-white/10 group"
+              <motion.div 
+                key={stat.label}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.05 }}
+                className="relative overflow-hidden p-6 rounded-[2rem] bg-white/5 border border-white/10 hover:border-white/20 transition-all group"
               >
-                <div className={`absolute top-0 right-0 w-20 h-20 bg-${stat.color}-500/5 rounded-full blur-2xl group-hover:bg-${stat.color}-500/10 transition-colors`} />
-                <div className="relative flex items-center gap-4">
-                  <div className={`p-3 rounded-2xl bg-${stat.color}-500/10 border border-${stat.color}-500/20 transition-transform group-hover:scale-110 duration-500`}>
-                    <stat.icon className={`h-4 w-4 text-${stat.color}-400`} />
+                <div className={`absolute top-0 right-0 w-24 h-24 bg-${stat.color}-500/5 rounded-full blur-2xl group-hover:bg-${stat.color}-500/10 transition-colors pointer-events-none`} />
+                <div className="relative flex flex-col gap-4">
+                  <div className={`w-fit p-3 rounded-2xl bg-${stat.color}-500/10 border border-${stat.color}-500/20 group-hover:scale-110 transition-transform duration-500`}>
+                    <stat.icon className={`h-5 w-5 text-${stat.color}-400`} />
                   </div>
                   <div>
-                    <p className="text-2xl font-black text-white tracking-tighter leading-none mb-1">
-                      {stat.value}
-                    </p>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{stat.label}</p>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-3xl font-black text-white tracking-tighter leading-none">
+                        {stat.value}
+                      </p>
+                      {stat.trend && <span className="text-[8px] font-black text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-md">{stat.trend}</span>}
+                    </div>
+                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500">{stat.label}</p>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
 
-          {/* Activity Timeline */}
+          {/* Activity Insight */}
           {user.activity && Object.keys(user.activity).length > 0 && (
-            <div className="relative overflow-hidden rounded-3xl bg-zinc-900/40 border border-white/5 p-8 transition-all hover:border-white/10">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-violet-500/5 rounded-full blur-[100px] pointer-events-none" />
-              <div className="flex items-center justify-between mb-6 relative z-10">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-400 mb-1">Activity Insight</p>
-                  <h3 className="text-lg font-black text-white tracking-tighter">Engagement Heatmap</h3>
+            <div className="relative overflow-hidden rounded-[2.5rem] bg-white/5 border border-white/10 p-10 transition-all hover:border-white/20">
+              <div className="absolute top-0 right-0 w-80 h-80 bg-violet-600/5 rounded-full blur-[100px] pointer-events-none" />
+              <div className="flex items-center justify-between mb-8 relative z-10">
+                <div className="flex items-center gap-4">
+                  <div className="p-4 bg-violet-500/10 rounded-2xl border border-violet-500/20">
+                    <Activity className="h-6 w-6 text-violet-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-white tracking-tighter">Neural Activity Heatmap</h3>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 mt-1">Spatio-temporal engagement metrics</p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 bg-white/5 p-1.5 rounded-2xl border border-white/5">
+
+                <div className="flex items-center gap-4 bg-white/5 p-1.5 rounded-2xl border border-white/10 backdrop-blur-2xl">
                   <button
                     onClick={() => setUserHeatmapMonth(new Date(userHeatmapMonth.getFullYear(), userHeatmapMonth.getMonth() - 1, 1))}
-                    className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all"
+                    className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all group"
                   >
-                    <ChevronLeft className="h-4 w-4" />
+                    <ChevronLeft className="h-5 w-5 group-hover:-translate-x-0.5 transition-transform" />
                   </button>
-                  <div className="px-4 text-center">
-                    <span className="text-xs font-black text-white block uppercase tracking-wider">
+                  <div className="w-32 text-center">
+                    <span className="text-xs font-black text-white block uppercase tracking-widest pb-0.5">
                       {format(userHeatmapMonth, 'MMMM')}
                     </span>
-                    <span className="text-[9px] font-bold text-zinc-500">{format(userHeatmapMonth, 'yyyy')}</span>
+                    <span className="text-[10px] font-black text-zinc-600 uppercase tracking-tighter">{format(userHeatmapMonth, 'yyyy')}</span>
                   </div>
                   <button
                     onClick={() => setUserHeatmapMonth(new Date(userHeatmapMonth.getFullYear(), userHeatmapMonth.getMonth() + 1, 1))}
                     disabled={new Date(userHeatmapMonth.getFullYear(), userHeatmapMonth.getMonth() + 1, 1) > new Date()}
-                    className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all disabled:opacity-30"
+                    className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all group disabled:opacity-20"
                   >
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight className="h-5 w-5 group-hover:translate-x-0.5 transition-transform" />
                   </button>
                 </div>
               </div>
               
               <div className="relative z-10">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-zinc-500 font-bold">Activity level:</span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[9px] text-zinc-600 font-bold mr-1">Low</span>
-                      {['bg-zinc-800', 'bg-violet-900/60', 'bg-violet-700/70', 'bg-violet-500', 'bg-violet-400'].map((c, i) => (
-                        <div key={i} className={`h-2.5 w-2.5 rounded-[3px] ${c} shadow-sm`} />
-                      ))}
-                      <span className="text-[9px] text-zinc-600 font-bold ml-1">High</span>
-                    </div>
-                  </div>
-                </div>
-
                 <TooltipProvider delayDuration={0}>
-                  <div className="grid grid-cols-[repeat(31,minmax(0,1fr))] gap-1">
+                  <div className="grid grid-cols-[repeat(31,minmax(0,1fr))] gap-2">
                     <ActivityHeatmap 
                       userActivity={user.activity} 
                       userHeatmapMonth={userHeatmapMonth} 
                     />
                   </div>
                 </TooltipProvider>
+                
+                <div className="flex items-center justify-end mt-6 gap-3">
+                  <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mr-2">Intensity Spectrum:</span>
+                  {['bg-zinc-800', 'bg-violet-900/60', 'bg-violet-700/70', 'bg-violet-500', 'bg-violet-400'].map((c, i) => (
+                    <div key={i} className={`h-3 w-3 rounded-md ${c} shadow-sm border border-white/5`} />
+                  ))}
+                </div>
               </div>
             </div>
           )}
 
-          {/* Achievements */}
+          {/* Achieving Milestones */}
           {user.unlockedAchievements && user.unlockedAchievements.length > 0 && (
-            <div className="rounded-2xl bg-zinc-900/40 border border-white/5 p-6">
-              <p className="text-[10px] font-black uppercase text-zinc-500 mb-4">Achievements ({user.unlockedAchievements.length})</p>
-              <div className="flex flex-wrap gap-2">
+            <div className="p-8 rounded-[2rem] bg-white/5 border border-white/10">
+              <div className="flex items-center gap-3 mb-6">
+                <Trophy className="h-4 w-4 text-amber-400" />
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Unlocked Milestones ({user.unlockedAchievements.length})</p>
+              </div>
+              <div className="flex flex-wrap gap-3">
                 {user.unlockedAchievements.map((a: string) => (
-                  <span key={a} className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[9px] font-black text-amber-400 uppercase">
+                  <Badge key={a} className="px-4 py-2 rounded-xl bg-amber-500/5 border border-amber-500/20 text-[10px] font-black text-amber-400 uppercase tracking-widest hover:bg-amber-500/10 transition-colors">
                     {a.replace(/_/g, ' ')}
-                  </span>
+                  </Badge>
                 ))}
               </div>
             </div>
           )}
 
-          <div className="relative overflow-hidden rounded-3xl bg-zinc-900/40 border border-white/5 p-8 transition-all hover:border-white/10">
-            <div className="absolute top-0 left-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none" />
+          <div className="relative overflow-hidden rounded-[2.5rem] bg-white/5 border border-white/10 p-10 transition-all hover:border-white/20">
+            <div className="absolute top-0 left-0 w-80 h-80 bg-indigo-600/5 rounded-full blur-[100px] pointer-events-none" />
             <div className="flex items-center justify-between mb-8 relative z-10">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-indigo-500/10 rounded-2xl border border-indigo-500/20">
+              <div className="flex items-center gap-4">
+                <div className="p-4 bg-indigo-500/10 rounded-2xl border border-indigo-500/20">
                   <Library className="h-6 w-6 text-indigo-400" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-white tracking-tighter">Mindmap Index ({userMaps.length})</h3>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">MANAGE AND ACCESS YOUR MAP LIBRARY</p>
+                  <h3 className="text-2xl font-black text-white tracking-tighter">Subject Library ({userMaps.length})</h3>
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 mt-1">Comprehensive index of cognitive mindmaps</p>
                 </div>
               </div>
             </div>
 
             {isLoadingMaps ? (
-              <div className="py-20 flex flex-col items-center justify-center gap-4 relative z-10">
-                <div className="relative">
-                  <div className="h-12 w-12 border-2 border-violet-500/20 rounded-full" />
-                  <div className="absolute inset-0 h-12 w-12 border-t-2 border-violet-500 rounded-full animate-spin" />
+              <div className="py-32 flex flex-col items-center justify-center gap-6 relative z-10">
+                <div className="relative h-16 w-16">
+                  <div className="absolute inset-0 border-4 border-violet-500/10 rounded-full" />
+                  <div className="absolute inset-0 border-t-4 border-violet-500 rounded-full animate-spin shadow-[0_0_15px_rgba(139,92,246,0.3)]" />
                 </div>
-                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest animate-pulse">Synchronizing Data...</p>
+                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] animate-pulse">Establishing Cryptographic Sync...</p>
               </div>
             ) : userMaps.length > 0 ? (
-              <div className="overflow-x-auto relative z-10 custom-scrollbar">
-                <table className="w-full border-separate border-spacing-y-2">
-                  <thead>
-                    <tr>
-                      <th className="text-left text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 pb-4 pl-4">CONCEPT TITLE</th>
-                      <th className="text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 pb-4">CREATED</th>
-                      <th className="text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 pb-4">NODES</th>
-                      <th className="text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 pb-4">VIEWS</th>
-                      <th className="text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 pb-4">SOURCE</th>
-                      <th className="text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 pb-4">MODE</th>
-                      <th className="text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 pb-4">DEPTH</th>
-                      <th className="text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 pb-4">PERSONA</th>
-                      <th className="text-right text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 pb-4 pr-4">ACTION</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {userMaps.map(m => {
-                      const depthConfig = m.depth === 'deep' || (!m.depth || m.depth === 'auto' ? (m.nodeCount || 0) > 75 : false)
-                        ? { color: 'indigo', label: 'DETAILED' }
-                        : (m.depth === 'medium' || (!m.depth || m.depth === 'auto' ? (m.nodeCount || 0) > 35 : false))
-                          ? { color: 'blue', label: 'BALANCED' }
-                          : { color: 'violet', label: 'QUICK' };
-
-                      return (
-                        <tr key={m.id} className="group/row">
-                          <td className="py-3 pl-4 bg-white/5 rounded-l-2xl border-y border-l border-white/5 group-hover/row:bg-white/[0.08] transition-colors">
-                            <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-indigo-500/20 flex items-center justify-center border border-violet-500/20 shadow-sm group-hover/row:scale-110 transition-transform">
-                                <MapIcon className="h-5 w-5 text-violet-400" />
+              <div className="relative z-10">
+                <div className="overflow-x-auto custom-scrollbar pb-4">
+                  <table className="w-full border-separate border-spacing-y-3">
+                    <thead>
+                      <tr>
+                        <th className="text-left text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600 pb-2 pl-6">Topic / Signature</th>
+                        <th className="text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600 pb-2">Sync Date</th>
+                        <th className="text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600 pb-2">Nodes</th>
+                        <th className="text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600 pb-2">Reach</th>
+                        <th className="text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600 pb-2">Origin</th>
+                        <th className="text-right text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600 pb-2 pr-6">Access</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {userMaps.map(m => {
+                        return (
+                          <motion.tr 
+                            key={m.id} 
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className="group/row"
+                          >
+                            <td className="py-4 pl-6 bg-white/[0.02] rounded-l-3xl border-y border-l border-white/5 group-hover/row:bg-white/[0.05] transition-all duration-300">
+                              <div className="flex items-center gap-4">
+                                <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-violet-600/20 to-indigo-600/20 flex items-center justify-center border border-white/10 shadow-lg group-hover/row:scale-110 group-hover/row:rotate-3 transition-transform duration-500">
+                                  <MapIcon className="h-6 w-6 text-violet-400" />
+                                </div>
+                                <div className="min-w-0">
+                                  <span className="text-sm font-black text-white group-hover/row:text-violet-400 transition-colors truncate block max-w-[280px]">
+                                    {m.shortTitle || m.topic || 'Untitled Knowledge'}
+                                  </span>
+                                  <span className="text-[9px] font-black text-zinc-500 uppercase tracking-tighter">
+                                    SIG: {(m.id || '').substring((m.id || '').length - 8).toUpperCase()}
+                                  </span>
+                                </div>
                               </div>
-                              <div className="min-w-0">
-                                <span className="text-xs font-black text-white truncate block max-w-[220px]">
-                                  {m.shortTitle || m.topic || m.title || 'System Generated Asset'}
-                                </span>
-                                <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-tighter">
-                                  ID: {m.id.substring(0, 8)}...
-                                </span>
+                            </td>
+                            <td className="py-4 text-center bg-white/[0.02] border-y border-white/5 group-hover/row:bg-white/[0.05] transition-colors">
+                              <span className="text-[11px] font-black text-zinc-400 tracking-tighter uppercase">{m.createdAt ? format(toDate(m.createdAt), 'MMM dd, HH:mm') : '-'}</span>
+                            </td>
+                            <td className="py-4 text-center bg-white/[0.02] border-y border-white/5 group-hover/row:bg-white/[0.05] transition-colors">
+                              <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px] font-black px-3 py-1 rounded-full">{m.nodeCount || 0}</Badge>
+                            </td>
+                            <td className="py-4 text-center bg-white/[0.02] border-y border-white/5 group-hover/row:bg-white/[0.05] transition-colors">
+                              <div className="flex items-center justify-center gap-2">
+                                <Eye className="h-3.5 w-3.5 text-emerald-500" />
+                                <span className="text-[11px] font-black text-emerald-400">{m.publicViews || 0}</span>
                               </div>
-                            </div>
-                          </td>
-                          <td className="py-3 text-center bg-white/5 border-y border-white/5 group-hover/row:bg-white/[0.08] transition-colors">
-                            <span className="text-[10px] font-black text-white">{m.createdAt ? format(toDate(m.createdAt), 'dd/MM/yy HH:mm') : '-'}</span>
-                          </td>
-                          <td className="py-3 text-center bg-white/5 border-y border-white/5 group-hover/row:bg-white/[0.08] transition-colors">
-                            <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 w-fit mx-auto border border-blue-500/20">
-                              <span className="text-[10px] font-black text-blue-400">{m.nodeCount || 0}</span>
-                            </div>
-                          </td>
-                          <td className="py-3 text-center bg-white/5 border-y border-white/5 group-hover/row:bg-white/[0.08] transition-colors">
-                            <div className="flex items-center justify-center gap-1.5" title="Community Views">
-                              <Eye className="h-3.5 w-3.5 text-emerald-500" />
-                              <span className="text-[10px] font-black text-emerald-400">{m.publicViews || 0}</span>
-                            </div>
-                          </td>
-                          <td className="py-3 text-center bg-white/5 border-y border-white/5 group-hover/row:bg-white/[0.08] transition-colors">
-                            {(() => {
-                                const st = m.sourceFileType || m.sourceType;
-                                const isMulti = st === 'multi';
-                                const icon = st === 'youtube' || m.videoId ? '🎥' : st === 'pdf' ? '📄' : st === 'image' ? '🖼️' : st === 'website' || m.sourceUrl ? '🌐' : isMulti ? '📦' : '📝';
-                                const color = st === 'youtube' || m.videoId ? 'text-red-400 bg-red-500/10 border-red-500/20' : st === 'pdf' ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : st === 'image' ? 'text-pink-400 bg-pink-500/10 border-pink-500/20' : st === 'website' || m.sourceUrl ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : isMulti ? 'text-violet-400 bg-violet-500/10 border-violet-500/20' : 'text-zinc-400 bg-zinc-500/10 border-zinc-500/20';
-                                const label = st === 'youtube' || m.videoId ? 'Video' : st === 'pdf' ? 'PDF' : st === 'image' ? 'Image' : st === 'website' || m.sourceUrl ? 'Web' : isMulti ? 'Multi' : 'Text';
-                                return (
-                                    <div
-                                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[8px] font-black uppercase tracking-tighter cursor-help ${color}`}
-                                        title={label}
-                                    >
-                                        <span>{icon}</span>
-                                        <span>{label}</span>
-                                    </div>
-                                );
-                            })()}
-                          </td>
-                          <td className="py-3 text-center bg-white/5 border-y border-white/5 group-hover/row:bg-white/[0.08] transition-colors">
-                            <Badge className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[8px] font-black uppercase px-2 py-0.5">
-                              {m.mode || 'SINGLE'}
-                            </Badge>
-                          </td>
-                          <td className="py-3 text-center bg-white/5 border-y border-white/5 group-hover/row:bg-white/[0.08] transition-colors">
-                            <Badge className={`bg-${depthConfig.color}-500/10 text-${depthConfig.color}-400 border border-${depthConfig.color}-500/20 text-[8px] font-black uppercase px-2 py-0.5`}>
-                              {depthConfig.label}
-                            </Badge>
-                          </td>
-                          <td className="py-3 text-center bg-white/5 border-y border-white/5 group-hover/row:bg-white/[0.08] transition-colors">
-                            <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[8px] font-black uppercase px-2 py-0.5">
-                              {m.aiPersona || 'TEACHER'}
-                            </Badge>
-                          </td>
-                          <td className="py-3 text-right pr-4 bg-white/5 rounded-r-2xl border-y border-r border-white/5 group-hover/row:bg-white/[0.08] transition-colors">
-                            <button 
-                              onClick={() => window.open(`/canvas?mapId=${m.id}&ownerId=${user.id}`, '_blank')}
-                              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-500 hover:text-white border border-white/5 transition-all hover:scale-110 active:scale-95"
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            </td>
+                            <td className="py-4 text-center bg-white/[0.02] border-y border-white/5 group-hover/row:bg-white/[0.05] transition-colors">
+                              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/5 text-[9px] font-black uppercase tracking-tighter text-zinc-400">
+                                {m.sourceFileType === 'youtube' ? '🎥' : m.sourceFileType === 'pdf' ? '📄' : '📝'} {m.sourceFileType || 'Text'}
+                              </div>
+                            </td>
+                            <td className="py-4 text-right pr-6 bg-white/[0.02] rounded-r-3xl border-y border-r border-white/5 group-hover/row:bg-white/[0.05] transition-colors">
+                              <motion.button 
+                                whileHover={{ scale: 1.1, x: -5 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => window.open(`/canvas?mapId=${m.id}&ownerId=${user.id}`, '_blank')}
+                                className="p-3 rounded-[1.2rem] bg-white/5 hover:bg-violet-600 text-zinc-400 hover:text-white border border-white/10 transition-all shadow-xl"
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </motion.button>
+                            </td>
+                          </motion.tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ) : (
-              <div className="py-12 flex flex-col items-center justify-center text-zinc-600 relative z-10">
-                <div className="p-4 rounded-full bg-zinc-800/30 mb-3 grayscale opacity-30">
-                  <Library className="h-8 w-8" />
+              <div className="py-24 flex flex-col items-center justify-center text-zinc-700 relative z-10 border-2 border-dashed border-white/5 rounded-[2.5rem]">
+                <div className="p-6 rounded-[2rem] bg-white/5 mb-6 opacity-30">
+                  <Library className="h-12 w-12" />
                 </div>
-                <p className="text-xs font-black uppercase tracking-widest italic">Inventory Empty</p>
+                <p className="text-xs font-black uppercase tracking-[0.4em] italic mb-2">Subject Index Dormant</p>
+                <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest text-center max-w-xs">No mindmap signatures detected for this biological entity.</p>
               </div>
             )}
           </div>
@@ -568,7 +536,6 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
           {/* Map Analytics */}
           {userMaps.length > 0 && (
             <div className="space-y-6 border border-violet-500/30 rounded-2xl p-6 bg-violet-500/5">
-              {/* Premium Header with Overview Stats & Toggle */}
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-3">
                   <div className="p-3 bg-gradient-to-br from-violet-500/20 to-indigo-500/20 rounded-2xl border border-violet-500/30 shadow-lg shadow-violet-500/10">
@@ -583,52 +550,37 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
                     </p>
                   </div>
                 </div>
-                
                 <div className="flex items-center gap-4">
-                  <div className="flex gap-1 p-1 bg-zinc-800/50 rounded-xl border border-white/10">
+                  <div className="flex gap-1.5 p-1.5 bg-white/5 rounded-2xl border border-white/10">
                     <button
                       onClick={() => setAnalyticsView('current')}
-                      className={`px-5 py-2.5 text-xs font-bold rounded-lg transition-all ${
+                      className={`px-6 py-2.5 text-[10px] font-black rounded-[0.9rem] transition-all uppercase tracking-widest ${
                         analyticsView === 'current'
-                          ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/20'
-                          : 'text-zinc-400 hover:text-white hover:bg-white/10'
+                          ? 'bg-violet-600 text-white shadow-xl shadow-violet-600/20 scale-105'
+                          : 'text-zinc-500 hover:text-white hover:bg-white/5'
                       }`}
                     >
-                      Current
+                      Realtime
                     </button>
                     <button
                       onClick={() => setAnalyticsView('allTime')}
-                      className={`px-5 py-2.5 text-xs font-bold rounded-lg transition-all ${
+                      className={`px-6 py-2.5 text-[10px] font-black rounded-[0.9rem] transition-all uppercase tracking-widest ${
                         analyticsView === 'allTime'
-                          ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/20'
-                          : 'text-zinc-400 hover:text-white hover:bg-white/10'
+                          ? 'bg-violet-600 text-white shadow-xl shadow-violet-600/20 scale-105'
+                          : 'text-zinc-500 hover:text-white hover:bg-white/5'
                       }`}
                     >
-                      All Time
+                      Aggregate
                     </button>
                   </div>
-                  
-                  {rank && (
-                    <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500/10 to-orange-500/10 rounded-xl border border-amber-500/20">
-                      <Trophy className="h-4 w-4 text-amber-400" />
-                      <span className="text-lg font-black text-amber-400">#{rank}</span>
-                    </div>
-                  )}
                 </div>
               </div>
-
-
-
-              {analyticsView === 'current' ? (
-                <UserMapAnalytics userMaps={userMaps} />
-              ) : (
-                <AllTimeAnalytics stats={stats} />
-              )}
+              <UserMapAnalytics userMaps={userMaps} />
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -681,22 +633,14 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
   const modeCounts = { single: 0, compare: 0, multi: 0 };
   const depthCounts = { low: 0, medium: 0, deep: 0, unspecified: 0 };
   const sourceCounts: Record<string, number> = {
-    'text': 0,
-    'website': 0,
-    'image': 0,
-    'youtube': 0,
-    'pdf': 0,
-    'multi': 0
+    'text': 0, 'pdf': 0, 'youtube': 0, 'web': 0, 'unknown': 0
   };
+  const publicPrivate = { public: 0, private: 0 };
   const personaCounts: Record<string, number> = {
-    Teacher: 0,
-    Concise: 0,
-    Creative: 0,
-    Sage: 0,
+    'Teacher': 0, 'Concise': 0, 'Creative': 0, 'Sage': 0
   };
   let totalSubMaps = 0;
   const parentMapIds = new Set<string>();
-  const publicPrivate = { public: 0, private: 0 };
 
   userMaps.forEach(m => {
     // Mode Detection
@@ -757,35 +701,33 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
   return (
     <div className="space-y-6">
       {/* Row 1: Mode & Depth */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Maps by Mode */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-6">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full blur-3xl" />
+        <div className="relative overflow-hidden rounded-[2rem] bg-white/5 border border-white/10 p-8 shadow-xl">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-violet-600/5 rounded-full blur-3xl pointer-events-none" />
           <div className="relative">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 bg-violet-500/10 rounded-xl border border-violet-500/20">
-                <MapIcon className="h-4 w-4 text-violet-400" />
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-violet-500/10 rounded-xl border border-violet-500/20">
+                <MapIcon className="h-5 w-5 text-violet-400" />
               </div>
-              <p className="text-sm font-bold text-white">Maps by Mode</p>
+              <p className="text-sm font-black text-white uppercase tracking-widest">Cognitive Modes</p>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-4">
               {( [
-                { key: 'single', label: 'Single', value: modeCounts.single, color: 'violet' as const, icon: FileText },
-                { key: 'compare', label: 'Compare', value: modeCounts.compare, color: 'indigo' as const, icon: Copy },
-                { key: 'multi', label: 'Multi', value: modeCounts.multi, color: 'blue' as const, icon: Layers },
+                { key: 'single', label: 'Monologue', value: modeCounts.single, color: 'violet' as const, icon: FileText },
+                { key: 'compare', label: 'Dual-Synapse', value: modeCounts.compare, color: 'indigo' as const, icon: Copy },
+                { key: 'multi', label: 'Networked', value: modeCounts.multi, color: 'blue' as const, icon: Layers },
               ] as const).map(({ key, label, value, color, icon: Icon }) => {
                 const percentage = Math.round((value / total) * 100);
                 return (
-                  <div key={key} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10`}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className={`p-1.5 bg-${color}-500/10 rounded-lg`}>
-                        <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
-                      </div>
-                      <span className="text-[8px] font-bold uppercase tracking-wider text-${color}-400/70">{label}</span>
+                  <div key={key} className="rounded-2xl bg-white/[0.03] border border-white/5 p-5 transition-all hover:bg-white/[0.06] group/item">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Icon className={`h-4 w-4 text-${color}-400`} />
+                      <span className="text-[10px] font-black uppercase tracking-tighter text-zinc-500">{label}</span>
                     </div>
                     <div className="flex items-end justify-between">
-                      <p className="text-2xl font-black text-white tracking-tight">{value}</p>
-                      <span className={`px-1.5 py-0.5 rounded-lg bg-${color}-500/10 text-[9px] font-bold text-${color}-400`}>{percentage}%</span>
+                      <p className="text-3xl font-black text-white tracking-tighter">{value}</p>
+                      <span className={`text-[10px] font-black text-${color}-400`}>{percentage}%</span>
                     </div>
                   </div>
                 );
@@ -795,16 +737,16 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
         </div>
 
         {/* Maps by Depth */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-6">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl" />
+        <div className="relative overflow-hidden rounded-[2rem] bg-white/5 border border-white/10 p-8 shadow-xl">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-600/5 rounded-full blur-3xl pointer-events-none" />
           <div className="relative">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
-                <Layers className="h-4 w-4 text-indigo-400" />
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
+                <Layers className="h-5 w-5 text-indigo-400" />
               </div>
-              <p className="text-sm font-bold text-white">Maps by Depth</p>
+              <p className="text-sm font-black text-white uppercase tracking-widest">Structural Depth</p>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-4">
               {( [
                 { key: 'low', label: 'Quick', value: depthCounts.low, color: 'emerald' as const, icon: Zap },
                 { key: 'medium', label: 'Balanced', value: depthCounts.medium, color: 'yellow' as const, icon: Layers },

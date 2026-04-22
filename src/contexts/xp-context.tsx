@@ -6,6 +6,8 @@ import { awardPointsAction } from '@/app/actions/award-points';
 import { PointEventType } from '@/types/points';
 import { AwardResult } from '@/lib/points-engine';
 import { XPToastStack, XPToastItem } from '@/components/points/xp-toast';
+import { getSupabaseClient } from '@/lib/supabase-db';
+import { trackLogin } from '@/lib/activity-tracker';
 
 const EVENT_LABELS: Record<PointEventType, string> = {
   MAP_CREATED:           'Mind Map Created',
@@ -55,7 +57,7 @@ export function XPProvider({ children }: { children: React.ReactNode }) {
   ): Promise<AwardResult | null> => {
     if (!user) return null;
 
-    const { data, error } = await awardPointsAction(user.uid, eventType, metadata);
+    const { data, error } = await awardPointsAction(user.id, eventType, metadata);
     if (error || !data || !data.awarded) return data;
 
     // Push toast
@@ -64,6 +66,22 @@ export function XPProvider({ children }: { children: React.ReactNode }) {
 
     return data;
   }, [user]);
+
+  // Handle daily login and activity tracking
+  React.useEffect(() => {
+    if (user) {
+      // Award daily login points
+      awardXP('DAILY_LOGIN').catch(() => {});
+      
+      // Track activity in users table (streaks, etc.)
+      const supabase = getSupabaseClient();
+      trackLogin(supabase, user.id, {
+        displayName: user.displayName,
+        email: user.email,
+        photoURL: user.photoURL
+      }).catch(err => console.error('[XPContext] trackLogin failed:', err));
+    }
+  }, [user?.id, awardXP]);
 
   const dismissToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));

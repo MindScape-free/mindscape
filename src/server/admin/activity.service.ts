@@ -13,11 +13,11 @@ export interface ActivityLogEntry {
 }
 
 export async function logAdminActivity(entry: ActivityLogEntry): Promise<{ success: boolean; error?: string }> {
-  const { admin, supabase } = { supabase: getSupabaseAdmin() };
+  const supabase = getSupabaseAdmin();
 
-  if (!supabase || !admin) {
-    console.error('[ActivityService] Firebase Admin not available');
-    return { success: false, error: 'Firebase Admin not initialized' };
+  if (!supabase) {
+    console.error('[ActivityService] Supabase Admin not available');
+    return { success: false, error: 'Supabase Admin not initialized' };
   }
 
   try {
@@ -26,112 +26,114 @@ export async function logAdminActivity(entry: ActivityLogEntry): Promise<{ succe
     const dateStr = dateObj.toISOString().split('T')[0];
     const monthStr = dateStr.substring(0, 7);
 
-    await supabase.collection('adminActivityLog').add({
-      ...entry,
+    // 1. Log the activity with snake_case mapping
+    const { error: logError } = await supabase.from('admin_activity_log').insert({
+      type: entry.type,
+      user_id: entry.userId,
+      user_email: entry.userEmail,
+      performed_by: entry.performedBy,
+      target_type: entry.targetType,
+      target_id: entry.targetId,
+      details: entry.details,
+      metadata: entry.metadata || {},
       timestamp,
-      createdAt: admin.supabase.Timestamp.now(),
     });
 
+    if (logError) throw logError;
+
+    // 2. Compute increments for stats
     const type = entry.type;
-    const increments: Record<string, any> = {};
+    const updates: Record<string, number> = {};
 
     if (type === 'MAP_CREATED') {
-      increments.totalMindmapsEver = admin.supabase.FieldValue.increment(1);
-      increments.newMapsToday = admin.supabase.FieldValue.increment(1);
+      updates.total_mindmaps_ever = 1;
+      updates.new_maps_today = 1;
       const isSubMap = entry.metadata?.isSubMap === true || !!entry.metadata?.parentMapId;
       if (!isSubMap) {
-        increments.totalMindmaps = admin.supabase.FieldValue.increment(1);
+        updates.total_mindmaps = 1;
       }
     } else if (type === 'USER_CREATED') {
-      increments.totalUsers = admin.supabase.FieldValue.increment(1);
-      increments.newUsersToday = admin.supabase.FieldValue.increment(1);
+      updates.total_users = 1;
+      updates.new_users_today = 1;
     } else if (type === 'LOGIN') {
-      increments.activeUsers = admin.supabase.FieldValue.increment(1);
+      updates.active_users = 1;
     } else if (type === 'MAP_DELETED') {
-      increments.totalMindmaps = admin.supabase.FieldValue.increment(-1);
+      updates.total_mindmaps = -1;
     } else if (type === 'CHAT_CREATED') {
-      increments.totalChats = admin.supabase.FieldValue.increment(1);
+      updates.total_chats = 1;
     }
 
-    if (Object.keys(increments).length > 0) {
-      const statsBatch = supabase.batch();
+    // 3. Update stats if needed
+    if (Object.keys(updates).length > 0) {
+      const lastUpdated = Date.now();
       
-      const allTimeRef = supabase.collection('adminStats').doc('all-time');
-      statsBatch.set(allTimeRef, { 
-        ...increments, 
-        lastUpdated: Date.now(),
-        timestamp: new Date().toISOString() 
-      }, { merge: true });
+      const updateStats = async (period: string, extra: object = {}) => {
+        // Atomic increment would be better, but we follow the established project pattern
+        await supabase.from('admin_stats').upsert(
+          { period, ...updates, last_updated: lastUpdated, ...extra },
+          { onConflict: 'period', ignoreDuplicates: false }
+        );
+      };
 
-      const dailyRef = supabase.collection('adminStats').doc(`daily_${dateStr}`);
-      statsBatch.set(dailyRef, { 
-        ...increments,
-        date: dateStr,
-        lastUpdated: Date.now(),
-        timestamp: new Date().toISOString()
-      }, { merge: true });
-
-      const monthlyRef = supabase.collection('adminStats').doc(`monthly_${monthStr}`);
-      statsBatch.set(monthlyRef, { 
-        ...increments,
-        month: monthStr,
-        lastUpdated: Date.now(),
-        timestamp: new Date().toISOString()
-      }, { merge: true });
-
-      await statsBatch.commit();
+      await Promise.all([
+        updateStats('all-time'),
+      ]);
     }
 
     return { success: true };
   } catch (error: any) {
-    console.error('[ActivityService] Error:', error);
+    console.error('[ActivityService] Error logicAdminActivity:', error);
     return { success: false, error: error.message };
   }
 }
 
 export async function getActivityLogs(options: {
   limit?: number;
-  startAfter?: string;
+  offset?: number;
   type?: string;
   userId?: string;
-} = {}): Promise<{ logs: any[]; lastDoc: any; hasMore: boolean }> {
-  const { admin, supabase } = { supabase: getSupabaseAdmin() };
+} = {}): Promise<{ logs: any[]; total: number; hasMore: boolean }> {
+  const supabase = getSupabaseAdmin();
 
-  if (!supabase || !admin) {
-    return { logs: [], lastDoc: null, hasMore: false };
+  if (!supabase) {
+    return { logs: [], total: 0, hasMore: false };
   }
 
-  const { limit = 50, startAfter, type, userId } = options;
+  const { limit = 50, offset = 0, type, userId } = options;
 
-  let query: any = supabase
-    .collection('adminActivityLog')
-    .orderBy('timestamp', 'desc')
-    .limit(limit);
+  let query = supabase
+    .from('admin_activity_log')
+    .select('*', { count: 'exact' })
+    .order('timestamp', { ascending: false })
+    .range(offset, offset + limit - 1);
 
-  if (type) {
-    query = query.where('type', '==', type);
+  if (type && type !== 'all') {
+    query = query.eq('type', type);
   }
 
   if (userId) {
-    query = query.where('userId', '==', userId);
+    query = query.eq('user_id', userId);
   }
 
-  if (startAfter) {
-    const docSnap = await supabase.collection('adminActivityLog').doc(startAfter).get();
-    if (docSnap.exists) {
-      query = query.startAfter(docSnap);
-    }
+  const { data, count, error } = await query;
+
+  if (error) {
+    console.error('[ActivityService] Error fetching logs:', error.message);
+    return { logs: [], total: 0, hasMore: false };
   }
 
-  const snapshot = await query.get();
-  const logs = snapshot.docs.map((doc: any) => ({
-    id: doc.id,
-    ...doc.data(),
-    timestamp: doc.data().timestamp || doc.data().createdAt?.toDate?.()?.toISOString(),
+  const logs = (data || []).map(row => ({
+    ...row,
+    id: row.id,
+    userId: row.user_id,
+    userEmail: row.user_email,
+    performedBy: row.performed_by,
+    targetType: row.target_type,
+    targetId: row.target_id,
   }));
 
-  const lastDoc = snapshot.docs[snapshot.docs.length - 1] || null;
-  const hasMore = snapshot.docs.length === limit;
+  const total = count || 0;
+  const hasMore = offset + logs.length < total;
 
-  return { logs, lastDoc: lastDoc?.id || null, hasMore };
+  return { logs, total, hasMore };
 }

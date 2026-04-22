@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useUser, useFirestore, useAuth } from '@/lib/auth-context';
+import { useUser, useAuth } from '@/lib/auth-context';
 import { Button } from './ui/button';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
@@ -35,9 +35,7 @@ import { RankBadge } from '@/components/points/rank-badge';
 import { PointsDialog } from '@/components/points/points-drawer';
 
 export function Navbar() {
-  const { user, isUserLoading } = useUser();
-  const { isAdmin } = useFirestore();
-  const { signOut } = useAuth();
+  const { user, isUserLoading, isAdmin, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const { resetConfig, pollenBalance, isBalanceLoading } = useAIConfig();

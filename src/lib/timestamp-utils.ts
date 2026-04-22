@@ -1,8 +1,6 @@
 export function normalizeTimestamp(value: any): Date {
   if (!value) return new Date(0);
   if (value instanceof Date) return value;
-  if (typeof value.toDate === 'function') return value.toDate();
-  if (typeof value._seconds === 'number') return new Date(value._seconds * 1000);
   if (typeof value === 'string') {
     const parsed = new Date(value);
     return isNaN(parsed.getTime()) ? new Date(0) : parsed;

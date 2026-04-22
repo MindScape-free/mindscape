@@ -75,7 +75,7 @@ import { QuizCard } from './chat/quiz-card';
 import { QuizResultCard } from './chat/quiz-result';
 import { CreateMindmapDialog } from './chat/CreateMindmapDialog';
 
-// firebase/firestore removed
+// mindscape-native data types
 import { ChatSession, ChatMessage, ChatAttachment, PinnedMessage, toDate } from '@/types/chat';
 
 import { toPlainObject } from '@/lib/serialize';
@@ -98,7 +98,6 @@ declare global {
 
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useChatPersistence } from '@/hooks/use-chat-persistence';
-import { useChatMigration } from '@/hooks/use-chat-migration';
 import { useStreamingChat } from '@/hooks/use-streaming-chat';
 
 
@@ -201,11 +200,10 @@ export function ChatPanel({
     provider: providerOptionsConfig.provider,
     apiKey: providerOptionsConfig.provider === 'pollinations' ? providerOptionsConfig.pollinationsApiKey : providerOptionsConfig.apiKey,
     model: providerOptionsConfig.pollinationsModel,
-    userId: user?.uid,
-  }), [providerOptionsConfig.provider, providerOptionsConfig.apiKey, providerOptionsConfig.pollinationsApiKey, providerOptionsConfig.pollinationsModel, user?.uid]);
+    userId: user?.id,
+  }), [providerOptionsConfig.provider, providerOptionsConfig.apiKey, providerOptionsConfig.pollinationsApiKey, providerOptionsConfig.pollinationsModel, user?.id]);
 
   // 1. MIGRATION & PERSISTENCE
-  useChatMigration(); // Run migration on mount
   const { 
     sessions, 
     activeSessionId, 
@@ -336,7 +334,9 @@ export function ChatPanel({
             ...updatedMessages[messageIndex],
             content: streamText
           };
-          updateSession(activeSessionId, { messages: updatedMessages });
+          if (activeSessionId) {
+            updateSession(activeSessionId, { messages: updatedMessages });
+          }
         }
       }
       
@@ -404,7 +404,9 @@ export function ChatPanel({
             content: `Sorry, I encountered an error: ${streamError}`,
             type: 'text'
           };
-          updateSession(activeSessionId, { messages: updatedMessages });
+          if (activeSessionId) {
+            updateSession(activeSessionId, { messages: updatedMessages });
+          }
         }
       }
       // Clear streaming state
@@ -429,7 +431,7 @@ export function ChatPanel({
       const { data: mapsData } = await supabase
         .from('mindmaps')
         .select('pinned_messages')
-        .eq('user_id', user.uid);
+        .eq('user_id', user.id);
       
       const pins: PinnedMessage[] = [];
       mapsData?.forEach(d => {
@@ -631,7 +633,7 @@ export function ChatPanel({
     setIsQuizLoading(true);
     setQuizShowingDifficultySelector(false);
 
-    // Context for mind map if available - serialize Firestore Timestamps first
+    // Context for mind map if available - serialize timestamps for JSON delivery
     const mindMapContext = mindMapData ? JSON.stringify(toPlainObject(mindMapData)) : undefined;
 
     const { data, error } = await generateQuizAction({
@@ -777,7 +779,7 @@ export function ChatPanel({
         const { data } = await supabase
           .from('users')
           .select('preferences')
-          .eq('id', user.uid)
+          .eq('id', user.id)
           .single();
 
         if (data?.preferences?.default_ai_persona) {
@@ -1139,7 +1141,7 @@ export function ChatPanel({
       return;
     }
 
-    const updatedMessages = messages.map(m => 
+    const updatedMessages = activeSession.messages.map((m: ChatMessage) => 
       m.id === messageId ? { ...m, isPinned: !m.isPinned } : m
     );
     updateSession(activeSessionId, { messages: updatedMessages });
@@ -1257,7 +1259,7 @@ export function ChatPanel({
       }
     }
 
-    // Call the hook to delete from Firestore/State
+    // Call the hook to delete from Supabase/State
     deleteSessionFromDb(sessionId);
   }
 
@@ -1618,7 +1620,7 @@ export function ChatPanel({
                                   ))}
                                 </div>
                               </div>
-                            ) : message.type !== 'quiz' && message.type !== 'quiz-result' && message.type !== 'quiz-selector' && message.role === 'user' ? (
+                            ) : message.role === 'user' ? (
                               <p className="text-sm text-zinc-200 leading-relaxed">{message.content}</p>
                             ) : (
                               <div
@@ -2356,7 +2358,7 @@ export function ChatPanel({
           const { data: mapsData } = await supabase
             .from('mindmaps')
             .select('id, pinned_messages')
-            .eq('user_id', user.uid);
+            .eq('user_id', user.id);
           
           for (const map of mapsData || []) {
             if (Array.isArray(map.pinned_messages) && map.pinned_messages.some((p: any) => p.id === pinId)) {
@@ -2713,7 +2715,7 @@ export function ChatPanel({
                           setView('canvas-pins');
                           loadAllUserPins();
                         }}
-                        className={cn('relative', (view === 'pins' || view === 'canvas-pins') && 'text-amber-400')}
+                        className={cn('relative')}
                       >
                         <Pin className="h-5 w-5" />
                         {canvasPinnedMessages.length > 0 && (

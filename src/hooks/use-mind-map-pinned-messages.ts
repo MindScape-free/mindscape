@@ -2,7 +2,7 @@
 
 import { useCallback } from 'react';
 import { getSupabaseClient } from '@/lib/supabase-db';
-import { useUser } from '@/lib/auth-context';
+import { useAuth } from '@/lib/auth-context';
 import { PinnedMessage, ChatMessage } from '@/types/chat';
 import { useToast } from '@/hooks/use-toast';
 
@@ -17,18 +17,22 @@ export function useMindMapPinnedMessages({
   pinnedMessages = [],
   onPinsUpdate,
 }: UseMindMapPinnedMessagesOptions) {
-  const { user } = useUser();
-  const firestore = null;
+  const { user, supabase } = useAuth();
   const { toast } = useToast();
 
   const persistPins = useCallback(async (updatedPins: PinnedMessage[]) => {
-    if (!user || !firestore || !mindMapId) return;
-
+    if (!supabase || !user || !mindMapId) return;
     try {
-      const mapRef = doc(firestore, 'users', user.uid, 'mindmaps', mindMapId);
-      await updateDoc(mapRef, {
-        pinnedMessages: updatedPins,
-      });
+      const { error } = await supabase
+        .from('mindmaps')
+        .update({
+          pinned_messages: updatedPins,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', mindMapId)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
       
       if (onPinsUpdate) {
         onPinsUpdate(updatedPins);
@@ -41,7 +45,7 @@ export function useMindMapPinnedMessages({
         description: 'Could not save the pinned message. Please try again.',
       });
     }
-  }, [user, firestore, mindMapId, onPinsUpdate, toast]);
+  }, [user, supabase, mindMapId, onPinsUpdate, toast]);
 
   const addPinnedMessage = useCallback(async (
     questionMessage: ChatMessage,
@@ -132,9 +136,9 @@ export function useMindMapPinnedMessages({
     
     const lowerQuery = query.toLowerCase();
     return pinnedMessages.filter(pin => {
-      const questionMatch = pin.question.content.toLowerCase().includes(lowerQuery);
-      const responseMatch = pin.response?.content.toLowerCase().includes(lowerQuery);
-      const soloMatch = pin.soloMessage?.content.toLowerCase().includes(lowerQuery);
+      const questionMatch = pin.question?.content.toLowerCase().includes(lowerQuery) || false;
+      const responseMatch = pin.response?.content.toLowerCase().includes(lowerQuery) || false;
+      const soloMatch = pin.soloMessage?.content.toLowerCase().includes(lowerQuery) || false;
       return questionMatch || responseMatch || soloMatch;
     });
   }, [pinnedMessages]);

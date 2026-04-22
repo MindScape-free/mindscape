@@ -170,7 +170,18 @@ function TransactionItem({ tx }: { tx: PointTransaction }) {
         <Icon className={cn('h-3.5 w-3.5', colors.text)} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-zinc-200 truncate">{info.label}</p>
+        <p className="text-xs font-medium text-zinc-200 truncate">
+          {info.label}
+          {tx.metadata?.topic && (
+            <span className="text-zinc-500 font-normal ml-1.5">— {tx.metadata.topic}</span>
+          )}
+          {tx.metadata?.node && (
+            <span className="text-zinc-500 font-normal ml-1.5">— {tx.metadata.node}</span>
+          )}
+          {tx.metadata?.targetLang && (
+            <span className="text-zinc-500 font-normal ml-1.5">— {tx.metadata.targetLang}</span>
+          )}
+        </p>
         <div className="flex items-center gap-1.5 mt-0.5">
           <span className={cn('text-[9px] font-medium px-1.5 py-0.5 rounded border', colors.bg, colors.text, colors.border)}>
             {info.category}

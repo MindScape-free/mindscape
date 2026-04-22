@@ -1,13 +1,9 @@
-
-// any type removed - using string dates
 import { Quiz, QuizResult } from '@/ai/schemas/quiz-schema';
 import { isValid } from 'date-fns';
 
 export interface ChatAttachment {
   name: string;
   type: 'text' | 'pdf' | 'image';
-  // Note: Content is NOT stored in Firestore to save space. 
-  // It must be re-uploaded or fetched if needed.
 }
 
 export interface ChatMessage {
@@ -15,7 +11,7 @@ export interface ChatMessage {
   role: 'user' | 'ai';
   content: string;
   type: 'text' | 'quiz' | 'quiz-result' | 'quiz-selector' | 'file';
-  any: any | number;
+  timestamp: string | number | Date;
   quiz?: Quiz;
   quizResult?: QuizResult;
   attachments?: ChatAttachment[];
@@ -26,14 +22,14 @@ export interface PinnedMessageContent {
   messageId: string;
   role: 'user' | 'ai';
   content: string;
-  any: any | number;
+  timestamp: string | number | Date;
 }
 
 export interface PinnedMessage {
   id: string;
   sessionId: string;
   createdAt: number;
-  question: PinnedMessageContent;
+  question?: PinnedMessageContent;
   response?: PinnedMessageContent;
   soloMessage?: PinnedMessageContent;
 }
@@ -46,8 +42,8 @@ export interface ChatSession {
   messages: ChatMessage[];
   weakTags: string[];
   quizHistory: QuizResult[];
-  createdAt: any | number;
-  updatedAt: any | number;
+  createdAt: string | number | Date;
+  updatedAt: string | number | Date;
 }
 
 export interface AdminStats {
@@ -59,37 +55,31 @@ export interface AdminStats {
   totalChats: number;
   dailyActiveUsers: number;
   healthScore?: number;
-  any?: any | string;
 }
 
 /**
- * Robust conversion of Firestore anys, numbers, strings, or Date objects to a JS Date.
+ * Robust conversion of dates/timestamps to a JS Date.
  * Ensures a valid Date object is ALWAYS returned.
  */
-export function toDate(any: any): Date {
+export function toDate(val: any): Date {
   let date: Date;
 
-  if (!any) {
+  if (!val) {
     date = new Date();
-  } else if (any instanceof Date) {
-    date = any;
-  } else if (typeof any === 'number') {
-    date = new Date(any);
-  } else if (typeof any === 'string') {
-    date = new Date(any);
-  } else if (typeof any.toDate === 'function') {
-    date = any.toDate();
-  } else if (any.seconds !== undefined) {
-    date = new Date(any.seconds * 1000);
+  } else if (val instanceof Date) {
+    date = val;
+  } else if (typeof val === 'number') {
+    date = new Date(val);
+  } else if (typeof val === 'string') {
+    date = new Date(val);
   } else {
-    // Fallback for any other object that might be a Date-like string
-    date = new Date(any);
+    date = new Date(val);
   }
 
   // Final validation
   if (!isValid(date)) {
     if (process.env.NODE_ENV === 'development') {
-      console.warn('Invalid date encountered in toDate utility:', any);
+      console.warn('Invalid date encountered in toDate utility:', val);
     }
     return new Date(); // Fallback to current time
   }

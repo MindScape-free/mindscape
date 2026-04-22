@@ -1,7 +1,7 @@
 'use client';
 
-import { getSupabaseClient } from '@/lib/supabase-db';
 import React, { useState } from 'react';
+import { useAuth } from '@/lib/auth-context';
 import { Feedback } from '@/types/feedback';
 import { FeedbackBadge } from './FeedbackBadge';
 import { Button } from '@/components/ui/button';
@@ -41,22 +41,21 @@ import {
     Calendar,
     User,
     Mail,
-    ArrowUpDown,
-    Filter,
     Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 const safeFormat = (date: any, fmt: string) => {
   if (!date) return 'Unknown';
-  const d = typeof date?.toDate === 'function' ? date.toDate() : new Date(date);
-  if (isNaN(d.getTime())) return 'Unknown';
-  return format(d, fmt);
+  try {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return 'Unknown';
+    return format(d, fmt);
+  } catch (e) {
+    return 'Unknown';
+  }
 };
-import { updateFeedbackAction } from '@/app/actions/feedback';
-import { useToast } from '@/hooks/use-toast';
-// firebase/firestore removed
-import { useUser } from '@/lib/auth-context';
 
 interface FeedbackTableProps {
     data: Feedback[];
@@ -65,23 +64,26 @@ interface FeedbackTableProps {
 }
 
 export const FeedbackTable: React.FC<FeedbackTableProps> = ({ data, onRefresh, adminUserId }) => {
+    const { supabase } = useAuth();
     const { toast } = useToast();
     const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
     const [isDetailsOpen, setIsDetailsOpen] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
     const [adminNotes, setAdminNotes] = useState('');
 
-    const supabase = getSupabaseClient();
-
     const handleUpdateStatus = async (id: string, status: string) => {
+        if (!supabase) return;
         setIsUpdating(true);
         try {
-            // Refactored to Client-Side SDK to avoid Server Action credential issues
-            const feedbackRef = doc(firestore, 'feedback', id);
-            await updateDoc(feedbackRef, { 
-                status,
-                updatedAt: serverTimestamp() 
-            });
+            const { error } = await supabase
+                .from('feedback')
+                .update({ 
+                    status,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', id);
+
+            if (error) throw error;
 
             toast({ title: "Status Updated", description: `Feedback marked as ${status.toLowerCase().replace('_', ' ')}.` });
             onRefresh();
@@ -97,15 +99,18 @@ export const FeedbackTable: React.FC<FeedbackTableProps> = ({ data, onRefresh, a
     };
 
     const handleSaveNotes = async () => {
-        if (!selectedFeedback) return;
+        if (!selectedFeedback || !supabase) return;
         setIsUpdating(true);
         try {
-            // Refactored to Client-Side SDK to avoid Server Action credential issues
-            const feedbackRef = doc(firestore, 'feedback', selectedFeedback.id);
-            await updateDoc(feedbackRef, { 
-                adminNotes,
-                updatedAt: serverTimestamp() 
-            });
+            const { error } = await supabase
+                .from('feedback')
+                .update({ 
+                    admin_notes: adminNotes,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', selectedFeedback.id);
+
+            if (error) throw error;
 
             toast({ title: "Notes Saved", description: "Internal notes updated successfully." });
             onRefresh();

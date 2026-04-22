@@ -31,7 +31,15 @@ export async function submitFeedbackAction(input: FeedbackInput) {
 
     await supabase.from('feedback').insert({
       id: feedbackId,
-      ...validated,
+      type: validated.type,
+      title: validated.title,
+      description: validated.description,
+      affected_area: validated.affectedArea,
+      priority: validated.priority,
+      user_email: validated.userEmail,
+      user_id: validated.userId,
+      user_name: validated.userName,
+      attachments: validated.attachments,
       tracking_id: trackingId,
       status: 'OPEN',
       upvotes: 0,
@@ -68,7 +76,12 @@ export async function getFeedbackAction(filters?: { type?: string; status?: stri
 export async function updateFeedbackAction(feedbackId: string, updates: { status?: string; adminNotes?: string }, adminUserId: string) {
   try {
     const supabase = getSupabaseAdmin();
-    await supabase.from('feedback').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', feedbackId);
+    const mappedUpdates: any = { ...updates };
+    if (updates.adminNotes) {
+      mappedUpdates.admin_notes = updates.adminNotes;
+      delete mappedUpdates.adminNotes;
+    }
+    await supabase.from('feedback').update({ ...mappedUpdates, updated_at: new Date().toISOString() }).eq('id', feedbackId);
     revalidatePath('/admin');
     return { success: true };
   } catch (error: any) {

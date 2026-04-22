@@ -1,6 +1,5 @@
 'use client';
 
-import { getSupabaseClient } from '@/lib/supabase-db';
 import React, { useState } from 'react';
 import { Feedback } from '@/types/feedback';
 import { AdminActivityLogEntry } from '@/ai/schemas/feedback-schema';
@@ -34,16 +33,16 @@ import {
   Flag,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/lib/auth-context';
 
 const safeFormat = (date: any, fmt: string) => {
   if (!date) return 'Unknown';
-  const d = typeof date?.toDate === 'function' ? date.toDate() : new Date(date);
+  // Handle ISO strings or Timestamps
+  const d = new Date(date);
   if (isNaN(d.getTime())) return 'Unknown';
   return format(d, fmt);
 };
-import { useToast } from '@/hooks/use-toast';
-import { useUser } from '@/lib/auth-context';
-// firebase/firestore removed
 
 interface FeedbackCardsProps {
   data: Feedback[];
@@ -54,7 +53,8 @@ interface FeedbackCardsProps {
 
 export const FeedbackCards: React.FC<FeedbackCardsProps> = ({ data, onRefresh, adminUserId, isLoading }) => {
   const { toast } = useToast();
-  const supabase = getSupabaseClient();
+  const { supabase } = useAuth();
+  
   const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -63,31 +63,52 @@ export const FeedbackCards: React.FC<FeedbackCardsProps> = ({ data, onRefresh, a
   const [expandedLogs, setExpandedLogs] = useState<Record<string, boolean>>({});
 
   const addActivityLog = async (feedbackId: string, log: Omit<AdminActivityLogEntry, 'id' | 'timestamp'>) => {
+    if (!supabase) return;
+
     const newLog = {
       ...log,
       id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
     };
     
-    const feedbackRef = doc(firestore, 'feedback', feedbackId);
-    await updateDoc(feedbackRef, {
-      adminActivityLogs: arrayUnion(newLog),
-      updatedAt: serverTimestamp(),
-    });
+    // Fetch current feedback to get existing logs
+    const { data: feedback, error: fetchError } = await supabase
+      .from('feedback')
+      .select('admin_activity_logs')
+      .eq('id', feedbackId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const currentLogs = feedback.admin_activity_logs || [];
+    
+    const { error: updateError } = await supabase
+      .from('feedback')
+      .update({
+        admin_activity_logs: [...currentLogs, newLog],
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', feedbackId);
+
+    if (updateError) throw updateError;
     return newLog;
   };
 
   const handleUpdateStatus = async (id: string, newStatus: string) => {
-    if (!selectedFeedback) return;
+    if (!selectedFeedback || !supabase) return;
     setIsUpdating(true);
     try {
-      const feedbackRef = doc(firestore, 'feedback', id);
       const oldStatus = selectedFeedback.status;
       
-      await updateDoc(feedbackRef, { 
-        status: newStatus,
-        updatedAt: serverTimestamp(),
-      });
+      const { error: updateError } = await supabase
+        .from('feedback')
+        .update({ 
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      if (updateError) throw updateError;
 
       const newLog = await addActivityLog(id, {
         adminId: adminUserId,
@@ -98,12 +119,16 @@ export const FeedbackCards: React.FC<FeedbackCardsProps> = ({ data, onRefresh, a
 
       toast({ title: "Status Updated", description: `Feedback marked as ${newStatus.toLowerCase().replace('_', ' ')}.` });
       onRefresh();
+      
       if (selectedFeedback?.id === id) {
-        setSelectedFeedback(prev => prev ? { 
-          ...prev, 
-          status: newStatus as any,
-          adminActivityLogs: [...(prev.adminActivityLogs || []), newLog]
-        } : null);
+        setSelectedFeedback(prev => {
+          if (!prev) return null;
+          const updated = { ...prev, status: newStatus as any };
+          if (newLog) {
+            updated.adminActivityLogs = [...(prev.adminActivityLogs || []), newLog as any];
+          }
+          return updated;
+        });
       }
     } catch (error: any) {
       console.error('Error updating status:', error);
@@ -114,16 +139,20 @@ export const FeedbackCards: React.FC<FeedbackCardsProps> = ({ data, onRefresh, a
   };
 
   const handleUpdatePriority = async (id: string, newPriority: string) => {
-    if (!selectedFeedback) return;
+    if (!selectedFeedback || !supabase) return;
     setIsUpdating(true);
     try {
-      const feedbackRef = doc(firestore, 'feedback', id);
       const oldPriority = selectedFeedback.priority;
       
-      await updateDoc(feedbackRef, { 
-        priority: newPriority,
-        updatedAt: serverTimestamp(),
-      });
+      const { error: updateError } = await supabase
+        .from('feedback')
+        .update({ 
+          priority: newPriority,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      if (updateError) throw updateError;
 
       const newLog = await addActivityLog(id, {
         adminId: adminUserId,
@@ -134,12 +163,16 @@ export const FeedbackCards: React.FC<FeedbackCardsProps> = ({ data, onRefresh, a
 
       toast({ title: "Priority Updated", description: `Priority changed from ${oldPriority} to ${newPriority}.` });
       onRefresh();
+      
       if (selectedFeedback?.id === id) {
-        setSelectedFeedback(prev => prev ? { 
-          ...prev, 
-          priority: newPriority as any,
-          adminActivityLogs: [...(prev.adminActivityLogs || []), newLog]
-        } : null);
+        setSelectedFeedback(prev => {
+          if (!prev) return null;
+          const updated = { ...prev, priority: newPriority as any };
+          if (newLog) {
+            updated.adminActivityLogs = [...(prev.adminActivityLogs || []), newLog as any];
+          }
+          return updated;
+        });
       }
     } catch (error: any) {
       console.error('Error updating priority:', error);
@@ -150,18 +183,22 @@ export const FeedbackCards: React.FC<FeedbackCardsProps> = ({ data, onRefresh, a
   };
 
   const handleSaveNotes = async () => {
-    if (!selectedFeedback) return;
+    if (!selectedFeedback || !supabase) return;
     setIsUpdating(true);
     try {
-      const feedbackRef = doc(firestore, 'feedback', selectedFeedback.id);
       const oldNotes = selectedFeedback.adminNotes || '';
       
-      await updateDoc(feedbackRef, { 
-        adminNotes,
-        updatedAt: serverTimestamp(),
-      });
+      const { error: updateError } = await supabase
+        .from('feedback')
+        .update({ 
+          admin_notes: adminNotes,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', selectedFeedback.id);
 
-      let newLog: AdminActivityLogEntry | undefined;
+      if (updateError) throw updateError;
+
+      let newLog: any | undefined;
       if (adminNotes !== oldNotes) {
         newLog = await addActivityLog(selectedFeedback.id, {
           adminId: adminUserId,
@@ -426,7 +463,7 @@ export const FeedbackCards: React.FC<FeedbackCardsProps> = ({ data, onRefresh, a
                   )}
 
                   {/* Admin Activity Logs - Foldable Cards */}
-                  {selectedFeedback.adminActivityLogs && selectedFeedback.adminActivityLogs.length > 0 && (
+                  {selectedFeedback.adminActivityLogs && (
                     <div className="space-y-2">
                       <Label className="text-xs font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2">
                         <Clock className="w-3 h-3" /> Admin Activity Logs ({selectedFeedback.adminActivityLogs.length})
@@ -437,11 +474,7 @@ export const FeedbackCards: React.FC<FeedbackCardsProps> = ({ data, onRefresh, a
                           const isExpanded = expandedLogs[logId];
                           const ActionIcon = getLogActionIcon(log.action);
                           const colorClass = getLogActionColor(log.action);
-                          const logTimestamp = log.timestamp
-                            ? (typeof (log.timestamp as any).toDate === 'function'
-                                ? (log.timestamp as any).toDate()
-                                : new Date(log.timestamp as any))
-                            : new Date();
+                          const logTimestamp = new Date(log.timestamp as any);
                           const isValidDate = !isNaN(logTimestamp.getTime());
                           
                           return (

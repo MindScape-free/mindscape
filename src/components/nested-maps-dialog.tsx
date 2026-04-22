@@ -193,7 +193,12 @@ export function NestedMapsDialog({
         });
 
         // Column 1: L1 Maps
-        const l1Maps = expansions.filter(e => e.depth === 1 || e.parentName === rootMap.topic);
+        const normalizedRootTopic = rootMap.topic.toLowerCase().trim();
+        const l1Maps = expansions.filter(e => 
+            e.depth === 1 || 
+            (e.parentName && e.parentName.toLowerCase().trim() === normalizedRootTopic)
+        );
+
         if (l1Maps.length > 0) {
             columns.push({
                 level: 1,
@@ -216,9 +221,12 @@ export function NestedMapsDialog({
             const expandedItems = previousColumnItems.filter(i => currentExpandedIds.includes(i.id));
             if (expandedItems.length === 0) break;
 
-            const parentNames = new Set(expandedItems.map(i => i.topic));
+            const parentNames = new Set(expandedItems.map(i => i.topic.toLowerCase().trim()));
             // Ensure we match both the parent name AND the correct depth to avoid cross-map duplication
-            const children = expansions.filter(e => parentNames.has(e.parentName) && e.depth === currentLevel + 1);
+            const children = expansions.filter(e => 
+                e.parentName && parentNames.has(e.parentName.toLowerCase().trim()) && 
+                Number(e.depth) === currentLevel + 1
+            );
 
             if (children.length > 0) {
                 columns.push({
@@ -382,8 +390,10 @@ export function NestedMapsDialog({
                                                 const isCurrentMap = currentMapId === expansion.id;
 
                                                 const getDisplayDate = (d: any) => {
+                                                    if (!d) return null;
                                                     if (d instanceof Date) return d;
                                                     if (typeof d === 'number') return new Date(d);
+                                                    if (typeof d === 'string') return new Date(d);
                                                     if (d?.toDate && typeof d.toDate === 'function') return d.toDate();
                                                     if (d?.toMillis && typeof d.toMillis === 'function') return new Date(d.toMillis());
                                                     return null;

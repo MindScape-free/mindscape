@@ -102,7 +102,7 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
         isRefreshingRef.current = true;
         setIsBalanceLoading(true);
         try {
-            const result = await checkPollenBalanceAction({ apiKey, userId: user.uid });
+            const result = await checkPollenBalanceAction({ apiKey, userId: user.id });
             if (!result.error) {
                 setPollenBalance(result.balance);
                 updateConfig({ pollenBalance: result.balance });
@@ -162,7 +162,7 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
         if (!user) return;
 
         const supabase = getSupabaseClient();
-        console.log('🔄 Setting up AI config listener for user:', user.uid);
+        console.log('🔄 Setting up AI config listener for user:', user.id);
 
         const applyRemoteConfig = (remoteConfig: Partial<AIConfig>) => {
             const merged = {
@@ -188,7 +188,7 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
             const { data, error } = await supabase
                 .from('user_settings')
                 .select('pollinations_api_key, image_model, text_model')
-                .eq('user_id', user.uid)
+                .eq('user_id', user.id)
                 .single();
 
             if (!error && data) {
@@ -205,12 +205,12 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
 
         // 2. Realtime subscription
         const channel = supabase
-            .channel(`public:user_settings:user_id=eq.${user.uid}`)
+            .channel(`public:user_settings:user_id=eq.${user.id}`)
             .on('postgres_changes', { 
                 event: '*', 
                 schema: 'public', 
                 table: 'user_settings', 
-                filter: `user_id=eq.${user.uid}` 
+                filter: `user_id=eq.${user.id}` 
             }, (payload) => {
                 console.log('🔔 AI Config Realtime update:', payload);
                 const data = payload.new as any;

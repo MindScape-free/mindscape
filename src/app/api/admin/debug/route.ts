@@ -5,41 +5,53 @@ export const runtime = 'nodejs';
 
 export async function GET() {
   try {
-    const { admin, app, supabase } = { supabase: getSupabaseAdmin() };
+    const supabase = getSupabaseAdmin();
     
-    if (!app || !supabase || !admin) {
+    if (!supabase) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Firebase not initialized',
-        details: { app: !!app, supabase: !!supabase, admin: !!admin }
+        error: 'Supabase admin client not initialized',
       }, { status: 500 });
     }
 
     // Test fetching users
-    const usersSnap = await supabase.collection('users').limit(10).get();
-    const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const { data: users, error: usersErr, count: usersCount } = await supabase
+      .from('users')
+      .select('*', { count: 'exact' })
+      .limit(10);
     
     // Test fetching stats
-    const statsDoc = await supabase.collection('adminStats').doc('all-time').get();
-    const stats = statsDoc.exists ? statsDoc.data() : null;
+    const { data: stats, error: statsErr } = await supabase
+      .from('admin_stats')
+      .select('*')
+      .eq('period', 'all-time')
+      .single();
     
     // Test fetching logs
-    const logsSnap = await supabase.collection('adminActivityLog').limit(5).get();
-    const logs = logsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const { data: logs, error: logsErr, count: logsCount } = await supabase
+      .from('admin_activity_log')
+      .select('*', { count: 'exact' })
+      .order('timestamp', { ascending: false })
+      .limit(5);
 
     return NextResponse.json({
       success: true,
-      firebase: {
-        projectId: process.env.FIREBASE_PROJECT_ID || 'mindscape-free',
-        hasCredentials: true,
+      diagnostics: {
+        supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Configured' : 'Missing',
+        hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
       },
       data: {
-        usersCount: usersSnap.size,
-        statsExists: statsDoc.exists,
-        logsCount: logsSnap.size,
+        usersCount: usersCount || 0,
+        statsExists: !!stats,
+        logsCount: logsCount || 0,
+        errors: {
+          users: usersErr?.message,
+          stats: statsErr?.message,
+          logs: logsErr?.message
+        }
       },
-      sampleUsers: users.slice(0, 3),
-      sampleLogs: logs.slice(0, 3),
+      sampleUsers: (users || []).slice(0, 3),
+      sampleLogs: (logs || []).slice(0, 3),
     });
   } catch (error: any) {
     console.error('[DebugAPI] Error:', error);

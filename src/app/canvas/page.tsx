@@ -316,7 +316,7 @@ function MindMapPageContent() {
             currentMode = 'saved';
             let topicToRegen = params.topic || (mindMapsRef.current.find((m: any) => m.id === effectiveMapId)?.topic);
             if (!topicToRegen && user) {
-              const { data: mapRow } = await supabase.from('mindmaps').select('topic').eq('id', effectiveMapId).eq('user_id', user.uid).single();
+              const { data: mapRow } = await supabase.from('mindmaps').select('topic').eq('id', effectiveMapId).eq('user_id', user.id).single();
               topicToRegen = mapRow?.topic;
             }
 
@@ -454,7 +454,7 @@ function MindMapPageContent() {
                   provider: config.provider,
                   apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
                   model: config.pollinationsModel,
-                  userId: user?.uid,
+                  userId: user?.id,
                 });
               } else if (sessionType === 'pdf') {
                 currentMode = 'vision-pdf';
@@ -469,7 +469,7 @@ function MindMapPageContent() {
                   provider: config.provider,
                   apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
                   model: config.pollinationsModel,
-                  userId: user?.uid,
+                  userId: user?.id,
                 });
               } else if (sessionType === 'text') {
                 currentMode = 'vision-text';
@@ -484,7 +484,7 @@ function MindMapPageContent() {
                   provider: config.provider,
                   apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
                   model: config.pollinationsModel,
-                  userId: user?.uid,
+                  userId: user?.id,
                 });
               } else if (sessionType === 'website') {
                 currentMode = 'website';
@@ -498,7 +498,7 @@ function MindMapPageContent() {
                   provider: config.provider,
                   apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
                   model: config.pollinationsModel,
-                  userId: user?.uid,
+                  userId: user?.id,
                 });
               } else if (sessionType === 'multi') {
                 currentMode = 'multi-source';
@@ -513,7 +513,7 @@ function MindMapPageContent() {
                   provider: config.provider,
                   apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
                   model: config.pollinationsModel,
-                  userId: user?.uid,
+                  userId: user?.id,
                 });
               }
             }
@@ -599,6 +599,15 @@ function MindMapPageContent() {
                 ));
                 handleUpdateCurrentMap({ id: savedId });
                 navigateToMap(savedId!);
+
+                // Award points for creating a new map
+                if (currentMode === 'compare') {
+                  awardXP('MAP_COMPARE', { topic: result.data.topic }).catch(() => {});
+                } else if (currentMode === 'multi-source') {
+                  awardXP('MAP_MULTI_SOURCE', { topic: result.data.topic }).catch(() => {});
+                } else {
+                  awardXP('MAP_CREATED', { topic: result.data.topic, mode: currentMode }).catch(() => {});
+                }
               }
             });
           }
@@ -671,7 +680,7 @@ function MindMapPageContent() {
         let parentId = (currentMapData as any).parentMapId;
         let iterations = 0;
         while (parentId && iterations < 10) {
-          const { data: p } = await supabase.from('mindmaps').select('id,topic,icon,parent_map_id').eq('id', parentId).eq('user_id', user.uid).single();
+          const { data: p } = await supabase.from('mindmaps').select('id,topic,icon,parent_map_id').eq('id', parentId).eq('user_id', user.id).single();
           if (p) { rootMapId = parentId; rootMapData = { id: parentId, topic: p.topic || 'Untitled', icon: p.icon }; parentId = p.parent_map_id; }
           else break;
           iterations++;
@@ -682,7 +691,7 @@ function MindMapPageContent() {
       const allSubMaps: NestedExpansionItem[] = [];
       const visitedIds = new Set<string>();
       const fetchDescendants = async (parentId: string, parentName: string, currentDepth: number) => {
-        const { data: children } = await supabase.from('mindmaps').select('id,topic,icon,created_at,content,parent_map_id').eq('user_id', user.uid).eq('parent_map_id', parentId);
+        const { data: children } = await supabase.from('mindmaps').select('id,topic,icon,created_at,content,parent_map_id').eq('user_id', user.id).eq('parent_map_id', parentId);
         if (!children) return;
         for (const child of children) {
           if (visitedIds.has(child.id)) continue;
@@ -868,7 +877,7 @@ function MindMapPageContent() {
       }
     }
 
-    if (user) await supabase.from('mindmaps').delete().eq('id', id).eq('user_id', user.uid).catch(console.error);
+    if (user) await supabase.from('mindmaps').delete().eq('id', id).eq('user_id', user.id).catch(console.error);
     toast({ title: "Nested Map Deleted", description: "The link has been removed." });
   }, [mindMap, handleUpdateCurrentMap, handleSaveMap, toast, user]);
 
@@ -913,7 +922,7 @@ function MindMapPageContent() {
     const mapIdToFetch = mapData?.id || expansionId;
     if (mapIdToFetch && user) {
       try {
-        const { data: row } = await supabase.from('mindmaps').select('*').eq('id', mapIdToFetch).eq('user_id', user.uid).single();
+        const { data: row } = await supabase.from('mindmaps').select('*').eq('id', mapIdToFetch).eq('user_id', user.id).single();
         if (row) finalMapData = { ...row, ...(row.content || {}), id: row.id };
         else if (!mapData) { toast({ variant: "destructive", title: "Cannot Open Map", description: "This map could not be found." }); return; }
       } catch (e) {
@@ -942,7 +951,7 @@ function MindMapPageContent() {
     try {
       const shareId = `share_${mindMap.id}`;
       await supabase.from('shared_mindmaps').upsert({
-        id: shareId, original_map_id: mindMap.id, original_author_id: user?.uid || 'anonymous',
+        id: shareId, original_map_id: mindMap.id, original_author_id: user?.id || 'anonymous',
         content: toPlainObject(mindMap), is_shared: true,
         shared_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       }, { onConflict: 'id' });

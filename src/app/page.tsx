@@ -799,7 +799,7 @@ export default function Home() {
   // Load user's saved preferences from Supabase
   useEffect(() => {
     if (!user) return;
-    supabase.from('users').select('preferences').eq('id', user.uid).single().then(({ data }) => {
+    supabase.from('users').select('preferences').eq('id', user.id).single().then(({ data }) => {
       const prefs = data?.preferences;
       if (prefs?.defaultDepth) setDepth(prefs.defaultDepth);
       if (prefs?.defaultAIPersona) setPersona(prefs.defaultAIPersona.toLowerCase());

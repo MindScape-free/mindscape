@@ -145,7 +145,7 @@ function ProfileContent() {
                 const { data: profileData, error: profileError } = await supabase
                     .from('users')
                     .select('*')
-                    .eq('id', user.uid)
+                    .eq('id', user.id)
                     .single();
 
                 if (profileError && profileError.code !== 'PGRST116') {
@@ -226,7 +226,7 @@ function ProfileContent() {
                 }
 
                 // 2. Fetch API settings from user_settings table
-                getUserImageSettings(supabase, user.uid).then(settings => {
+                getUserImageSettings(supabase, user.id).then(settings => {
                     if (settings) {
                         setApiKeyInput(settings.pollinationsApiKey || '');
                         
@@ -244,7 +244,7 @@ function ProfileContent() {
                 const { data: mapsData } = await supabase
                     .from('mindmaps')
                     .select('id, topic, created_at, updated_at')
-                    .eq('user_id', user.uid)
+                    .eq('user_id', user.id)
                     .order('updated_at', { ascending: false });
 
                 if (mapsData) {
@@ -256,7 +256,7 @@ function ProfileContent() {
                 const { count: chatCount } = await supabase
                     .from('chat_sessions')
                     .select('id', { count: 'exact', head: true })
-                    .eq('user_id', user.uid);
+                    .eq('user_id', user.id);
                 setChatCount(chatCount || 0);
 
                 setLoading(false);
@@ -280,7 +280,7 @@ function ProfileContent() {
             await supabase
                 .from('users')
                 .update({ preferences: { ...profile?.preferences, [key]: value } })
-                .eq('id', user.uid);
+                .eq('id', user.id);
             toast({ title: 'Saved', description: 'Preference updated.' });
         } catch {
             toast({ variant: 'destructive', title: 'Error', description: 'Failed to update preferences.' });
@@ -305,7 +305,7 @@ function ProfileContent() {
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
         const mapsThisWeekList = userMaps.filter(m => {
-            const d = m.createdAt?.toMillis ? m.createdAt.toMillis() : (m.createdAt instanceof Date ? m.createdAt.getTime() : new Date(m.createdAt).getTime());
+            const d = typeof m.createdAt === 'number' ? m.createdAt : new Date(m.createdAt || 0).getTime();
             return d > oneWeekAgo.getTime();
         });
         const mapsWeek = mapsThisWeekList.length;
@@ -316,13 +316,13 @@ function ProfileContent() {
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         const activeDays = new Set();
         userMaps.forEach(m => {
-            const d = m.createdAt?.toMillis ? m.createdAt.toMillis() : (m.createdAt instanceof Date ? m.createdAt.getTime() : new Date(m.createdAt).getTime());
+            const d = typeof m.createdAt === 'number' ? m.createdAt : new Date(m.createdAt || 0).getTime();
             if (d > thirtyDaysAgo.getTime()) {
                 activeDays.add(new Date(d).toDateString());
             }
         });
         const engagement = activeDays.size > 0 ? Number(((userMaps.filter(m => {
-            const d = m.createdAt?.toMillis ? m.createdAt.toMillis() : (m.createdAt instanceof Date ? m.createdAt.getTime() : new Date(m.createdAt).getTime());
+            const d = typeof m.createdAt === 'number' ? m.createdAt : new Date(m.createdAt || 0).getTime();
             return d > thirtyDaysAgo.getTime();
         }).length / activeDays.size) * 10).toFixed(1)) : 0;
 
@@ -350,7 +350,7 @@ function ProfileContent() {
                 await supabase
                     .from('users')
                     .update({ photo_url: base64String })
-                    .eq('id', user.uid);
+                    .eq('id', user.id);
                 
                 setProfile(prev => prev ? { ...prev, photoURL: base64String } : prev);
                 toast({ title: 'Success', description: 'Profile picture updated.' });
@@ -369,7 +369,7 @@ function ProfileContent() {
             await supabase
                 .from('users')
                 .update({ display_name: editName.trim() })
-                .eq('id', user.uid);
+                .eq('id', user.id);
 
             setIsEditing(false);
             setProfile(prev => prev ? { ...prev, displayName: editName.trim() } : prev);
@@ -416,7 +416,7 @@ function ProfileContent() {
             // 1. Verify the key first by checking balance
             const result = await checkPollenBalanceAction({
                 apiKey: apiKeyInput.trim(),
-                userId: user.uid,
+                userId: user.id,
             });
 
             if (result.error || result.balance === null) {
@@ -429,7 +429,7 @@ function ProfileContent() {
             }
 
             // 2. If valid, save the key
-            await saveUserApiKey(supabase, user.uid, apiKeyInput.trim(), preferredModel, preferredTextModel);
+            await saveUserApiKey(supabase, user.id, apiKeyInput.trim(), preferredModel, preferredTextModel);
             
             // 3. Update global balance state immediately
             await refreshBalance();
@@ -454,7 +454,7 @@ function ProfileContent() {
         try {
             setPreferredModel(modelId);
             updateConfig({ imageModel: modelId });
-            await saveUserApiKey(supabase, user.uid, apiKeyInput, modelId, preferredTextModel);
+            await saveUserApiKey(supabase, user.id, apiKeyInput, modelId, preferredTextModel);
             toast({ title: 'Vision Preference Saved', description: `Default image model set to ${modelId}` });
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Error', description: error.message });
@@ -469,7 +469,7 @@ function ProfileContent() {
         try {
             setPreferredTextModel(modelId);
             updateConfig({ textModel: modelId });
-            await saveUserApiKey(supabase, user.uid, apiKeyInput, preferredModel, modelId);
+            await saveUserApiKey(supabase, user.id, apiKeyInput, preferredModel, modelId);
             toast({ title: 'Intelligence Preference Saved', description: `Core AI model set to ${modelId}` });
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Error', description: error.message });
@@ -492,7 +492,7 @@ function ProfileContent() {
         if (!user) return;
         setIsSyncing(true);
         try {
-            await updateUserStatistics(supabase, user.uid, {});
+            await updateUserStatistics(supabase, user.id, {});
             toast({
                 title: 'Statistics Synced!',
                 description: 'Your historical activity data has been aggregated into your profile.',
@@ -737,14 +737,14 @@ function ProfileContent() {
                                 <div className="p-3 bg-black/30 rounded-2xl border border-white/5 flex items-center justify-between group/id">
                                     <div className="min-w-0">
                                         <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-0.5">Explorer Hash</p>
-                                        <p className="text-[9px] font-mono text-zinc-400 truncate w-32">{user.uid}</p>
+                                        <p className="text-[9px] font-mono text-zinc-400 truncate w-32">{user.id}</p>
                                     </div>
                                     <Button
                                         size="icon"
                                         variant="ghost"
                                         className="h-8 w-8 rounded-xl hover:bg-white/10 text-zinc-500 hover:text-white transition-all shrink-0"
                                         onClick={() => {
-                                            navigator.clipboard.writeText(user.uid);
+                                            navigator.clipboard.writeText(user.id);
                                             toast({ title: "Copied", description: "Explorer ID copied." });
                                         }}
                                     >
@@ -1074,7 +1074,7 @@ function ProfileContent() {
                                                                     <Button 
                                                                         variant="ghost" size="icon"
                                                                         className="h-8 w-8 rounded-lg hover:bg-violet-500/10 text-zinc-500 hover:text-violet-400 transition-all"
-                                                                        onClick={() => window.open(`/canvas?mapId=${m.id}&ownerId=${user.uid}`, '_blank')}
+                                                                        onClick={() => window.open(`/canvas?mapId=${m.id}&ownerId=${user.id}`, '_blank')}
                                                                     >
                                                                         <ExternalLink className="h-4 w-4" />
                                                                     </Button>

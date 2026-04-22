@@ -193,8 +193,8 @@ import { toPascalCase } from '@/lib/utils';
 import { toPlainObject } from '@/lib/serialize';
 import { findMatchingCategory } from '@/lib/depth-analysis';
 
-// firebase/firestore removed
-import { useUser } from '@/lib/auth-context';
+// Supabase logic
+import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { trackNestedExpansion, trackImageGenerated, trackMapCreated } from '@/lib/activity-tracker';
 import { useXP } from '@/contexts/xp-context';
@@ -311,7 +311,7 @@ export const MindMap = ({
   const mindMapRef = React.useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { toast } = useToast();
-  const { user } = useUser();
+  const { user, supabase } = useAuth();
   const { config, refreshBalance } = useAIConfig();
   const { awardXP } = useXP();
   const [activeTab, setActiveTab] = useState<'visual' | 'radial' | 'accordion' | 'compare'>('visual');
@@ -321,20 +321,36 @@ export const MindMap = ({
     provider: config.provider,
     apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
     model: useSearch ? 'pollinations/gemini-search' : config.pollinationsModel,
-    userId: user?.uid,
-  }), [config.provider, config.apiKey, config.pollinationsApiKey, config.pollinationsModel, user?.uid, useSearch]);
+    userId: user?.id,
+  }), [config.provider, config.apiKey, config.pollinationsApiKey, config.pollinationsModel, user?.id, useSearch]);
 
   const imageProviderOptions = useMemo(() => ({
     provider: config.provider as 'pollinations',
     apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
     model: config.pollinationsModel,
-    userId: user?.uid,
-  }), [config.provider, config.apiKey, config.pollinationsApiKey, config.pollinationsModel, user?.uid]);
+    userId: user?.id,
+  }), [config.provider, config.apiKey, config.pollinationsApiKey, config.pollinationsModel, user?.id]);
 
 
 
 
 
+
+  const mergedExpansions = useMemo(() => {
+    const expansionMap = new Map<string, any>();
+    
+    // Add all from hierarchy (the whole tree from DB)
+    if (allSubMaps) {
+      allSubMaps.forEach(item => expansionMap.set(item.id, item));
+    }
+    
+    // Override or add from local nestedExpansions (immediate children, highly fresh)
+    if (nestedExpansions) {
+      nestedExpansions.forEach(item => expansionMap.set(item.id, item));
+    }
+    
+    return Array.from(expansionMap.values());
+  }, [allSubMaps, nestedExpansions]);
 
   // localMindMap state is removed. We use 'data' prop directly.
   const [isTranslating, setIsTranslating] = useState(false);
@@ -713,6 +729,7 @@ export const MindMap = ({
       } else if (translation) {
         if (onUpdate) onUpdate(translation);
         onLanguageChange(langCode);
+        awardXP('MAP_TRANSLATED', { targetLang: langCode }).catch(() => {});
       }
     } catch (err: any) {
       console.error("Translation error:", err);
@@ -752,7 +769,8 @@ export const MindMap = ({
         explanationMode: explanationMode,
         targetLanguage: selectedLanguage,
         usePdfContext: useFileAware,
-        pdfContext: (data as any).pdfContext ? JSON.stringify((data as any).pdfContext) : undefined
+        pdfContext: (data as any).pdfContext ? JSON.stringify((data as any).pdfContext) : undefined,
+        subCategoryDescription: activeSubCategory!.description || ''
       }, providerOptions);
 
       if (error) {
@@ -1160,9 +1178,9 @@ export const MindMap = ({
       // Award XP for image generation
       awardXP('IMAGE_GENERATED', { model: settings.model, node: labNode.name }).catch(() => {});
 
-      if (firestore && user) {
+      if (supabase && user) {
         try {
-          const achievements = await trackImageGenerated(firestore, user.uid);
+          const achievements = await trackImageGenerated(supabase, user.id);
           // Show achievement toasts
           const tierEmoji: Record<string, string> = { bronze: '🥉', silver: '🥈', gold: '🥇', platinum: '💎' };
           for (const a of achievements) {
@@ -1225,7 +1243,7 @@ export const MindMap = ({
 
       const newMapData = {
         ...cleanData,
-        userId: user.uid,
+        userId: user.id,
         nestedExpansions: [], // Start fresh
         savedImages: [], // Start fresh
       };
@@ -1234,11 +1252,13 @@ export const MindMap = ({
       // But simpler: just tell parent we want to save this as a new map?
       // Actually, since this is "Duplicate", we should probably just save it directly to the user's collection
 
-      const docRef = await addDoc(collection(firestore!, 'users', user.uid, 'mindmaps'), {
+      const { data: newMap, error: insertError } = await supabase!.from('mindmaps').insert({
         ...newMapData,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).select().single();
+
+      if (insertError) throw insertError;
 
       toast({
         title: "Mind Map Duplicated",
@@ -1246,7 +1266,7 @@ export const MindMap = ({
       });
 
       // Redirect to the new map?
-      router.push(`/data?id=${docRef.id}`);
+      router.push(`/data?id=${newMap.id}`);
 
     } catch (error: any) {
       toast({
@@ -1308,7 +1328,7 @@ export const MindMap = ({
       return;
     }
 
-    if (!user || !firestore) {
+    if (!user || !supabase) {
       // Fallback for non-logged in users (shouldn't happen for saved maps usually)
       copyLinkToClipboard(effectiveId, false);
       return;
@@ -1319,22 +1339,23 @@ export const MindMap = ({
       // 1. Create shared entry (Unlisted)
       const shareId = `share_${effectiveId}`;
       const sharedData = {
-        ...toPlainObject(data),
+        topic: data.topic,
+        summary: data.summary,
+        content: (data as any).content || {},
         id: shareId,
-        isShared: true, // Mark as shared
-        isPublic: false, // Explicitly not public in community
-        sharedAt: serverTimestamp(),
-        originalAuthorId: user.uid,
-        authorName: user.displayName || 'Explorer'
+        is_shared: true,
+        is_public: false,
+        shared_at: new Date().toISOString(),
+        original_author_id: user.id,
+        author_name: user.displayName || 'Explorer'
       };
 
-      // Save to 'sharedMindmaps' collection
-      await setDoc(doc(firestore, 'sharedMindmaps', shareId), sharedData);
+      await supabase.from('shared_mindmaps').upsert(sharedData);
 
-      // 2. Update user doc to reflect shared status
-      await updateDoc(doc(firestore, 'users', user.uid, 'mindmaps', effectiveId), {
-        isShared: true
-      });
+      // 2. Update user map to reflect shared status
+      await supabase.from('mindmaps').update({
+        is_shared: true
+      }).eq('id', effectiveId).eq('user_id', user.id);
 
       // 3. Update local state
       if (onUpdate) onUpdate({ isShared: true });
@@ -1372,7 +1393,7 @@ export const MindMap = ({
   };
 
   const handlePublish = async () => {
-    if (!user || !firestore || isPublishing) return;
+    if (!user || !supabase || isPublishing) return;
 
     // 1. Check if it's already public
     if (data.isPublic) {
@@ -1402,11 +1423,11 @@ export const MindMap = ({
       update({ id: toastId, title: 'Uploading Data...', description: 'Saving your mind map to the community repository.' });
 
       // 3. Prepare Community Data
-      const targetUid = data.userId || data.uid || user.uid;
+      const targetUid = data.userId || data.uid || user.id;
       
       // Fix: Prioritize original author name from data, fallback to current user ONLY if it's their own map
       const authorName = data.authorName || 
-                         (targetUid !== user.uid ? 'Explorer' : (user.displayName || 'Anonymous'));
+                         (targetUid !== user.id ? 'Explorer' : (user.displayName || 'Anonymous'));
       
       const publicData: any = {
         ...toPlainObject(data),
@@ -1415,12 +1436,12 @@ export const MindMap = ({
         originalMapId: data.id,
         originalAuthorId: targetUid,
         authorName: authorName,
-        authorAvatar: data.authorAvatar || (targetUid === user.uid ? (user.photoURL || '') : ''),
+        authorAvatar: data.authorAvatar || (targetUid === user.id ? (user.photoURL || '') : ''),
         views: 0,
       };
 
-      // 4. Save via Server Action (handles Admin bypass)
-      const { success, error: publishError } = await publishMindMapAction(data.id!, publicData, user.uid);
+      // 4. Save via Server Action
+      const { success, error: publishError } = await publishMindMapAction(data.id!, publicData, user.id);
 
       if (!success) {
         throw new Error(publishError || 'Failed to publish mind map.');
@@ -1508,7 +1529,7 @@ export const MindMap = ({
         onRegenerate={onRegenerate}
         onStartGlobalQuiz={() => onStartQuiz(data.topic)}
         canRegenerate={canRegenerate}
-        nestedExpansionsCount={(allSubMaps?.length || 0)}
+        nestedExpansionsCount={mergedExpansions.length}
         imagesCount={generatedImages.length}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
@@ -1711,10 +1732,12 @@ export const MindMap = ({
         onDelete={handleDeleteImage}
       />
 
+
+
       <NestedMapsDialog
         isOpen={isNestedMapsDialogOpen}
         onClose={() => setIsNestedMapsDialogOpen(false)}
-        expansions={(allSubMaps || nestedExpansions || []).map(item => ({
+        expansions={mergedExpansions.map(item => ({
           ...item,
           thumbnailUrl: thumbnailOverrides[item.id] || (item.fullData as any)?.thumbnailUrl || (item as any).thumbnailUrl,
           path: item.path || ''
@@ -1794,7 +1817,7 @@ export const MindMap = ({
                   model: settings.model || 'flux',
                   width: settings.width || 512,
                   height: settings.height || 288,
-                  userId: user?.uid,
+                  userId: user?.id,
                   userApiKey: config.pollinationsApiKey
                 })
               });
@@ -1832,11 +1855,14 @@ export const MindMap = ({
                 description: `Successfully created thumbnail for ${nestedLabNode.topic}`,
               });
 
-              // Persist the new thumbnail URL to Firestore
-              if (user && firestore && nestedLabNode.id) {
+              // Persist the new thumbnail URL to Supabase
+              if (user && supabase && nestedLabNode.id) {
                 try {
-                  const docRef = doc(firestore, 'users', user.uid, 'mindmaps', nestedLabNode.id);
-                  await updateDoc(docRef, { thumbnailUrl: imageData.imageUrl });
+                  await supabase
+                    .from('mindmaps')
+                    .update({ thumbnail_url: imageData.imageUrl })
+                    .eq('id', nestedLabNode.id)
+                    .eq('user_id', user.id);
                 } catch (dbError) {
                   console.error('Failed to save nested map thumbnail to db:', dbError);
                 }

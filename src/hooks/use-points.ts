@@ -33,7 +33,7 @@ export function usePoints(): UsePointsReturn {
     const supabase = getSupabaseClient();
 
     const fetchPoints = async () => {
-      const { data } = await supabase.from('user_points').select('*').eq('user_id', user.uid).maybeSingle();
+      const { data } = await supabase.from('user_points').select('*').eq('user_id', user.id).maybeSingle();
       if (data) {
         setLedger(data.ledger || DEFAULT_LEDGER);
         setDailyCaps(data.daily_caps || null);
@@ -47,8 +47,8 @@ export function usePoints(): UsePointsReturn {
     fetchPoints();
 
     const channel = supabase
-      .channel(`points-${user.uid}-${Math.random().toString(36).substring(7)}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_points', filter: `user_id=eq.${user.uid}` }, (payload) => {
+      .channel(`points-${user.id}-${Math.random().toString(36).substring(7)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_points', filter: `user_id=eq.${user.id}` }, (payload) => {
         const data = payload.new as any;
         if (data) {
           setLedger(data.ledger || DEFAULT_LEDGER);

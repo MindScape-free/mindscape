@@ -29,246 +29,181 @@ export interface MindmapListItem {
 
 function sanitizeTimestamp(value: any): number {
   if (!value) return 0;
-  if (typeof value.toDate === 'function') {
-    return value.toDate().getTime();
-  }
   if (typeof value === 'number') return value;
-  if (typeof value === 'string' || typeof value === 'object') {
-    const date = new Date(value as any);
+  if (typeof value === 'string') {
+    const date = new Date(value);
     return isNaN(date.getTime()) ? 0 : date.getTime();
   }
+  // Handle case where it might be a Supabase/Postgres timestamp object or number
   return 0;
 }
 
 export async function getAdminStats(): Promise<AdminStats> {
-  const { supabase } = { supabase: getSupabaseAdmin() };
+  const supabase = getSupabaseAdmin();
   
   if (!supabase) {
-    throw new Error('Firebase not initialized');
+    throw new Error('Supabase not initialized');
   }
-
-  let total = 0;
-  let active = 0;
-  let deleted = 0;
-  let publicCount = 0;
-  let privateCount = 0;
-  let totalNodes = 0;
 
   try {
-    const snapshot = await supabase.collectionGroup('mindmaps').get();
-    
-    snapshot.forEach((doc: any) => {
-      const data = doc.data();
-      total++;
+    // Implement efficient stats using Supabase queries
+    const { count: total, error: totalErr } = await supabase
+      .from('mindmaps')
+      .select('*', { count: 'exact', head: true });
 
-      if (data.isDeleted === true || data.deleted === true) {
-        deleted++;
-      } else {
-        active++;
-        
-        if (data.isPublic === true) {
-          publicCount++;
-        } else {
-          privateCount++;
-        }
-        
-        totalNodes += data.nodeCount || data.nodeCountInt || 0;
-      }
-    });
+    const { count: deleted, error: deletedErr } = await supabase
+      .from('mindmaps')
+      .select('*', { count: 'exact', head: true })
+      .or('is_deleted.eq.true,deleted.eq.true');
+
+    const { count: publicCount, error: publicErr } = await supabase
+      .from('mindmaps')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_public', true)
+      .not('is_deleted', 'eq', true)
+      .not('deleted', 'eq', true);
+
+    const { data: nodesData, error: nodesErr } = await supabase
+      .from('mindmaps')
+      .select('node_count')
+      .not('is_deleted', 'eq', true)
+      .not('deleted', 'eq', true);
+
+    if (totalErr || deletedErr || publicErr || nodesErr) {
+      throw totalErr || deletedErr || publicErr || nodesErr;
+    }
+
+    const totalNodes = (nodesData || []).reduce((acc, curr) => acc + (curr.node_count || 0), 0);
+    const totalCreated = total || 0;
+    const deletedCount = deleted || 0;
+    const activeCount = totalCreated - deletedCount;
+    const pubCount = publicCount || 0;
+    const priCount = activeCount - pubCount;
+
+    return {
+      totalCreated,
+      activeCount,
+      deletedCount,
+      publicCount: pubCount,
+      privateCount: priCount,
+      totalNodes,
+      lastUpdatedAt: Date.now(),
+    };
   } catch (error: any) {
-    console.warn('[AdminService] collectionGroup query failed, falling back:', error.message);
-    const fallbackResult = await getAdminStatsFallback();
-    return fallbackResult;
+    console.error('[AdminService] getAdminStats failed:', error.message);
+    return {
+      totalCreated: 0,
+      activeCount: 0,
+      deletedCount: 0,
+      publicCount: 0,
+      privateCount: 0,
+      totalNodes: 0,
+      lastUpdatedAt: Date.now(),
+    };
   }
-
-  return {
-    totalCreated: total,
-    activeCount: active,
-    deletedCount: deleted,
-    publicCount,
-    privateCount,
-    totalNodes,
-    lastUpdatedAt: Date.now(),
-  };
-}
-
-async function getAdminStatsFallback(): Promise<AdminStats> {
-  const { supabase } = { supabase: getSupabaseAdmin() };
-  
-  if (!supabase) {
-    throw new Error('Firebase not initialized');
-  }
-
-  let total = 0;
-  let active = 0;
-  let deleted = 0;
-  let publicCount = 0;
-  let privateCount = 0;
-  let totalNodes = 0;
-
-  const usersSnap = await supabase.collection('users').get();
-  
-  await Promise.all(
-    usersSnap.docs.map(async (userDoc: any) => {
-      try {
-        const mapsSnap = await supabase
-          .collection('users')
-          .doc(userDoc.id)
-          .collection('mindmaps')
-          .get();
-        
-        mapsSnap.forEach((mapDoc: any) => {
-          const data = mapDoc.data();
-          total++;
-
-          if (data.isDeleted === true || data.deleted === true) {
-            deleted++;
-          } else {
-            active++;
-            
-            if (data.isPublic === true) {
-              publicCount++;
-            } else {
-              privateCount++;
-            }
-            
-            totalNodes += data.nodeCount || data.nodeCountInt || 0;
-          }
-        });
-      } catch {
-        // Skip users with permission issues
-      }
-    })
-  );
-
-  return {
-    totalCreated: total,
-    activeCount: active,
-    deletedCount: deleted,
-    publicCount,
-    privateCount,
-    totalNodes,
-    lastUpdatedAt: Date.now(),
-  };
 }
 
 export async function getMindmapsList(options: {
   limit?: number;
-  startAfterDoc?: string;
-  startAfterTime?: number;
+  offset?: number;
   filterDeleted?: boolean;
 } = {}): Promise<{
   data: MindmapListItem[];
-  lastDoc: any;
+  total: number;
   hasMore: boolean;
 }> {
-  const { supabase } = { supabase: getSupabaseAdmin() };
+  const supabase = getSupabaseAdmin();
   
   if (!supabase) {
-    throw new Error('Firebase not initialized');
+    throw new Error('Supabase not initialized');
   }
 
-  const { limit = 20, startAfterDoc, startAfterTime, filterDeleted = true } = options;
+  const { limit = 20, offset = 0, filterDeleted = true } = options;
 
-  let query: any = supabase
-    .collectionGroup('mindmaps')
-    .orderBy('createdAt', 'desc')
-    .limit(limit);
+  let query = supabase
+    .from('mindmaps')
+    .select('*', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
 
-  if (startAfterDoc && startAfterTime) {
-    query = query.startAfter(startAfterTime, startAfterDoc);
+  if (filterDeleted) {
+    query = query.not('is_deleted', 'eq', true).not('deleted', 'eq', true);
   }
 
-  let snapshot;
-  try {
-    snapshot = await query.get();
-  } catch (error: any) {
-    console.warn('[AdminService] Pagination query failed:', error.message);
-    return { data: [], lastDoc: null, hasMore: false };
+  const { data: rows, count, error } = await query;
+
+  if (error) {
+    console.error('[AdminService] getMindmapsList failed:', error.message);
+    return { data: [], total: 0, hasMore: false };
   }
 
-  const data: MindmapListItem[] = [];
-  
-  snapshot.forEach((doc: any) => {
-    const mapData = doc.data();
-    
-    if (filterDeleted && (mapData.isDeleted === true || mapData.deleted === true)) {
-      return;
-    }
+  const data: MindmapListItem[] = (rows || []).map(mapData => ({
+    id: mapData.id,
+    userId: mapData.user_id || 'unknown',
+    title: mapData.title || mapData.topic || mapData.short_title || 'Untitled',
+    summary: mapData.summary || '',
+    mode: mapData.mode || 'single',
+    depth: mapData.depth || 'medium',
+    isPublic: mapData.is_public === true,
+    isDeleted: mapData.is_deleted === true || mapData.deleted === true,
+    nodeCount: mapData.node_count || 0,
+    views: mapData.public_views || mapData.views || 0,
+    createdAt: sanitizeTimestamp(mapData.created_at),
+    updatedAt: sanitizeTimestamp(mapData.updated_at),
+    sourceType: mapData.source_type || mapData.source_file_type,
+    persona: mapData.ai_persona || mapData.persona,
+  }));
 
-    const pathParts = doc.ref.path.split('/');
-    const userId = pathParts.length > 1 ? pathParts[1] : 'unknown';
+  const total = count || 0;
+  const hasMore = offset + data.length < total;
 
-    data.push({
-      id: doc.id,
-      userId,
-      title: mapData.title || mapData.topic || mapData.shortTitle || 'Untitled',
-      summary: mapData.summary || '',
-      mode: mapData.mode || 'single',
-      depth: mapData.depth || 'medium',
-      isPublic: mapData.isPublic === true,
-      isDeleted: mapData.isDeleted === true || mapData.deleted === true,
-      nodeCount: mapData.nodeCount || mapData.nodeCountInt || 0,
-      views: mapData.views || mapData.publicViews || 0,
-      createdAt: sanitizeTimestamp(mapData.createdAt),
-      updatedAt: sanitizeTimestamp(mapData.updatedAt || mapData.timestamp),
-      sourceType: mapData.sourceType || mapData.sourceFileType,
-      persona: mapData.aiPersona || mapData.persona,
-    });
-  });
-
-  const lastDoc = snapshot.docs[snapshot.docs.length - 1] || null;
-  const hasMore = snapshot.docs.length === limit;
-
-  return { data, lastDoc, hasMore };
+  return { data, total, hasMore };
 }
 
 export async function getMindmapsByUser(userId: string, options: {
   limit?: number;
   includeDeleted?: boolean;
 } = {}): Promise<MindmapListItem[]> {
-  const { supabase } = { supabase: getSupabaseAdmin() };
+  const supabase = getSupabaseAdmin();
   
   if (!supabase) {
-    throw new Error('Firebase not initialized');
+    throw new Error('Supabase not initialized');
   }
 
   const { limit = 100, includeDeleted = false } = options;
 
-  let query: any = supabase
-    .collection('users')
-    .doc(userId)
-    .collection('mindmaps')
-    .orderBy('createdAt', 'desc')
+  let query = supabase
+    .from('mindmaps')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
     .limit(limit);
 
-  const snapshot = await query.get();
-  const data: MindmapListItem[] = [];
+  if (!includeDeleted) {
+    query = query.not('is_deleted', 'eq', true).not('deleted', 'eq', true);
+  }
 
-  snapshot.forEach((doc: any) => {
-    const mapData = doc.data();
-    
-    if (!includeDeleted && (mapData.isDeleted === true || mapData.deleted === true)) {
-      return;
-    }
+  const { data: rows, error } = await query;
 
-    data.push({
-      id: doc.id,
-      userId,
-      title: mapData.title || mapData.topic || mapData.shortTitle || 'Untitled',
-      summary: mapData.summary || '',
-      mode: mapData.mode || 'single',
-      depth: mapData.depth || 'medium',
-      isPublic: mapData.isPublic === true,
-      isDeleted: mapData.isDeleted === true || mapData.deleted === true,
-      nodeCount: mapData.nodeCount || mapData.nodeCountInt || 0,
-      views: mapData.views || mapData.publicViews || 0,
-      createdAt: sanitizeTimestamp(mapData.createdAt),
-      updatedAt: sanitizeTimestamp(mapData.updatedAt || mapData.timestamp),
-      sourceType: mapData.sourceType || mapData.sourceFileType,
-      persona: mapData.aiPersona || mapData.persona,
-    });
-  });
+  if (error) {
+    console.error('[AdminService] getMindmapsByUser failed:', error.message);
+    return [];
+  }
 
-  return data;
+  return (rows || []).map(mapData => ({
+    id: mapData.id,
+    userId,
+    title: mapData.title || mapData.topic || mapData.short_title || 'Untitled',
+    summary: mapData.summary || '',
+    mode: mapData.mode || 'single',
+    depth: mapData.depth || 'medium',
+    isPublic: mapData.is_public === true,
+    isDeleted: mapData.is_deleted === true || mapData.deleted === true,
+    nodeCount: mapData.node_count || 0,
+    views: mapData.public_views || mapData.views || 0,
+    createdAt: sanitizeTimestamp(mapData.created_at),
+    updatedAt: sanitizeTimestamp(mapData.updated_at),
+    sourceType: mapData.source_type || mapData.source_file_type,
+    persona: mapData.ai_persona || mapData.persona,
+  }));
 }

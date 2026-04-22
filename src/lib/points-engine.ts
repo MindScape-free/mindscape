@@ -14,6 +14,8 @@ function generateId(): string {
 export interface AwardResult {
   awarded: boolean;
   points: number;
+  bonusPoints: number;
+  multiplier: number;
   totalPoints: number;
   level: number;
   rank: string;
@@ -48,7 +50,18 @@ export async function awardPoints(
   const cap = DAILY_CAPS[eventType];
   const usedToday = dailyData.caps[eventType] ?? 0;
   if (cap > 0 && usedToday >= cap) {
-    return { awarded: false, points: 0, totalPoints: ledger.totalPoints, level: ledger.level, rank: ledger.rank, leveledUp: false, previousLevel: ledger.level, cappedOut: true };
+    return { 
+      awarded: false, 
+      points: 0, 
+      bonusPoints: 0,
+      multiplier: 0,
+      totalPoints: ledger.totalPoints, 
+      level: ledger.level, 
+      rank: ledger.rank, 
+      leveledUp: false, 
+      previousLevel: ledger.level, 
+      cappedOut: true 
+    };
   }
 
   const basePoints = POINT_VALUES[eventType];
@@ -110,5 +123,5 @@ export async function awardPoints(
     }
   }
 
-  return { awarded: true, points: totalEarned, totalPoints: newTotal, level: newRankInfo.level, rank: newRankInfo.rank, leveledUp, previousLevel, cappedOut: false };
+  return { awarded: true, points: totalEarned, bonusPoints, multiplier, totalPoints: newTotal, level: newRankInfo.level, rank: newRankInfo.rank, leveledUp, previousLevel, cappedOut: false };
 }

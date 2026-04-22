@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase-server';
-// firebase-admin/auth removed
+import { getSupabaseAdmin, isUserAdminServer } from '@/lib/supabase-server';
 import { format, subHours, subDays } from 'date-fns';
-
-const ADMIN_UID = '765cd0a0-6201-41d2-ac8d-ff99b4941289';
 
 async function verifyAdmin(request: Request): Promise<{ authorized: boolean; uid?: string; error?: string }> {
   try {
@@ -13,20 +10,21 @@ async function verifyAdmin(request: Request): Promise<{ authorized: boolean; uid
     }
 
     const idToken = authHeader.substring(7);
-    const { app } = { firestore: getSupabaseAdmin() };
+    const supabase = getSupabaseAdmin();
     
-    if (!app) {
-      return { authorized: false, error: 'Firebase not initialized' };
+    // Verify the user via their access token
+    const { data: { user }, error: authError } = await supabase.auth.getUser(idToken);
+    
+    if (authError || !user) {
+      return { authorized: false, error: authError?.message || 'Token verification failed' };
     }
 
-    const decodedToken = await getAuth(app).verifyIdToken(idToken);
-    const uid = decodedToken.uid;
-    
-    if (uid !== ADMIN_UID) {
-      return { authorized: false, uid, error: 'Unauthorized: Not an admin' };
+    const isAdmin = await isUserAdminServer(user.id);
+    if (!isAdmin) {
+      return { authorized: false, uid: user.id, error: 'Unauthorized: Not an admin' };
     }
 
-    return { authorized: true, uid };
+    return { authorized: true, uid: user.id };
   } catch (error: any) {
     console.error('RBAC verification failed:', error.message);
     return { authorized: false, error: error.message || 'Token verification failed' };
@@ -36,102 +34,85 @@ async function verifyAdmin(request: Request): Promise<{ authorized: boolean; uid
 let lastSyncTime = 0;
 const MIN_SYNC_INTERVAL_MS = 60 * 1000; // 1 minute minimum between syncs
 
-function safeDate(value: any, fallback: Date): Date {
-  if (!value) return fallback;
-  try {
-    if (typeof value.toDate === 'function') {
-      const d = value.toDate();
-      return isNaN(d.getTime()) ? fallback : d;
-    }
-    if (value instanceof Date) return isNaN(value.getTime()) ? fallback : value;
-    const d = new Date(value);
-    return isNaN(d.getTime()) ? fallback : d;
-  } catch {
-    return fallback;
-  }
-}
-
 function buildEmptyAnalytics() {
   return {
-    totalAnalyzed: 0,
-    modeCounts: { single: 0, compare: 0, multi: 0 },
-    depthCounts: { low: 0, medium: 0, deep: 0, unspecified: 0 },
-    sourceCounts: {} as Record<string, number>,
-    personaCounts: {} as Record<string, number>,
-    subMapStats: { total: 0, parents: 0, avgPerParent: 0 },
-    publicPrivate: { public: 0, private: 0 },
-    avgNodesPerMap: 0,
-    featuredCount: 0,
-    topPersona: 'N/A',
-    userStats: [] as any[],
+    total_analyzed: 0,
+    mode_counts: { single: 0, compare: 0, multi: 0 },
+    depth_counts: { low: 0, medium: 0, deep: 0, unspecified: 0 },
+    source_counts: {} as Record<string, number>,
+    persona_counts: {} as Record<string, number>,
+    sub_map_stats: { total: 0, parents: 0, avg_per_parent: 0 },
+    public_private: { public: 0, private: 0 },
+    avg_nodes_per_map: 0,
+    featured_count: 0,
+    top_persona: 'N/A',
+    user_stats: [] as any[],
   };
 }
 
-function processMapsForAnalytics(docs: any[]) {
+function processMapsForAnalytics(maps: any[]) {
   const analytics = buildEmptyAnalytics();
   let totalNodes = 0;
 
-  docs.forEach((doc: any) => {
-    const data = doc.data();
-    analytics.totalAnalyzed++;
-    totalNodes += data.nodeCount || 0;
+  maps.forEach((data: any) => {
+    analytics.total_analyzed++;
+    totalNodes += data.node_count || 0;
 
     // Mode
     const isMulti =
       data.mode === 'multi' ||
-      data.mode === 'multi-source' ||
-      data.sourceFileType === 'multi' ||
-      (data.sourceFileContent && data.sourceFileContent.includes('--- SOURCE:'));
-    if (isMulti) analytics.modeCounts.multi++;
-    else if (data.mode === 'compare') analytics.modeCounts.compare++;
-    else analytics.modeCounts.single++;
+      data.source_file_type === 'multi' ||
+      (data.source_file_content && data.source_file_content.includes('--- SOURCE:'));
+    if (isMulti) analytics.mode_counts.multi++;
+    else if (data.mode === 'compare') analytics.mode_counts.compare++;
+    else analytics.mode_counts.single++;
 
     // Depth
-    const depth = (data.depth || 'unspecified') as keyof typeof analytics.depthCounts;
-    if (depth in analytics.depthCounts) analytics.depthCounts[depth]++;
-    else analytics.depthCounts.unspecified++;
+    const depth = (data.depth || 'unspecified') as keyof typeof analytics.depth_counts;
+    if (depth in analytics.depth_counts) analytics.depth_counts[depth]++;
+    else analytics.depth_counts.unspecified++;
 
-    // Source — with website fallback for maps that only have sourceUrl
-    const source = data.sourceFileType || data.sourceType || (data.sourceUrl ? 'website' : 'text');
-    analytics.sourceCounts[source] = (analytics.sourceCounts[source] || 0) + 1;
+    // Source
+    const source = data.source_file_type || data.source_type || (data.source_url ? 'website' : 'text');
+    analytics.source_counts[source] = (analytics.source_counts[source] || 0) + 1;
 
     // Public/Private
-    if (data.isPublic) analytics.publicPrivate.public++;
-    else analytics.publicPrivate.private++;
+    if (data.is_public) analytics.public_private.public++;
+    else analytics.public_private.private++;
 
     // Persona
-    const raw = (data.aiPersona || data.persona || '').toLowerCase().trim();
+    const raw = (data.ai_persona || '').toLowerCase().trim();
     let persona = 'Teacher';
     if (raw === 'concise') persona = 'Concise';
     else if (raw === 'creative') persona = 'Creative';
     else if (raw.includes('sage')) persona = 'Sage';
-    analytics.personaCounts[persona] = (analytics.personaCounts[persona] || 0) + 1;
+    analytics.persona_counts[persona] = (analytics.persona_counts[persona] || 0) + 1;
 
     // Sub-maps
-    if (data.isSubMap || data.parentId || data.parentMapId) analytics.subMapStats.total++;
-    if ((data.nestedExpansions?.length > 0) || data.hasSubMaps) analytics.subMapStats.parents++;
-    if (data.isFeatured) analytics.featuredCount++;
+    if (data.is_sub_map || data.parent_id) analytics.sub_map_stats.total++;
+    if (data.has_sub_maps) analytics.sub_map_stats.parents++;
+    if (data.is_featured) analytics.featured_count++;
   });
 
-  analytics.avgNodesPerMap =
-    analytics.totalAnalyzed > 0
-      ? Math.round((totalNodes / analytics.totalAnalyzed) * 10) / 10
+  analytics.avg_nodes_per_map =
+    analytics.total_analyzed > 0
+      ? Math.round((totalNodes / analytics.total_analyzed) * 10) / 10
       : 0;
 
-  analytics.subMapStats.avgPerParent =
-    analytics.subMapStats.parents > 0
-      ? Math.round((analytics.subMapStats.total / analytics.subMapStats.parents) * 10) / 10
+  analytics.sub_map_stats.avg_per_parent =
+    analytics.sub_map_stats.parents > 0
+      ? Math.round((analytics.sub_map_stats.total / analytics.sub_map_stats.parents) * 10) / 10
       : 0;
 
   let topPersona = 'N/A';
   let topCount = 0;
-  Object.entries(analytics.personaCounts).forEach(([key, value]) => {
+  Object.entries(analytics.persona_counts).forEach(([key, value]) => {
     if ((value as number) > topCount) {
       topCount = value as number;
       topPersona = key;
     }
   });
-  analytics.topPersona = topPersona;
+  analytics.top_persona = topPersona;
 
   return analytics;
 }
@@ -139,23 +120,18 @@ function processMapsForAnalytics(docs: any[]) {
 export async function POST(request: Request) {
   const authCheck = await verifyAdmin(request);
   if (!authCheck.authorized) {
-    console.warn(`🚫 [AdminSync] Unauthorized access attempt from UID: ${authCheck.uid || 'unknown'}`);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
-
-  console.log('🚀 [AdminSync] Starting full synchronization...');
 
   const nowMs = Date.now();
   if (lastSyncTime > 0 && nowMs - lastSyncTime < MIN_SYNC_INTERVAL_MS) {
     const waitTime = Math.ceil((MIN_SYNC_INTERVAL_MS - (nowMs - lastSyncTime)) / 1000);
-    return NextResponse.json(
-      { success: false, error: `Rate limited. Wait ${waitTime}s.`, nextAvailableIn: waitTime },
-      { status: 429 }
-    );
+    return NextResponse.json({ error: `Rate limited. Wait ${waitTime}s.` }, { status: 429 });
   }
 
   const now = new Date();
   const timestamp = now.toISOString();
+  const supabase = getSupabaseAdmin();
 
   const heatmapRange = [...Array(31)].map((_, i) => format(subDays(now, 30 - i), 'yyyy-MM-dd'));
   const heatmapMap = new Map(
@@ -166,234 +142,163 @@ export async function POST(request: Request) {
   );
 
   try {
-    const { app, firestore } = { firestore: getSupabaseAdmin() };
-    if (!app || !firestore) {
-      return NextResponse.json({ success: false, error: 'Firebase not initialized.' }, { status: 500 });
-    }
+    console.log('📊 [AdminSync] Fetching all collections from Supabase...');
 
-    console.log('📊 [AdminSync] Fetching all collections...');
+    const [usersRes, mapsRes, logsRes] = await Promise.all([
+      supabase.from('users').select('*'),
+      supabase.from('mindmaps').select('*'),
+      supabase.from('admin_activity_log').select('*').gte('timestamp', subDays(now, 31).toISOString())
+    ]);
 
-    const [usersSnap, publicMapsSnap, publicMapsRecentSnap, activitySnap] =
-      await Promise.all([
-        firestore.collection('users').get(),
-        firestore.collection('publicMindmaps').get(),
-        firestore.collection('publicMindmaps').orderBy('timestamp', 'desc').limit(10).get().catch(() =>
-          firestore.collection('publicMindmaps').limit(10).get()
-        ),
-        firestore
-          .collection('adminActivityLog')
-          .where('timestamp', '>=', subDays(now, 31).toISOString())
-          .get()
-          .catch(() => ({ docs: [] })),
-      ]);
+    if (usersRes.error) throw usersRes.error;
+    if (mapsRes.error) throw mapsRes.error;
+    if (logsRes.error) throw logsRes.error;
 
-    // collectionGroup('mindmaps') requires a Firestore index exemption.
-    // We fetch it separately so a missing index doesn't kill the whole sync.
-    let allMapsSnap: any = { docs: [], size: 0 };
-    try {
-      allMapsSnap = await firestore.collectionGroup('mindmaps').get();
-    } catch (e: any) {
-      console.error('❌ [AdminSync] collectionGroup(mindmaps) failed — falling back to per-user fetch:', e.message);
-      // Fallback: fetch maps per user (no index required)
-      const allMapDocs: any[] = [];
-      await Promise.all(
-        usersSnap.docs.map(async (userDoc: any) => {
-          try {
-            const mapsSnap = await firestore
-              .collection('users')
-              .doc(userDoc.id)
-              .collection('mindmaps')
-              .get();
-            mapsSnap.docs.forEach((d: any) => allMapDocs.push(d));
-          } catch {
-            // skip users with permission issues
-          }
-        })
-      );
-      allMapsSnap = { docs: allMapDocs, size: allMapDocs.length };
-    }
+    const users = usersRes.data;
+    const allMaps = mapsRes.data;
+    const logs = logsRes.data;
 
-    const totalUsers = usersSnap.size;
-    const totalPublicMaps = publicMapsSnap.size;
+    const totalUsers = users.length;
+    const totalPublicMaps = allMaps.filter(m => m.is_public).length;
 
-    // Count chats from user statistics to avoid collectionGroup index requirement
-    let totalChats = 0;
-
-    // --- Process Users ---
     let activeUsers24h = 0;
     let newUsers24h = 0;
     let newUsersPrevious24h = 0;
     let totalMindmapsEver = 0;
+    let totalChats = 0;
 
-    const processedUsers = usersSnap.docs.map((doc: any) => {
-      const data = doc.data();
-      const createdAt: Date = safeDate(data.createdAt, new Date(0));
-      const lastActiveStr: string | undefined = data.statistics?.lastActiveDate;
-      const lastActive: Date | null = lastActiveStr ? safeDate(lastActiveStr, new Date(0)) : null;
+    // --- Process Users ---
+    users.forEach(data => {
+      const createdAt = new Date(data.created_at || 0);
+      const lastActiveAt = data.last_active ? new Date(data.last_active) : null;
 
-      // Heatmap: new users (skip epoch fallback dates)
       if (createdAt.getTime() > 0) {
         const dateKey = format(createdAt, 'yyyy-MM-dd');
         if (heatmapMap.has(dateKey)) heatmapMap.get(dateKey)!.newUsers++;
+        
+        if (createdAt >= subHours(now, 24)) newUsers24h++;
+        else if (createdAt >= subHours(now, 48)) newUsersPrevious24h++;
       }
 
-      if (createdAt.getTime() > 0 && createdAt >= subHours(now, 24)) newUsers24h++;
-      else if (createdAt.getTime() > 0 && createdAt >= subHours(now, 48)) newUsersPrevious24h++;
-
-      if (lastActive && lastActive.getTime() > 0) {
-        if (lastActive >= subHours(now, 24)) activeUsers24h++;
-        const activeKey = format(lastActive, 'yyyy-MM-dd');
+      if (lastActiveAt && lastActiveAt >= subHours(now, 24)) {
+        activeUsers24h++;
+        const activeKey = format(lastActiveAt, 'yyyy-MM-dd');
         if (heatmapMap.has(activeKey)) heatmapMap.get(activeKey)!.activeUsers++;
       }
 
-      // Accumulate historical total and chats from user stats
       totalMindmapsEver += data.statistics?.totalMapsCreated || 0;
       totalChats += data.statistics?.totalChats || 0;
-
-      return {
-        id: doc.id,
-        ...data,
-        createdAt: createdAt.toISOString(),
-        lastActive: lastActive ? lastActive.toISOString() : null,
-      };
     });
 
-    // --- Process Activity Logs for heatmap ---
-    activitySnap.docs.forEach((doc: any) => {
-      const dateKey = (doc.data().timestamp || '').split('T')[0];
+    // --- Process Logs ---
+    logs.forEach(log => {
+      const dateKey = (log.timestamp || '').split('T')[0];
       if (heatmapMap.has(dateKey)) heatmapMap.get(dateKey)!.totalActions++;
     });
 
-    // Count live maps — exclude sub-maps for the "Current Library" count
+    // --- Process Maps ---
     let totalMindmaps = 0;
     let totalSubMaps = 0;
     let newMaps24h = 0;
     let newMapsPrevious24h = 0;
-    let totalNodesInLibrary = 0;
+    let totalNodes = 0;
 
-    allMapsSnap.docs.forEach((doc: any) => {
-      const data = doc.data();
-      const isSubMap = data.isSubMap === true || !!data.parentMapId;
+    allMaps.forEach(data => {
+      const isSubMap = data.is_sub_map === true || !!data.parent_id;
       if (!isSubMap) totalMindmaps++;
       else totalSubMaps++;
 
-      const mapDate: Date = safeDate(
-        data.timestamp || data.createdAt,
-        new Date(0)
-      );
-
-      totalNodesInLibrary += data.nodeCount || 0;
+      totalNodes += data.node_count || 0;
+      const mapDate = new Date(data.created_at || 0);
 
       if (mapDate.getTime() > 0) {
         const dateKey = format(mapDate, 'yyyy-MM-dd');
         if (heatmapMap.has(dateKey)) {
           const day = heatmapMap.get(dateKey)!;
           day.newMaps++;
-          if (data.isSubMap) day.newSubMaps++;
-          if (data.isPublic) day.publicMaps++;
+          if (isSubMap) day.newSubMaps++;
+          if (data.is_public) day.publicMaps++;
           else day.privateMaps++;
         }
+
+        if (mapDate >= subHours(now, 24)) {
+          if (!isSubMap) newMaps24h++;
+        } else if (mapDate >= subHours(now, 48)) {
+          if (!isSubMap) newMapsPrevious24h++;
+        }
       }
-
-      if (mapDate.getTime() > 0 && mapDate >= subHours(now, 24)) newMaps24h++;
-      else if (mapDate.getTime() > 0 && mapDate >= subHours(now, 48)) newMapsPrevious24h++;
     });
 
-    // Filter out sub-maps for analytics - only analyze root maps
-    const rootMapsOnly = allMapsSnap.docs.filter((doc: any) => {
-      const data = doc.data();
-      return data.isSubMap !== true && !data.parentMapId;
-    });
-    const mapAnalytics = processMapsForAnalytics(rootMapsOnly);
-
-    console.log(`📊 [AdminSync] Map breakdown: total docs=${allMapsSnap.docs.length} (root=${rootMapsOnly.length}, sub=${allMapsSnap.docs.length - rootMapsOnly.length}), users=${totalUsers}`);
-    const subMapSamples = allMapsSnap.docs
-      .filter((d: any) => d.data().isSubMap === true || !!d.data().parentMapId)
-      .slice(0, 5)
-      .map((d: any) => ({ id: d.id, isSubMap: d.data().isSubMap, parentMapId: d.data().parentMapId, path: d.ref.path }));
-    console.log('📊 [AdminSync] Sub-map samples:', JSON.stringify(subMapSamples));
-    const rootSamples = allMapsSnap.docs
-      .filter((d: any) => d.data().isSubMap !== true && !d.data().parentMapId)
-      .slice(0, 5)
-      .map((d: any) => ({ id: d.id, topic: d.data().topic, path: d.ref.path }));
-    console.log('📊 [AdminSync] Root map samples:', JSON.stringify(rootSamples));
+    const rootMaps = allMaps.filter(m => !m.is_sub_map && !m.parent_id);
+    const mapAnalytics = processMapsForAnalytics(rootMaps);
 
     const engagementRate = totalUsers > 0 ? (activeUsers24h / totalUsers) * 100 : 0;
     const healthScore = Math.round(
       Math.min(50, (engagementRate / 20) * 50) +
-        Math.min(50, ((totalMindmapsEver / (totalUsers || 1)) / 1.5) * 50)
+      Math.min(50, ((totalMindmapsEver / (totalUsers || 1)) / 1.5) * 50)
     );
 
-    // Only store the fields the UI needs — strip raw Firestore objects to prevent set() failures
     const serializeUser = (u: any) => ({
       id: u.id,
-      displayName: u.displayName || null,
+      display_name: u.display_name || null,
       email: u.email || null,
-      photoURL: u.photoURL || null,
-      createdAt: u.createdAt,   // already ISO string from processedUsers
-      lastActive: u.lastActive, // already ISO string or null
-      statistics: u.statistics ? {
-        totalMapsCreated: u.statistics.totalMapsCreated || 0,
-        totalNodes: u.statistics.totalNodes || 0,
-        totalImagesGenerated: u.statistics.totalImagesGenerated || 0,
-        totalChats: u.statistics.totalChats || 0,
-        currentStreak: u.statistics.currentStreak || 0,
-        lastActiveDate: u.statistics.lastActiveDate || null,
-        totalStudyTimeMinutes: u.statistics.totalStudyTimeMinutes || 0,
-      } : null,
+      photo_url: u.photo_url || null,
+      created_at: u.created_at,
+      last_active: u.last_active,
+      statistics: u.statistics || null,
     });
 
-    const latestUsers = [...processedUsers]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    const latestUsers = [...users]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, 10)
       .map(serializeUser);
 
-    const topUsers = [...processedUsers]
+    const topUsers = [...users]
       .sort((a, b) => (b.statistics?.totalMapsCreated || 0) - (a.statistics?.totalMapsCreated || 0))
       .slice(0, 20)
       .map(serializeUser);
 
-    const latestMaps = publicMapsRecentSnap.docs.map((doc: any) => {
-      const d = doc.data();
-      return {
-        id: doc.id,
-        topic: d.topic || d.title || d.shortTitle || null,
-        shortTitle: d.shortTitle || null,
-        isPublic: d.isPublic || false,
-        nodeCount: d.nodeCount || 0,
-        publicViews: d.publicViews || 0,
-        timestamp: d.timestamp?.toDate ? d.timestamp.toDate().toISOString() : d.timestamp || null,
-      };
-    });
+    const latestMaps = allMaps
+      .filter(m => m.is_public)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 10)
+      .map(m => ({
+        id: m.id,
+        topic: m.topic || m.title || null,
+        is_public: m.is_public,
+        node_count: m.node_count || 0,
+        public_views: m.public_views || 0,
+        created_at: m.created_at,
+      }));
 
     const docPayload = {
-      // Flat fields read directly by dashboard API
-      totalUsers,
-      totalMindmaps,       // current live count from DB
-      totalMindmapsEver,   // historical sum from user statistics
-      totalChats,
-      totalPublicMaps,
-      activeUsers24h,
-      activeUsers: activeUsers24h,
-      healthScore,
-      engagementRate,
-      newUsersToday: newUsers24h,
-      newUsersYesterday: newUsersPrevious24h,
-      newMapsToday: newMaps24h,
-      newMapsYesterday: newMapsPrevious24h,
-      avgMapsPerUser: totalUsers > 0 ? Math.round((totalMindmapsEver / totalUsers) * 10) / 10 : 0,
-      avgChatsPerUser: totalUsers > 0 ? Math.round((totalChats / totalUsers) * 10) / 10 : 0,
-      avgNodesPerMap: totalMindmaps > 0 ? Math.round((totalNodesInLibrary / totalMindmaps) * 10) / 10 : 0,
-      heatmapDays: Array.from(heatmapMap.values()),
-      mapAnalytics,
-      latestUsers,
-      latestMaps,
-      topUsers,
+      period: 'all-time',
+      total_users: totalUsers,
+      total_mindmaps: totalMindmaps,
+      total_mindmaps_ever: totalMindmapsEver,
+      total_chats: totalChats,
+      total_public_maps: totalPublicMaps,
+      active_users: activeUsers24h,
+      health_score: healthScore,
+      engagement_rate: engagementRate,
+      new_users_today: newUsers24h,
+      new_users_yesterday: newUsersPrevious24h,
+      new_maps_today: newMaps24h,
+      new_maps_yesterday: newMapsPrevious24h,
+      avg_maps_per_user: totalUsers > 0 ? Math.round((totalMindmapsEver / totalUsers) * 10) / 10 : 0,
+      avg_chats_per_user: totalUsers > 0 ? Math.round((totalChats / totalUsers) * 10) / 10 : 0,
+      avg_nodes_per_map: totalMindmaps > 0 ? Math.round((totalNodes / totalMindmaps) * 10) / 10 : 0,
+      heatmap_days: Array.from(heatmapMap.values()),
+      map_analytics: mapAnalytics,
+      latest_users: latestUsers,
+      latest_maps: latestMaps,
+      top_users: topUsers,
       timestamp,
-      lastUpdated: nowMs,
+      last_updated: nowMs,
     };
 
-    await firestore.collection('adminStats').doc('all-time').set(docPayload, { merge: false });
+    const { error: upsertError } = await supabase.from('admin_stats').upsert(docPayload);
+    if (upsertError) throw upsertError;
 
     lastSyncTime = nowMs;
     console.log('✅ [AdminSync] Sync completed');
@@ -401,8 +306,6 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('❌ [AdminSync] Error:', error);
-    console.error('❌ [AdminSync] Stack:', error?.stack);
-    console.error('❌ [AdminSync] Code:', error?.code);
-    return NextResponse.json({ success: false, error: error.message || 'Unknown error', code: error?.code }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message || 'Unknown error' }, { status: 500 });
   }
 }

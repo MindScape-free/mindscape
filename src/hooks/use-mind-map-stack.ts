@@ -121,19 +121,22 @@ export function useMindMapStack(options: {
                 const newId = await options.persistenceAdapter.persist(newMap, undefined, true);
                 const mapWithId = { ...newMap, id: newId };
 
-                // Create expansion record for parent
+                // Safely determine numeric tree depth
+                const parentTreeDepth = typeof (currentMap as any)?.treeDepth === 'number' 
+                    ? (currentMap as any).treeDepth 
+                    : (typeof (currentMap as any)?.depth === 'number' ? (currentMap as any).depth : 0);
+
                 const newExpansion: NestedExpansionItem = {
                     id: newId || `temp-${Date.now()}`,
                     topic: mapWithId.topic,
                     parentName: currentMap?.topic || 'Main',
                     icon: mapWithId.icon || 'Network',
                     status: 'completed',
-                    timestamp: Date.now(),
-                    fullData: mapWithId,
+                    fullData: { ...mapWithId, treeDepth: (navOptions.parentDepth !== undefined ? navOptions.parentDepth : parentTreeDepth) + 1 } as any,
                     createdAt: Date.now(),
-                    depth: (navOptions.parentDepth !== undefined ? navOptions.parentDepth : ((currentMap as any)?.depth || 0)) + 1,
-                    subCategories: [] // Not strictly needed for list view but good for type safety
-                } as any;
+                    depth: (navOptions.parentDepth !== undefined ? navOptions.parentDepth : parentTreeDepth) + 1,
+                    subCategories: [] 
+                };
 
                 setStack(prev => {
                     const newStack = [...prev];

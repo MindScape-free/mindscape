@@ -913,7 +913,8 @@ export async function chatAction(
         };
       }
       
-      const answerText = `🗺️ **Mind Map Created: "${topic}"**\n\nYour mind map has been generated with ${result.data.subTopics?.length || 0} main topics. Click to view the full interactive map.`;
+      const subTopicCount = result.data.mode === 'single' ? (result.data as SingleMindMapData).subTopics?.length || 0 : (result.data as any).compareData?.unityNexus?.length || 0;
+      const answerText = `🗺️ **Mind Map Created: "${topic}"**\n\nYour mind map has been generated with ${subTopicCount} main topics. Click to view the full interactive map.`;
       
       return { 
         response: { answer: answerText }, 
@@ -1387,7 +1388,7 @@ Return ONLY a JSON array:
 
 /**
  * Server action to log administrative activity.
- * Bypasses client-side security rules by using the Admin SDK.
+ * Bypasses client-side security rules by using the Supabase Service Role.
  * Also performs incremental stats updates for real-time dashboarding.
  */
 export async function logAdminActivityAction(entry: any) {

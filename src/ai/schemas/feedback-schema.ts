@@ -21,17 +21,17 @@ export const FeedbackSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters").max(120, "Title must be maximum 120 characters"),
   description: z.string().min(20, "Description must be at least 20 characters"),
   affectedArea: z.string().max(120).optional(),
-  priority: FeedbackPrioritySchema.default("MEDIUM"),
-  attachments: z.array(z.string()).optional().default([]),
+  priority: FeedbackPrioritySchema,
+  attachments: z.array(z.string()).optional(),
   userEmail: z.string().email("Invalid email format").optional().or(z.literal('')),
   userId: z.string().optional(),
   userName: z.string().optional(),
-  status: FeedbackStatusSchema.default("OPEN"),
+  status: FeedbackStatusSchema,
   adminNotes: z.string().optional(),
-  adminActivityLogs: z.array(AdminActivityLogEntrySchema).optional().default([]),
+  adminActivityLogs: z.array(AdminActivityLogEntrySchema).optional(),
   createdAt: z.date().optional(),
   updatedAt: z.date().optional(),
-  upvotes: z.number().default(0).optional(),
+  upvotes: z.number().optional(),
 });
 
 export type FeedbackInput = z.infer<typeof FeedbackSchema>;

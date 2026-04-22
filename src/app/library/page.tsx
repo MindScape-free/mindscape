@@ -1,7 +1,7 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -21,17 +21,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { GenerateMindMapOutput } from '@/ai/flows/generate-mind-map';
 import { generateMindMapAction } from '@/app/actions';
 import { Icons } from '@/components/icons';
-import { useUser } from '@/lib/auth-context';
-import { getSupabaseClient } from '@/lib/supabase-db';
-
-// Use Supabase directly instead of Firebase hooks
-function useCollection<T>(query: any) {
-  return { data: [] as T[], isLoading: false };
-}
-function useMemoFirebase(fn: () => any) {
-  return fn();
-}
-
 import { MindMapData } from '@/types/mind-map';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
@@ -53,7 +42,6 @@ import { ModeBadge } from '@/components/mind-map/mode-badge';
 import { ImageGenerationDialog, ImageSettings } from '@/components/mind-map/image-generation-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMindMapPersistence } from '@/hooks/use-mind-map-persistence';
-import { sanitizeFirestoreData } from '@/lib/sanitize-firestore';
 
 // ── Shared thumbnail prompt engine (mirrors use-mind-map-persistence.ts) ──
 function buildThumbnailPrompt(topic: string): string {
@@ -96,8 +84,8 @@ function DashboardLoadingSkeleton() {
 
 type SavedMindMap = GenerateMindMapOutput & {
   id: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  createdAt: string | number | Date;
+  updatedAt: string | number | Date;
   summary: string;
   thumbnailUrl?: string;
   thumbnailPrompt?: string;
@@ -122,8 +110,7 @@ function NotLoggedIn() {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, isUserLoading } = useUser();
-  const firestore = null;
+  const { user, isUserLoading, supabase } = useAuth();
   const { toast } = useToast();
   const { config, refreshBalance } = useAIConfig();
   const persistenceOptions = useMemo(() => ({
@@ -173,67 +160,76 @@ export default function DashboardPage() {
       setIsFullDataLoading(true);
 
       // Fetch dynamic topics
-      suggestRelatedTopicsAction({
-        topic: selectedMapForPreview.topic,
-        summary: selectedMapForPreview.summary
-      }, {
-        provider: config.provider,
-        apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-        userId: user?.uid
-      }).then(res => {
-        if (isMounted && res.topics) setSuggestedTopics(res.topics);
-        if (isMounted) {
-          setIsSuggestingTopics(false);
-          refreshBalance();
+      const fetchDynamicData = async () => {
+        try {
+          const res = await suggestRelatedTopicsAction({
+            topic: selectedMapForPreview.topic,
+            summary: selectedMapForPreview.summary
+          }, {
+            provider: config.provider,
+            apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
+            userId: user?.id
+          });
+          if (isMounted && res.topics) setSuggestedTopics(res.topics);
+          if (isMounted) {
+            setIsSuggestingTopics(false);
+            refreshBalance();
+          }
+        } catch (err) {
+          if (isMounted) setIsSuggestingTopics(false);
         }
-      }).catch(() => {
-        if (isMounted) setIsSuggestingTopics(false);
-      });
+      };
+      fetchDynamicData();
 
       // Fetch dynamic questions
       setSuggestedQuestions([]);
       setIsSuggestingQuestions(true);
-      import('@/app/actions').then(({ generateRelatedQuestionsAction }) => {
-        generateRelatedQuestionsAction({
-          topic: selectedMapForPreview.topic,
-          pdfContext: selectedMapForPreview.summary // Use summary as context for questions
-        }, {
-          provider: config.provider,
-          apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-          userId: user?.uid
-        }).then(res => {
+      import('@/app/actions').then(async ({ generateRelatedQuestionsAction }) => {
+        try {
+          const res = await generateRelatedQuestionsAction({
+            topic: selectedMapForPreview.topic,
+            pdfContext: selectedMapForPreview.summary // Use summary as context for questions
+          }, {
+            provider: config.provider,
+            apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
+            userId: user?.id
+          });
           if (isMounted && res.data?.questions) setSuggestedQuestions(res.data.questions.slice(0, 3));
           if (isMounted) {
             setIsSuggestingQuestions(false);
             refreshBalance();
           }
-        }).catch(() => {
+        } catch (err) {
           if (isMounted) setIsSuggestingQuestions(false);
-        });
+        }
       });
 
       // Fetch full content for Data Pack
-      if (user && firestore) {
-        const contentRef = doc(firestore, 'users', user.uid, 'mindmaps', selectedMapForPreview.id, 'content', 'tree');
-        getDoc(contentRef).then(snap => {
-          if (isMounted && snap.exists()) {
-            // Merge metadata (containing mode) with content data
-            setSelectedMapFullData({
-              ...selectedMapForPreview,
-              ...snap.data()
-            } as any);
-          }
-          if (isMounted) setIsFullDataLoading(false);
-        }).catch(err => {
-          console.error("Error fetching full data:", err);
-          if (isMounted) setIsFullDataLoading(false);
-        });
+      if (user && supabase) {
+        supabase
+          .from('mindmaps')
+          .select('content, mode')
+          .eq('id', selectedMapForPreview.id)
+          .eq('user_id', user.id)
+          .single()
+          .then((res: any) => {
+            const { data, error } = res;
+            if (isMounted && data) {
+              const content = data.content || {};
+              setSelectedMapFullData({
+                ...selectedMapForPreview,
+                ...content,
+                mode: data.mode || selectedMapForPreview.mode
+              } as any);
+            }
+            if (isMounted) setIsFullDataLoading(false);
+          });
       } else {
         setIsFullDataLoading(false);
       }
     }
     return () => { isMounted = false; };
-  }, [selectedMapForPreview, user, firestore]);
+  }, [selectedMapForPreview, user, supabase]);
 
   // Calculate detailed stats for the previewed map
   const previewStats = useMemo(() => {
@@ -280,9 +276,9 @@ export default function DashboardPage() {
     return { totalNodes, concepts };
   }, [selectedMapFullData]);
 
-  // Helper function to convert Firestore Timestamps to plain Date objects
+  // Helper function to prepare map for state
   const sanitizeMapForState = (map: SavedMindMap): SavedMindMap => {
-    return sanitizeFirestoreData(map);
+    return map;
   };
 
   const handleDownloadFullData = async (map: SavedMindMap) => {
@@ -459,7 +455,7 @@ export default function DashboardPage() {
         }, {
           provider: config.provider,
           apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-          userId: user?.uid,
+          userId: user?.id,
         });
 
         if (error) throw new Error(error);
@@ -467,8 +463,8 @@ export default function DashboardPage() {
         // Refresh balance after AI operation
         refreshBalance();
 
-        // Save using unified persistence (handles thumbnails, split schema, etc.)
-        if (user && firestore && data) {
+        // Save using unified persistence
+        if (user && supabase && data) {
           const mindMapToSave = {
             ...data,
             isPublic: false,
@@ -535,7 +531,7 @@ export default function DashboardPage() {
       // Metadata
       doc.setFontSize(10);
       doc.setTextColor(100);
-      const pdfCreatedDate = map.createdAt instanceof Date ? map.createdAt : (map.createdAt as any)?.toDate ? (map.createdAt as any).toDate() : null;
+      const pdfCreatedDate = map.createdAt ? new Date(map.createdAt) : null;
       doc.text(`Created: ${pdfCreatedDate?.toLocaleDateString() || 'Recently'}`, 20, y);
       y += 5;
       doc.text(`Complexity: ${(map as any).depth || 'Low'}`, 20, y);
@@ -585,7 +581,7 @@ export default function DashboardPage() {
   };
 
   const handlePublish = async (map: SavedMindMap) => {
-    if (!user || !firestore || isPublishingMapId) return;
+    if (!user || !supabase || isPublishingMapId) return;
 
     setIsPublishingMapId(map.id);
     const { id: toastId, update } = toast({
@@ -601,7 +597,7 @@ export default function DashboardPage() {
       }, {
         provider: config.provider,
         apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-        userId: user?.uid
+        userId: user?.id
       });
 
       // Refresh balance after AI operation
@@ -609,37 +605,36 @@ export default function DashboardPage() {
 
       if (catError) throw new Error(catError);
 
-      const docRef = doc(firestore, 'users', user.uid, 'mindmaps', map.id);
-      const contentRef = doc(firestore, 'users', user.uid, 'mindmaps', map.id, 'content', 'tree');
+      const { data: fullData, error: fetchError } = await supabase
+        .from('mindmaps')
+        .select('*')
+        .eq('id', map.id)
+        .eq('user_id', user.id)
+        .single();
 
-      const [metaSnap, contentSnap] = await Promise.all([
-        getDoc(docRef),
-        getDoc(contentRef)
-      ]);
-
-      if (!metaSnap.exists()) throw new Error("Mind map metadata not found.");
-
-      const fullData = {
-        ...metaSnap.data(),
-        ...(contentSnap.exists() ? contentSnap.data() : {}),
-        id: map.id
-      };
+      if (fetchError || !fullData) throw new Error("Mind map data not found.");
 
       const publicData: any = {
-        ...fullData,
-        isPublic: true,
-        publicCategories: categories,
-        originalMapId: map.id,
-        originalAuthorId: user.uid,
-        authorName: user.displayName || 'ADMIN',
-        authorAvatar: user.photoURL || '',
-        updatedAt: serverTimestamp(),
+        topic: map.topic,
+        summary: map.summary,
+        content: fullData.content || {},
+        is_public: true,
+        public_categories: categories,
+        original_map_id: map.id,
+        original_author_id: user.id,
+        author_name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User',
+        author_avatar: user?.user_metadata?.avatar_url || '',
+        updated_at: new Date().toISOString(),
         views: 0,
       };
 
-      const publicDocRef = doc(firestore, 'publicMindmaps', map.id);
-      await setDoc(publicDocRef, publicData);
-      await updateDoc(docRef, { isPublic: true, publicCategories: categories });
+      if (user && supabase) {
+        await supabase.from('public_mindmaps').upsert(publicData);
+        await supabase.from('mindmaps').update({ 
+          is_public: true, 
+          public_categories: categories 
+        }).eq('id', map.id).eq('user_id', user.id);
+      }
 
       // Update only the publish status without triggering full re-render
       if (selectedMapForPreview && selectedMapForPreview.id === map.id) {
@@ -667,7 +662,7 @@ export default function DashboardPage() {
   };
 
   const handleUnpublish = async (map: SavedMindMap) => {
-    if (!user || !firestore || isUnpublishingMapId) return;
+    if (!user || !supabase || isUnpublishingMapId) return;
 
     setIsUnpublishingMapId(map.id);
 
@@ -678,16 +673,11 @@ export default function DashboardPage() {
     });
 
     try {
-      // Delete from publicMindmaps collection
-      const publicDocRef = doc(firestore, 'publicMindmaps', map.id);
-      await deleteDoc(publicDocRef);
-
-      // Update user's map to set isPublic = false
-      const userMapRef = doc(firestore, 'users', user.uid, 'mindmaps', map.id);
-      await updateDoc(userMapRef, {
-        isPublic: false,
-        updatedAt: Date.now()
-      });
+      await supabase.from('public_mindmaps').delete().eq('id', map.id);
+      await supabase.from('mindmaps').update({
+        is_public: false,
+        updated_at: new Date().toISOString()
+      }).eq('id', map.id);
 
       // Update only the publish status without triggering full re-render
       if (selectedMapForPreview && selectedMapForPreview.id === map.id) {
@@ -715,7 +705,7 @@ export default function DashboardPage() {
   };
 
   const handleShareLink = async (map: SavedMindMap) => {
-    if (!user || !firestore) return;
+    if (!user || !supabase) return;
 
     // If already shared, just copy the link
     if ((map as any).isShared) {
@@ -729,30 +719,34 @@ export default function DashboardPage() {
 
     setIsSharingMapId(map.id);
     try {
-      // 1. Fetch full content from the split schema
-      const docRef = doc(firestore, 'users', user.uid, 'mindmaps', map.id);
-      const contentRef = doc(firestore, 'users', user.uid, 'mindmaps', map.id, 'content', 'tree');
-      const [metaSnap, contentSnap] = await Promise.all([getDoc(docRef), getDoc(contentRef)]);
+      // 1. Fetch full data from Supabase
+      const { data: fullData, error: fetchError } = await supabase
+        .from('mindmaps')
+        .select('*')
+        .eq('id', map.id)
+        .eq('user_id', user.id)
+        .single();
 
-      if (!metaSnap.exists()) throw new Error('Mind map not found.');
-
-      const fullData = { ...metaSnap.data(), ...(contentSnap.exists() ? contentSnap.data() : {}), id: map.id };
+      if (fetchError || !fullData) throw new Error('Mind map not found.');
 
       // 2. Create shared entry (unlisted) - Using stable share_ prefix
       const shareId = `share_${map.id}`;
+
       const sharedData = {
-        ...fullData,
+        topic: fullData.topic,
+        summary: fullData.summary,
+        content: fullData.content || {},
         id: shareId,
-        isShared: true,
-        isPublic: false,
-        sharedAt: serverTimestamp(),
-        originalAuthorId: user.uid,
-        authorName: user.displayName || 'ADMIN',
+        is_shared: true,
+        is_public: false,
+        shared_at: new Date().toISOString(),
+        original_author_id: user.id,
+        author_name: user.displayName || 'ADMIN',
       };
-      await setDoc(doc(firestore, 'sharedMindmaps', shareId), sharedData);
+      await supabase.from('shared_mindmaps').upsert(sharedData);
 
       // 3. Mark user's map as shared
-      await updateDoc(docRef, { isShared: true });
+      await supabase.from('mindmaps').update({ is_shared: true }).eq('id', map.id);
 
       // 4. Copy link
       const shareUrl = `${window.location.origin}/canvas?mapId=${shareId}`;
@@ -769,22 +763,20 @@ export default function DashboardPage() {
     }
   };
 
-  // Fetch user's mind maps from Supabase
-  const supabase = getSupabaseClient();
   const [savedMaps, setSavedMaps] = useState<any[]>([]);
   const [isMindMapsLoading, setIsMindMapsLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !supabase) return;
     async function fetchMaps() {
       const { data } = await supabase
         .from('mindmaps')
         .select('*')
-        .eq('user_id', user.uid)
+        .eq('user_id', user.id)
         .order('updated_at', { ascending: false })
         .limit(50);
       // Normalize snake_case to camelCase for consistency
-      const normalizedMaps = (data || []).map(m => ({
+      const normalizedMaps = (data || []).map((m: any) => ({
         ...m,
         thumbnailUrl: m.thumbnail_url,
         isSubMap: m.is_sub_map,
@@ -823,16 +815,16 @@ export default function DashboardPage() {
         break;
       case 'oldest':
         maps.sort((a, b) => {
-          const aTime = typeof a.createdAt === 'number' ? a.createdAt : (a.createdAt?.toMillis() ?? 0);
-          const bTime = typeof b.createdAt === 'number' ? b.createdAt : (b.createdAt?.toMillis() ?? 0);
+          const aTime = typeof a.createdAt === 'number' ? a.createdAt : new Date(a.createdAt || 0).getTime();
+          const bTime = typeof b.createdAt === 'number' ? b.createdAt : new Date(b.createdAt || 0).getTime();
           return aTime - bTime;
         });
         break;
       case 'recent':
       default:
         maps.sort((a, b) => {
-          const aTime = typeof a.updatedAt === 'number' ? a.updatedAt : (a.updatedAt?.toMillis() ?? 0);
-          const bTime = typeof b.updatedAt === 'number' ? b.updatedAt : (b.updatedAt?.toMillis() ?? 0);
+          const aTime = typeof a.updatedAt === 'number' ? a.updatedAt : new Date(a.updatedAt || 0).getTime();
+          const bTime = typeof b.updatedAt === 'number' ? b.updatedAt : new Date(b.updatedAt || 0).getTime();
           return bTime - aTime;
         });
         break;
@@ -879,7 +871,7 @@ export default function DashboardPage() {
           model: config.imageModel || config.pollinationsModel || 'flux',
           width: 512,
           height: 288,
-          userId: user.uid,
+          userId: user.id,
           userApiKey: config.pollinationsApiKey,
         })
       });
@@ -891,10 +883,12 @@ export default function DashboardPage() {
       const data = await response.json();
       const finalImageUrl = data.imageUrl;
 
-      await supabase.from('mindmaps').update({ 
-        thumbnail_url: finalImageUrl,
-        updated_at: new Date().toISOString()
-      }).eq('id', mapId).eq('user_id', user.uid);
+      if (supabase && user) {
+        await supabase.from('mindmaps').update({ 
+          thumbnail_url: finalImageUrl,
+          updated_at: new Date().toISOString()
+        }).eq('id', mapId).eq('user_id', user.id);
+      }
 
       if (selectedMapForPreview?.id === mapId) {
         setSelectedMapForPreview(prev => prev ? ({ ...prev, thumbnailUrl: finalImageUrl }) : null);
@@ -929,11 +923,12 @@ export default function DashboardPage() {
     setDeletingMapIds(prev => new Set(prev).add(idToRemove));
     setMapToDelete(null);
 
-    const docRef = doc(firestore, 'users', user.uid, 'mindmaps', idToRemove);
     try {
-      await deleteDoc(docRef);
+      if (supabase) {
+        await supabase.from('mindmaps').delete().eq('id', idToRemove);
+      }
 
-      // Log activity for real-time stats
+      // Log activity
       try {
         const { logAdminActivityAction } = await import('@/app/actions');
         await logAdminActivityAction({
@@ -941,15 +936,14 @@ export default function DashboardPage() {
           targetId: idToRemove,
           targetType: 'mindmap',
           details: `Mindmap deleted`,
-          performedBy: user.uid,
+          performedBy: user.id,
           performedByEmail: user.email || 'anonymous'
         });
       } catch (logErr) {
         console.error('Failed to log map deletion:', logErr);
       }
     } catch (serverError) {
-      const permissionError = new FirestorePermissionError({ path: docRef.path, operation: 'delete' });
-      errorEmitter.emit('permission-error', permissionError);
+      console.error('Delete failed:', serverError);
       // Revert optimistic UI on error
       setDeletingMapIds(prev => {
         const next = new Set(prev);
@@ -959,7 +953,7 @@ export default function DashboardPage() {
       toast({
         variant: 'destructive',
         title: 'Delete Failed',
-        description: 'You do not have permission to delete this map or a network error occurred.'
+        description: 'A network error occurred while deleting the map.'
       });
     }
   };
@@ -991,7 +985,7 @@ export default function DashboardPage() {
           lighting: settings.lighting,
           width: settings.width,
           height: settings.height,
-          userId: user.uid,
+          userId: user.id,
           userApiKey: config.pollinationsApiKey
         })
       });
@@ -1005,10 +999,12 @@ export default function DashboardPage() {
       const finalImageUrl = data.imageUrl;
 
       // Update Supabase
-      await supabase.from('mindmaps').update({ 
-        thumbnail_url: finalImageUrl,
-        updated_at: new Date().toISOString()
-      }).eq('id', mapId).eq('user_id', user.uid);
+      if (supabase && user) {
+        await supabase.from('mindmaps').update({ 
+          thumbnail_url: finalImageUrl,
+          updated_at: new Date().toISOString()
+        }).eq('id', mapId).eq('user_id', user.id);
+      }
 
       // Update local state for immediate feedback
       if (selectedMapForPreview?.id === mapId) {
@@ -1147,8 +1143,10 @@ export default function DashboardPage() {
 
               // Robust date parsing for display
               const getDisplayDate = (d: any) => {
+                if (!d) return null;
                 if (d instanceof Date) return d;
                 if (typeof d === 'number') return new Date(d);
+                if (typeof d === 'string') return new Date(d);
                 if (d?.toDate && typeof d.toDate === 'function') return d.toDate();
                 if (d?.toMillis && typeof d.toMillis === 'function') return new Date(d.toMillis());
                 return null;

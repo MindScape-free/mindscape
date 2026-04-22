@@ -12,6 +12,7 @@ const ExplainMindMapNodeInputSchema = z.object({
   explanationMode: z.enum(['Beginner', 'Intermediate', 'Expert']),
   apiKey: z.string().optional(),
   pdfContext: z.string().optional(),
+  targetLanguage: z.string().optional(),
 });
 export type ExplainMindMapNodeInput = z.infer<typeof ExplainMindMapNodeInputSchema>;
 

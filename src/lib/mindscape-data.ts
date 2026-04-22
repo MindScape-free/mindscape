@@ -277,23 +277,23 @@ export const mindscapeMap = {
                     subCategories: [
                         {
                             name: "Split Schema Storage",
-                            description: "Separates lightweight map metadata from heavy content trees in Firestore, ensuring near-instant dashboard load times.",
+                            description: "Separates lightweight map metadata from heavy content trees in Supabase, ensuring near-instant dashboard load times.",
                             icon: "split-square-horizontal",
-                            tags: ["Firestore", "Optimization", "Schema"],
+                            tags: ["Supabase", "Optimization", "Schema"],
                             isExpanded: false
                         },
                         {
-                            name: "Firebase Auth",
-                            description: "Secure authentication via email/password and Google OAuth with JWT token management.",
+                            name: "Supabase Auth",
+                            description: "Secure authentication via email/password and Social Providers with Supabase Auth and JWT token management.",
                             icon: "lock",
-                            tags: ["Auth", "OAuth", "JWT"],
+                            tags: ["Auth", "Supabase", "JWT"],
                             isExpanded: false
                         },
                         {
                             name: "Real-time Listeners",
-                            description: "Firestore snapshot listeners for live updates and multi-device synchronization.",
+                            description: "Supabase Realtime listeners for live updates and multi-device synchronization.",
                             icon: "radio",
-                            tags: ["WebSocket", "Live Updates", "Sync"],
+                            tags: ["Realtime", "Live Updates", "Sync"],
                             isExpanded: false
                         }
                     ]
@@ -311,7 +311,7 @@ export const mindscapeMap = {
                         },
                         {
                             name: "Conflict Resolution",
-                            description: "Snapshot listeners resolve external changes via 'updatedAt' timestamps safely without overwriting pending content.",
+                            description: "Realtime listeners resolve external changes via 'updated_at' timestamps safely without overwriting pending content.",
                             icon: "git-merge",
                             tags: ["Merge", "Timestamps", "Safeguard"],
                             isExpanded: false

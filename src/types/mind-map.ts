@@ -1,5 +1,3 @@
-
-// Timestamp type removed - using string dates
 import { PinnedMessage } from './chat';
 
 export interface SubCategory {
@@ -16,9 +14,9 @@ export interface SubCategory {
     topic: string;
     icon: string;
     subCategories: any[];
-    createdAt?: number;
+    createdAt?: string | number | Date;
   };
-  timestamp?: number;
+  timestamp?: number | string;
 }
 
 export interface Category {
@@ -28,7 +26,7 @@ export interface Category {
   icon: string;
   subCategories: SubCategory[];
   insight?: string;
-  timestamp?: number;
+  timestamp?: number | string;
 }
 
 export interface SubTopic {
@@ -105,7 +103,7 @@ export interface NestedExpansionItem {
   topic: string;
   icon: string;
   subCategories: Array<{ name: string; description: string; icon: string; tags?: string[] }>;
-  createdAt: number;
+  createdAt: string | number | Date;
   depth: number;
   path?: string;
   status?: 'generating' | 'completed' | 'failed';
@@ -118,10 +116,11 @@ export interface BaseMindMapData {
   thought?: string;
   shortTitle?: string;
   icon?: string;
-  uid?: string;
   userId?: string;
-  createdAt?: Timestamp | number;
-  updatedAt?: Timestamp | number;
+  uid?: string; // Legacy alias
+  parentMapId?: string;
+  createdAt?: string | number | Date;
+  updatedAt?: string | number | Date;
   summary?: string;
   summaryAudioUrl?: string;
   thumbnailUrl?: string;
@@ -166,7 +165,7 @@ export interface PdfContextData {
     title: string;
     description: string;
   }[];
-  timestamp: number;
+  timestamp: number | string;
 }
 
 export interface SearchSource {

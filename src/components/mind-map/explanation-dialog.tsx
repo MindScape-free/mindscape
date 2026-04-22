@@ -729,6 +729,7 @@ export function ExplanationDialog({
         timeline: false,
         myths: false,
         quiz: false,
+        confidence: false,
     });
     const toggleSection = (key: string) => setOpenSections(prev => {
         const isCurrentlyOpen = prev[key];
@@ -1003,7 +1004,7 @@ export function ExplanationDialog({
                                     </>
                                 )}
 
-                                <SectionDivider icon={Star} title="Confidence" />
+                                <SectionDivider icon={Star} title="Confidence" isOpen={openSections.confidence} onToggle={() => toggleSection('confidence')} />
                                 <J_ConfidenceMeter
                                     rating={confidenceRating}
                                     onChange={onConfidenceChange}

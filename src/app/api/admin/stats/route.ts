@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase-server';
-// firebase-admin/auth removed
+import { getSupabaseAdmin, isUserAdminServer } from '@/lib/supabase-server';
 import { getOrSetCache, invalidateCache } from '@/server/cache/admin.cache';
 import { getAdminStats, getMindmapsList } from '@/server/admin/admin.service';
-
-const ADMIN_UID = '765cd0a0-6201-41d2-ac8d-ff99b4941289';
 
 async function verifyAdmin(request: Request): Promise<{ authorized: boolean; uid?: string; error?: string }> {
   try {
@@ -13,21 +10,25 @@ async function verifyAdmin(request: Request): Promise<{ authorized: boolean; uid
       return { authorized: false, error: 'Missing or invalid Authorization header' };
     }
 
-    const idToken = authHeader.substring(7);
-    const { admin, app } = { firestore: getSupabaseAdmin() };
+    const token = authHeader.substring(7);
+    const supabase = getSupabaseAdmin();
     
-    if (!app || !admin) {
-      return { authorized: false, error: 'Firebase not initialized' };
+    if (!supabase) {
+      return { authorized: false, error: 'Supabase not initialized' };
     }
 
-    const decodedToken = await getAuth(app).verifyIdToken(idToken);
-    const uid = decodedToken.uid;
+    const { data: { user }, error } = await supabase.auth.getUser(token);
     
-    if (uid !== ADMIN_UID) {
-      return { authorized: false, uid, error: 'Unauthorized: Not an admin' };
+    if (error || !user) {
+      return { authorized: false, error: error?.message || 'Invalid token' };
     }
 
-    return { authorized: true, uid };
+    const isAdmin = await isUserAdminServer(user.id);
+    if (!isAdmin) {
+      return { authorized: false, uid: user.id, error: 'Unauthorized: Not an admin' };
+    }
+
+    return { authorized: true, uid: user.id };
   } catch (error: any) {
     console.error('Admin verification failed:', error.message);
     return { authorized: false, error: error.message || 'Token verification failed' };
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
   try {
     const authCheck = await verifyAdmin(request);
     if (!authCheck.authorized) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      return NextResponse.json({ error: authCheck.error || 'Unauthorized' }, { status: 403 });
     }
 
     const url = new URL(request.url);
@@ -70,23 +71,19 @@ export async function GET(request: Request) {
 
     if (action === 'mindmaps') {
       const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 100);
-      const startAfterDoc = url.searchParams.get('startAfterDoc') || undefined;
-      const startAfterTime = url.searchParams.get('startAfterTime')
-        ? parseInt(url.searchParams.get('startAfterTime')!)
-        : undefined;
+      const offset = parseInt(url.searchParams.get('offset') || '0');
 
-      const { data, lastDoc, hasMore } = await getMindmapsList({
+      const { data, total, hasMore } = await getMindmapsList({
         limit,
-        startAfterDoc,
-        startAfterTime,
+        offset,
       });
 
       return NextResponse.json({
         success: true,
         data,
         pagination: {
-          lastDoc: lastDoc?.id || null,
-          lastTime: lastDoc ? (lastDoc.data?.createdAt?.toMillis?.() || lastDoc._createTime?.seconds * 1000) : null,
+          offset,
+          total,
           hasMore,
         },
       });

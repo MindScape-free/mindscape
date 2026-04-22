@@ -1,36 +1,30 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase-server';
+import { getSupabaseAdmin, isUserAdminServer } from '@/lib/supabase-server';
 import { DEFAULT_MAP_ANALYTICS } from '@/types/admin';
-// firebase-admin/auth removed
-
-const ADMIN_UID = '765cd0a0-6201-41d2-ac8d-ff99b4941289';
 
 async function verifyAdmin(request: Request): Promise<{ authorized: boolean; uid?: string; error?: string }> {
   try {
     const authHeader = request.headers.get('Authorization');
-    console.log('[DashboardAPI] Auth header present:', !!authHeader);
     if (!authHeader?.startsWith('Bearer ')) {
       return { authorized: false, error: 'Missing or invalid Authorization header' };
     }
 
     const idToken = authHeader.substring(7);
-    console.log('[DashboardAPI] Token length:', idToken.length);
+    const supabase = getSupabaseAdmin();
     
-    const { app } = { firestore: getSupabaseAdmin() };
+    // Verify the user via their access token
+    const { data: { user }, error: authError } = await supabase.auth.getUser(idToken);
     
-    if (!app) {
-      return { authorized: false, error: 'Firebase not initialized' };
+    if (authError || !user) {
+      return { authorized: false, error: authError?.message || 'Token verification failed' };
     }
 
-    const decodedToken = await getAuth(app).verifyIdToken(idToken);
-    const uid = decodedToken.uid;
-    console.log('[DashboardAPI] Decoded UID:', uid, 'Admin UID:', ADMIN_UID);
-    
-    if (uid !== ADMIN_UID) {
-      return { authorized: false, uid, error: 'Unauthorized: Not an admin' };
+    const isAdmin = await isUserAdminServer(user.id);
+    if (!isAdmin) {
+      return { authorized: false, uid: user.id, error: 'Unauthorized: Not an admin' };
     }
 
-    return { authorized: true, uid };
+    return { authorized: true, uid: user.id };
   } catch (error: any) {
     console.error('RBAC verification failed:', error.message);
     return { authorized: false, error: error.message || 'Token verification failed' };
@@ -40,53 +34,34 @@ async function verifyAdmin(request: Request): Promise<{ authorized: boolean; uid
 function safeMapAnalytics(data?: any): typeof DEFAULT_MAP_ANALYTICS {
   if (!data) return { ...DEFAULT_MAP_ANALYTICS };
   return {
-    totalAnalyzed: data.totalAnalyzed ?? 0,
+    totalAnalyzed: data.total_analyzed ?? data.totalAnalyzed ?? 0,
     modeCounts: {
-      single: data.modeCounts?.single ?? 0,
-      compare: data.modeCounts?.compare ?? 0,
-      multi: data.modeCounts?.multi ?? 0,
+      single: data.mode_counts?.single ?? data.modeCounts?.single ?? 0,
+      compare: data.mode_counts?.compare ?? data.modeCounts?.compare ?? 0,
+      multi: data.mode_counts?.multi ?? data.modeCounts?.multi ?? 0,
     },
     depthCounts: {
-      low: data.depthCounts?.low ?? 0,
-      medium: data.depthCounts?.medium ?? 0,
-      deep: data.depthCounts?.deep ?? 0,
-      unspecified: data.depthCounts?.unspecified ?? 0,
+      low: data.depth_counts?.low ?? data.depthCounts?.low ?? 0,
+      medium: data.depth_counts?.medium ?? data.depthCounts?.medium ?? 0,
+      deep: data.depth_counts?.deep ?? data.depthCounts?.deep ?? 0,
+      unspecified: data.depth_counts?.unspecified ?? data.depthCounts?.unspecified ?? 0,
     },
-    sourceCounts: data.sourceCounts || {},
-    personaCounts: data.personaCounts || {},
+    sourceCounts: data.source_counts || data.sourceCounts || {},
+    personaCounts: data.persona_counts || data.personaCounts || {},
     subMapStats: {
-      total: data.subMapStats?.total ?? 0,
-      parents: data.subMapStats?.parents ?? 0,
-      avgPerParent: data.subMapStats?.avgPerParent ?? 0,
+      total: data.sub_map_stats?.total ?? data.subMapStats?.total ?? 0,
+      parents: data.sub_map_stats?.parents ?? data.subMapStats?.parents ?? 0,
+      avgPerParent: data.sub_map_stats?.avg_per_parent ?? data.subMapStats?.avgPerParent ?? 0,
     },
     publicPrivate: {
-      public: data.publicPrivate?.public ?? 0,
-      private: data.publicPrivate?.private ?? 0,
+      public: data.public_private?.public ?? data.publicPrivate?.public ?? 0,
+      private: data.public_private?.private ?? data.publicPrivate?.private ?? 0,
     },
-    avgNodesPerMap: data.avgNodesPerMap ?? 0,
-    featuredCount: data.featuredCount ?? 0,
-    topPersona: data.topPersona ?? 'N/A',
-    userStats: data.userStats || [],
+    avgNodesPerMap: data.avg_nodes_per_map ?? data.avgNodesPerMap ?? 0,
+    featuredCount: data.featured_count ?? data.featuredCount ?? 0,
+    topPersona: data.top_persona ?? data.topPersona ?? 'N/A',
+    userStats: data.user_stats || data.userStats || [],
   };
-}
-
-function sanitizeTimestamps(obj: any): any {
-  if (!obj || typeof obj !== 'object') return obj;
-  if (Array.isArray(obj)) return obj.map(sanitizeTimestamps);
-  const result: any = {};
-  for (const key of Object.keys(obj)) {
-    const val = obj[key];
-    if (val && typeof val.toDate === 'function') {
-      result[key] = val.toDate().toISOString();
-    } else if (val && typeof val === 'object' && val._seconds !== undefined) {
-      result[key] = new Date(val._seconds * 1000).toISOString();
-    } else if (val && typeof val === 'object' && !Array.isArray(val)) {
-      result[key] = sanitizeTimestamps(val);
-    } else {
-      result[key] = val;
-    }
-  }
-  return result;
 }
 
 export async function GET(request: Request) {
@@ -96,90 +71,96 @@ export async function GET(request: Request) {
       console.warn(`🚫 [DashboardAPI] Unauthorized access attempt from UID: ${authCheck.uid || 'unknown'}`);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+
     const url = new URL(request.url);
     const since = url.searchParams.get('since') || undefined;
 
-    const { admin, app, firestore } = { firestore: getSupabaseAdmin() };
-    if (!app || !firestore || !admin) {
-      console.error('[DashboardAPI] Firebase initialization failed:', { app: !!app, firestore: !!firestore, admin: !!admin });
-      return NextResponse.json({ error: 'Firebase not initialized.' }, { status: 500 });
-    }
+    const supabase = getSupabaseAdmin();
+    console.log(`📊 [DashboardAPI] Fetching stats from Supabase ${since ? ` (since ${since})` : ''}`);
 
-    console.log(`📊 [DashboardAPI] Fetching all-time stats${since ? ` (incremental since ${since})` : ''}`);
-
-    // Fetch precomputed stats doc and bundle data concurrently
-    const bundlePromises: Promise<any>[] = [];
-
-    // Users: fetch ALL users without orderBy so users missing createdAt are included.
-    // Firestore silently excludes documents from orderBy queries if the field doesn't exist.
-    if (since) {
-      bundlePromises.push(
-        firestore.collection('users').where('createdAt', '>=', since).get()
-      );
-    } else {
-      bundlePromises.push(firestore.collection('users').limit(500).get());
-    }
-
-    // Logs
-    let logsQuery: any = firestore.collection('adminActivityLog');
-    if (since) {
-      logsQuery = logsQuery.where('timestamp', '>=', since).orderBy('timestamp', 'desc');
-    } else {
-      logsQuery = logsQuery.orderBy('timestamp', 'desc').limit(100);
-    }
-    bundlePromises.push(logsQuery.get());
-
-    // Feedback
-    bundlePromises.push(
-      firestore.collection('feedback').orderBy('createdAt', 'desc').limit(200).get()
-    );
-
-    const [statsDoc, usersSnap, logsSnap, feedbackSnap] = await Promise.all([
-      firestore.collection('adminStats').doc('all-time').get(),
-      ...bundlePromises,
+    const [statsResult, usersResult, logsResult, feedbackResult] = await Promise.all([
+      supabase.from('admin_stats').select('*').eq('period', 'all-time').single(),
+      since 
+        ? supabase.from('users').select('*').gte('created_at', since).order('created_at', { ascending: false })
+        : supabase.from('users').select('*').order('created_at', { ascending: false }).limit(500),
+      since
+        ? supabase.from('admin_activity_log').select('*').gte('timestamp', since).order('timestamp', { ascending: false })
+        : supabase.from('admin_activity_log').select('*').order('timestamp', { ascending: false }).limit(100),
+      supabase.from('feedback').select('*').order('created_at', { ascending: false }).limit(200)
     ]);
 
-    const raw = statsDoc.exists ? statsDoc.data() : {};
-    // Sanitize all Firestore Timestamps in the raw doc
-    const data = sanitizeTimestamps(raw);
+    const data = statsResult.data || {};
+    
+    // Map snake_case to camelCase for the bundle
+    const bundleUsers = (usersResult.data || []).map(u => ({
+      ...u,
+      createdAt: u.created_at,
+      displayName: u.display_name,
+      photoURL: u.photo_url,
+      lastActive: u.last_active,
+      statistics: u.statistics
+    }));
+
+    const bundleLogs = (logsResult.data || []).map(l => ({
+      ...l,
+      performedBy: l.performed_by,
+      targetId: l.target_id,
+      targetType: l.target_type,
+      performedByEmail: l.performed_by_email
+    }));
+
+    const bundleFeedback = (feedbackResult.data || []).map(f => ({
+      ...f,
+      createdAt: f.created_at,
+      updatedAt: f.updated_at,
+      userId: f.user_id,
+      userName: f.user_name,
+      userEmail: f.user_email,
+      trackingId: f.tracking_id,
+      affectedArea: f.affected_area,
+      adminNotes: f.admin_notes,
+      adminActivityLogs: f.admin_activity_logs
+    }));
+
+    // Map heatmap_days to heatmapDays
+    const heatmapDays = (data.heatmap_days || []).map((day: any) => ({
+      date: day.date,
+      newUsers: day.newUsers || day.new_users || 0,
+      newMaps: day.newMaps || day.new_maps || 0,
+      newSubMaps: day.newSubMaps || day.new_sub_maps || 0,
+      activeUsers: day.activeUsers || day.active_users || 0,
+      publicMaps: day.publicMaps || day.public_maps || 0,
+      privateMaps: day.privateMaps || day.private_maps || 0,
+      totalActions: day.totalActions || day.total_actions || 0,
+    }));
 
     const response = {
-      // Spread all flat fields from the doc (heatmapDays, latestUsers, topUsers, newUsersToday, etc.)
       ...data,
-      // stats wrapper built last — never overwritten by ...data
       stats: {
-        totalUsers: data?.totalUsers ?? 0,
-        totalMindmaps: data?.totalMindmaps ?? 0,
-        totalChats: data?.totalChats ?? 0,
-        activeUsers: data?.activeUsers24h ?? data?.activeUsers ?? 0,
-        healthScore: data?.healthScore ?? 0,
-        lastUpdated: data?.lastUpdated ?? null,
+        totalUsers: data?.total_users ?? 0,
+        totalMaps: data?.total_public_maps ?? data?.total_maps ?? 0,
+        totalMindmaps: data?.total_mindmaps ?? 0,
+        totalMindmapsEver: data?.total_mindmaps_ever ?? 0,
+        totalChats: data?.total_chats ?? 0,
+        activeUsers: data?.active_users_24h ?? data?.active_users ?? 0,
+        healthScore: data?.health_score ?? 0,
+        lastUpdated: data?.last_updated ?? null,
         timestamp: data?.timestamp ?? null,
       },
-      mapAnalytics: safeMapAnalytics(data?.mapAnalytics),
+      // Frontend expects camelCase keys in safeMapAnalytics
+      mapAnalytics: safeMapAnalytics(data?.map_analytics || data),
+      heatmapDays: heatmapDays, // For the heatmap component
       bundle: {
-        users: usersSnap.docs
-          .map((d: any) => {
-            const ud = d.data();
-            return { id: d.id, ...sanitizeTimestamps(ud) };
-          })
-          .sort((a: any, b: any) => {
-            const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return tb - ta;
-          }),
-        logs: logsSnap.docs.map((d: any) => ({ id: d.id, ...d.data() })),
-        feedback: feedbackSnap.docs.map((d: any) => {
-          const fd = d.data();
-          return { id: d.id, ...sanitizeTimestamps(fd) };
-        }),
+        users: bundleUsers,
+        logs: bundleLogs,
+        feedback: bundleFeedback,
         serverTime: new Date().toISOString(),
         isIncremental: !!since,
       },
       meta: {
         cached: false,
         cacheAge: null,
-        source: 'unified',
+        source: 'supabase',
       },
     };
 

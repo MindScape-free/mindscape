@@ -1,20 +1,13 @@
 import useSWR, { mutate } from 'swr';
 import { useState, useCallback, useEffect } from 'react';
-import { useUser, useFirestore } from '@/lib/auth-context';
+import { useAuth } from '@/lib/auth-context';
 
 const API_BASE = '/api/admin/dashboard';
 
-async function fetcherWithAuth(url: string, getToken: () => Promise<string | null>): Promise<any> {
-  let token: string | null = null;
-  
-  try {
-    token = await getToken();
-    if (!token) {
-      console.warn('[AdminDashboard] No token available, skipping fetch');
-      return null;
-    }
-  } catch (e) {
-    console.warn('[AdminDashboard] Failed to get auth token:', e);
+async function fetcherWithAuth(url: string, getToken: () => string | null): Promise<any> {
+  const token = getToken();
+  if (!token) {
+    console.warn('[AdminDashboard] No token available, skipping fetch');
     return null;
   }
 
@@ -24,7 +17,6 @@ async function fetcherWithAuth(url: string, getToken: () => Promise<string | nul
   };
 
   const res = await fetch(url, { headers });
-  console.log('[AdminDashboard] Response status:', res.status);
   
   if (res.status === 403) {
     console.warn('[AdminDashboard] 403 - User is not admin or session expired');
@@ -69,8 +61,7 @@ interface DashboardStats {
 const STABLE_URL = `${API_BASE}?range=all`;
 
 export function useAdminDashboard() {
-  const { user } = useUser();
-  const { supabase } = useFirestore();
+  const { user, session, supabase } = useAuth();
   const [persistentBundle, setPersistentBundle] = useState<{
     users: any[];
     logs: any[];
@@ -85,7 +76,6 @@ export function useAdminDashboard() {
 
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const auth = supabase?.auth;
   const mergeData = useCallback((newData: DashboardStats | null) => {
     if (!newData?.bundle) return;
 
@@ -114,23 +104,11 @@ export function useAdminDashboard() {
     });
   }, []);
 
-  // Get token function that can be used by the fetcher
-  const getToken = useCallback(async (): Promise<string | null> => {
-    if (!auth || !user) {
-      console.log('[AdminDashboard] No auth or user yet');
-      return null;
-    }
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      console.log('[AdminDashboard] Got token for UID:', user.uid, token ? 'yes' : 'no');
-      return token ?? null;
-    } catch (e) {
-      console.warn('[AdminDashboard] Failed to get token:', e);
-      return null;
-    }
-  }, [auth, user]);
+  const getToken = useCallback((): string | null => {
+    return session?.access_token ?? null;
+  }, [session]);
 
-  const swrKey = user?.uid ? [STABLE_URL, user.uid] : null;
+  const swrKey = user?.id ? [STABLE_URL, user.id] : null;
 
   const { data, error, isLoading, isValidating } = useSWR<DashboardStats>(
     swrKey,
@@ -142,11 +120,6 @@ export function useAdminDashboard() {
       shouldRetryOnError: false,
       onSuccess: (newData) => {
         if (!newData?.bundle) return;
-        console.log('[AdminDashboard] SWR Data loaded:', {
-          users: newData?.bundle?.users?.length || 0,
-          logs: newData?.bundle?.logs?.length || 0,
-          feedback: newData?.bundle?.feedback?.length || 0,
-        });
         mergeData(newData);
       },
       onError: (err) => {
@@ -155,22 +128,15 @@ export function useAdminDashboard() {
     }
   );
 
-  // Force revalidation on mount if bundle is empty
-  useEffect(() => {
-    if (data && !data.bundle?.users?.length && !isLoading) {
-      console.log('[AdminDashboard] Bundle empty, triggering refresh');
-    }
-  }, [data, isLoading]);
-
   const refreshBundle = useCallback(async (forceFullRefresh = false) => {
-    if (isSyncing) return;
+    if (isSyncing || !session) return;
     setIsSyncing(true);
     try {
       const url = (!forceFullRefresh && persistentBundle.lastFetchTime)
         ? `${STABLE_URL}&since=${persistentBundle.lastFetchTime}`
         : STABLE_URL;
 
-      const token = await getToken();
+      const token = getToken();
       if (!token) {
         console.warn('[AdminDashboard] No token, cannot refresh');
         return;
@@ -202,13 +168,13 @@ export function useAdminDashboard() {
       } else {
         mergeData(newData);
       }
-      mutate([STABLE_URL, user?.uid], newData, false);
+      mutate([STABLE_URL, user?.id], newData, false);
     } catch (err) {
       console.error('Bundle refresh error:', err);
     } finally {
       setIsSyncing(false);
     }
-  }, [isSyncing, persistentBundle.lastFetchTime, mergeData, auth, user]);
+  }, [isSyncing, persistentBundle.lastFetchTime, mergeData, session, user, getToken]);
 
   return {
     data,

@@ -2,7 +2,7 @@
 
 import useSWR, { mutate } from 'swr';
 import { useCallback } from 'react';
-import { useUser } from '@/lib/auth-context';
+import { useAuth } from '@/lib/auth-context';
 
 const API_BASE = '/api/admin/stats';
 
@@ -124,6 +124,7 @@ export function useAdminMindmaps(options?: {
   limit?: number;
   initialData?: MindmapListItem[];
 }) {
+  const { limit = 20 } = options || {};
   const { session } = useAuth();
 
   const getToken = useCallback(async (): Promise<string | null> => {

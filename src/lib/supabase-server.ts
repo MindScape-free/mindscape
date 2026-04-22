@@ -6,7 +6,14 @@ export function getSupabaseAdmin(): SupabaseClient {
   if (cachedAdmin) return cachedAdmin;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) throw new Error('Supabase server credentials missing');
+
+  if (!url || !key) {
+    if (typeof window === 'undefined') {
+      console.warn('[Supabase Admin] Credentials missing during server-side execution/build.');
+    }
+    return createClient('https://placeholder.supabase.co', 'placeholder', { auth: { persistSession: false } });
+  }
+
   cachedAdmin = createClient(url, key, { auth: { persistSession: false } });
   return cachedAdmin;
 }

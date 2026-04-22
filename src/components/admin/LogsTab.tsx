@@ -1,7 +1,9 @@
 'use client';
 
 import React from 'react';
-import { Activity, RefreshCw, ChevronRight } from 'lucide-react';
+import { Activity, RefreshCw, ChevronRight, Calendar } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ActivityLogCard, ActivityLogSkeleton } from './ActivityLogCard';
 import { AdminActivityLogEntry, ActivityCategory, FILTER_CATEGORIES, groupLogsByDate } from '@/lib/admin-utils';
@@ -22,39 +24,21 @@ export const LogsTab: React.FC<LogsTabProps> = React.memo(({
   setLogFilter,
 }) => {
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-8 pb-32">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <div className="p-3 bg-gradient-to-br from-amber-500/20 to-orange-500/20 rounded-2xl border border-amber-500/20">
-              <Activity className="h-6 w-6 text-amber-400" />
-            </div>
-            <div className="absolute -top-1 -right-1 h-3 w-3 bg-emerald-500 rounded-full border-2 border-zinc-950 animate-pulse" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-black text-white">Activity Log</h2>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-black text-emerald-400 uppercase tracking-wider">
-                Live
-              </span>
-            </div>
-            <p className="text-xs text-zinc-500">{activityLogs.length} events recorded</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-end gap-6">
+        <div className="flex items-center gap-4 bg-white/5 p-1.5 rounded-[1.5rem] border border-white/10 backdrop-blur-2xl">
           {/* Filter Pills */}
-          <div className="flex items-center gap-1 p-1 bg-zinc-900/60 rounded-xl border border-white/5">
+          <div className="flex items-center gap-1">
             {FILTER_CATEGORIES.map((category) => (
               <button
                 key={category.value}
                 onClick={() => setLogFilter(category.value as any)}
                 className={`
-                  px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all
+                  px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-300
                   ${logFilter === category.value
-                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                    ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20'
+                    : 'text-zinc-500 hover:text-white hover:bg-white/5'
                   }
                 `}
               >
@@ -63,19 +47,26 @@ export const LogsTab: React.FC<LogsTabProps> = React.memo(({
             ))}
           </div>
 
-          <Button
-            variant="outline"
-            size="sm"
+          <div className="w-px h-6 bg-white/10 mx-1" />
+
+          <motion.button
+            whileTap={{ scale: 0.95 }}
             onClick={loadActivityLogs}
-            className="h-10 px-3 rounded-xl border-white/10 bg-white/5 hover:bg-white/10"
+            className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all group"
           >
-            <RefreshCw className={`h-4 w-4 ${isLogsLoading ? 'animate-spin' : ''}`} />
-          </Button>
+            <RefreshCw className={`h-4 w-4 text-zinc-400 group-hover:text-white transition-colors ${isLogsLoading ? 'animate-spin text-amber-400' : ''}`} />
+          </motion.button>
         </div>
       </div>
 
       {/* Activity Log Container */}
-      <div className="rounded-2xl bg-zinc-900/40 border border-white/5 overflow-hidden backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-[2.5rem] bg-white/5 border border-white/10 overflow-hidden backdrop-blur-3xl shadow-2xl relative"
+      >
+        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-[100px] pointer-events-none" />
+        
         {isLogsLoading && activityLogs.length === 0 ? (
           <ActivityLogSkeleton count={8} />
         ) : (() => {
@@ -88,36 +79,41 @@ export const LogsTab: React.FC<LogsTabProps> = React.memo(({
 
           if (filtered.length === 0) {
             return (
-              <div className="flex flex-col items-center justify-center py-20 px-6">
-                <div className="relative mb-6">
-                  <div className="w-20 h-20 rounded-full bg-zinc-800/50 flex items-center justify-center">
+              <div className="flex flex-col items-center justify-center py-32 px-6 relative z-10">
+                <motion.div 
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className="relative mb-8"
+                >
+                  <div className="w-24 h-24 rounded-[2rem] bg-zinc-900/50 flex items-center justify-center border border-white/5 shadow-2xl">
                     <Activity className="h-10 w-10 text-zinc-700" />
                   </div>
-                  <div className="absolute inset-0 w-20 h-20 rounded-full border-2 border-dashed border-zinc-700/30 animate-pulse" />
-                </div>
-                <p className="text-lg font-bold text-zinc-400 mb-2">No {(logFilter as string) !== 'all' ? logFilter : ''} Activity Yet</p>
-                <p className="text-sm text-zinc-600 text-center max-w-md">
-                  System activities will appear here as they happen.
+                  <div className="absolute -inset-4 rounded-[2.5rem] border-2 border-dashed border-white/5 animate-[spin_20s_linear_infinite]" />
+                </motion.div>
+                <p className="text-xl font-black text-white mb-2">Clean Slate</p>
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] text-center max-w-sm">
+                  No activity matching <span className="text-amber-500">"{logFilter}"</span> category has been detected yet.
                 </p>
               </div>
             );
           }
 
           return (
-            <div className="max-h-[calc(100vh-280px)] overflow-y-auto custom-scrollbar">
+            <div className="max-h-[calc(100vh-320px)] overflow-y-auto custom-scrollbar relative z-10">
               {groupLogsByDate(filtered).map((group, groupIndex) => (
                 <div key={group.title}>
                   {/* Date Group Header */}
-                  <div className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur-sm border-b border-white/5 px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-zinc-700/30 to-transparent" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-zinc-600">
-                        {group.title}
-                      </span>
-                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-zinc-700/30 to-transparent" />
-                      <span className="px-2 py-0.5 rounded-full bg-zinc-800/50 text-[9px] font-bold text-zinc-500">
-                        {group.data.length}
-                      </span>
+                  <div className="sticky top-0 z-20 bg-zinc-950/80 backdrop-blur-3xl border-b border-white/5 px-8 py-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Calendar className="h-3 w-3 text-amber-500/50" />
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">
+                          {group.title}
+                        </span>
+                      </div>
+                      <Badge className="bg-white/5 border-white/10 text-zinc-500 font-black text-[9px] px-2 py-0.5 rounded-full">
+                        {group.data.length} Events
+                      </Badge>
                     </div>
                   </div>
 
@@ -137,20 +133,20 @@ export const LogsTab: React.FC<LogsTabProps> = React.memo(({
 
               {/* Load More */}
               {activityLogs.length >= 100 && (
-                <div className="p-4 border-t border-white/5">
+                <div className="p-8 border-t border-white/5 flex justify-center">
                   <Button
                     variant="outline"
                     onClick={loadActivityLogs}
-                    className="w-full h-12 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white font-bold"
+                    className="h-14 px-10 rounded-2xl border-white/10 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest text-[10px] transition-all shadow-xl"
                   >
-                    Load More Events
+                    Fetch Historical Data
                   </Button>
                 </div>
               )}
             </div>
           );
         })()}
-      </div>
+      </motion.div>
     </div>
   );
 });

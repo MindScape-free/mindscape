@@ -11,18 +11,21 @@ import {
   RefreshCw,
   MessageSquare, 
   Activity,
+  LogOut,
+  ChevronUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { motion, AnimatePresence } from 'framer-motion';
 
-import { formatDistanceToNow, format, differenceInMinutes } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { AdminStats } from '@/types/chat';
-import { useAdminActivityLog, AdminActivityLogEntry, ActivityCategory } from '@/lib/admin-utils';
+import { useAdminActivityLog, AdminActivityLogEntry } from '@/lib/admin-utils';
 import { AdminPageSkeleton } from '@/components/admin/AdminSkeletons';
 import { AdminTab, DashboardMetrics } from '@/types/admin';
 import { useAdminDashboard } from '@/hooks/use-admin-dashboard';
 import { globalListenerManager } from '@/lib/listener-manager';
-import { normalizeTimestamp, toISOTimestamp, parseTimestamp, sortByTimestamp } from '@/lib/timestamp-utils';
+import { normalizeTimestamp, sortByTimestamp } from '@/lib/timestamp-utils';
 
 // Lazy Loaded Tab Components
 const DashboardTab = lazy(() => import('@/components/admin/DashboardTab').then(m => ({ default: m.DashboardTab })));
@@ -55,7 +58,6 @@ export default function AdminDashboard() {
   const [liveLogs, setLiveLogs] = useState<any[]>([]);
   const [liveUsers, setLiveUsers] = useState<any[]>([]);
   const [extraUsers, setExtraUsers] = useState<any[]>([]);
-  const [isExtraUsersLoading, setIsExtraUsersLoading] = useState(false);
 
   const { logAdminActivity, subscribeToAdminActivityLogs } = useAdminActivityLog();
   
@@ -106,8 +108,7 @@ export default function AdminDashboard() {
       supabase.removeChannel(statsChannel);
     }));
 
-    // 3. Optional Users real-time update (polling or simple listener)
-    // Since we handle user data via bundle, we can just listen for new user inserts
+    // 3. Optional Users real-time update
     const usersChannel = supabase
       .channel('admin-users-live')
       .on('postgres_changes', { 
@@ -115,7 +116,6 @@ export default function AdminDashboard() {
         schema: 'public', 
         table: 'users'
       }, () => {
-        // Refresh dashboard on new user
         refreshBundle();
       })
       .subscribe();
@@ -139,54 +139,11 @@ export default function AdminDashboard() {
     return sortByTimestamp(Array.from(logMap.values()), l => l.timestamp, 'desc');
   }, [bundle?.logs, liveLogs]);
 
-  const loadMoreUsersFromFirebase = async () => {
-    if (!supabase || isExtraUsersLoading) return;
-    
-    const allUsers = [...(bundle?.users || []), ...extraUsers];
-    const sorted = sortByTimestamp(allUsers, u => u.createdAt, 'desc');
-    const lastUser = sorted[sorted.length - 1];
-
-    if (!lastUser) return;
-
-    setIsExtraUsersLoading(true);
-    try {
-      console.log('🔍 [Admin] Deep fetching more users from Firebase...');
-      
-      const lastTimestamp = normalizeTimestamp(lastUser.createdAt);
-      const lastId = lastUser.id;
-
-      const { data: newUsersData, error: fetchError } = await supabase
-        .from('users')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .lt('created_at', lastUser.createdAt)
-        .limit(100);
-
-      if (fetchError) throw fetchError;
-
-      const newUsers = (newUsersData || []).map(row => ({
-        id: row.id,
-        ...row,
-        createdAt: row.created_at, // Map snake_case to camelCase if needed by UI
-      }));
-      
-      setExtraUsers(prev => {
-        const existingIds = new Set(prev.map(u => u.id));
-        const bundleIds = new Set((bundle?.users || []).map((u: any) => u.id));
-        const filteredNew = newUsers.filter(u => !existingIds.has(u.id) && !bundleIds.has(u.id));
-        return [...prev, ...filteredNew];
-      });
-    } catch (error) {
-      console.error('❌ Failed to deep fetch users:', error);
-    } finally {
-      setIsExtraUsersLoading(false);
-    }
-  };
+  // Deep fetch logic removed as per user request
 
   const users = useMemo(() => {
     const userMap = new Map<string, any>();
     (bundle?.users || []).forEach(u => userMap.set(u.id, u));
-    extraUsers.forEach(u => userMap.set(u.id, u));
     liveUsers.forEach(u => userMap.set(u.id, { ...userMap.get(u.id), ...u }));
     const result = sortByTimestamp(Array.from(userMap.values()), u => u.createdAt, 'desc');
     console.log('[Admin] Users computed:', {
@@ -198,20 +155,17 @@ export default function AdminDashboard() {
     return result;
   }, [bundle?.users, extraUsers, liveUsers]);
 
-  // Sync state from the unified bundle
   useEffect(() => {
     if (bundle) {
       if (bundle.feedback.length > 0) setFeedbackData(bundle.feedback);
     }
   }, [bundle]);
   
-  // Sync dashboard metrics from SWR data
   useEffect(() => {
     if (dashboardData) {
       const { stats, mapAnalytics } = dashboardData;
       const extendedData = dashboardData as any;
       
-      // Update basic status counts
       setStats({
         date: format(new Date(), 'yyyy-MM-dd'),
         totalUsers: stats.totalUsers,
@@ -256,7 +210,6 @@ export default function AdminDashboard() {
     }
   }, [dashboardData]);
 
-  // Authentication Guard
   useEffect(() => {
     if (!isUserLoading && !isAdmin) router.push('/');
   }, [isUserLoading, isAdmin, router]);
@@ -272,16 +225,11 @@ export default function AdminDashboard() {
       const syncJson = await syncRes.json().catch(() => ({}));
       
       if (syncRes.status === 429) {
-        console.warn('⏳ Sync rate limited:', syncJson.error);
         await refreshBundle(true);
         return;
       }
-      if (syncRes.status === 403) {
-        console.error('Unauthorized: Admin access required');
-        return;
-      }
+      if (syncRes.status === 403) return;
       if (!syncRes.ok) throw new Error(syncJson.error || `Sync failed with status ${syncRes.status}`);
-      console.log('✅ Sync response:', syncJson);
       setLastSyncedAt(syncJson.timestamp || new Date().toISOString());
       await logAdminActivity({
         type: 'FULL_REFRESH',
@@ -298,10 +246,10 @@ export default function AdminDashboard() {
   };
 
   const navItems = [
-    { id: 'dashboard' as AdminTab, label: 'Dashboard', icon: Brain, desc: 'System overview and metrics' },
-    { id: 'users' as AdminTab, label: 'Users', icon: Users, desc: 'Manage user accounts and data' },
-    { id: 'logs' as AdminTab, label: 'Activity Log', icon: Activity, desc: 'Real-time activity feed' },
-    { id: 'feedback' as AdminTab, label: 'Feedback', icon: MessageSquare, desc: 'User reports and suggestions' },
+    { id: 'dashboard' as AdminTab, label: 'Overview', icon: Brain, desc: 'System overview and metrics' },
+    { id: 'users' as AdminTab, label: 'Users', icon: Users, desc: 'Manage user accounts' },
+    { id: 'logs' as AdminTab, label: 'Activity', icon: Activity, desc: 'Live event stream' },
+    { id: 'feedback' as AdminTab, label: 'Feedback', icon: MessageSquare, desc: 'User reports' },
   ];
 
   if (isUserLoading || (isAdmin && isDashboardLoading && !dashboardData && activeTab === 'dashboard')) {
@@ -311,174 +259,201 @@ export default function AdminDashboard() {
   if (!isAdmin) return null;
 
   return (
-    <div className="h-[calc(100vh-80px)] bg-zinc-950 text-zinc-100 flex overflow-hidden selection:bg-violet-500/30 font-sans">
-      {/* Background Decor */}
+    <div className="min-h-screen bg-[#020202] text-zinc-100 flex flex-col selection:bg-violet-500/30 font-sans overflow-x-hidden">
+      {/* Mesh Background Experience */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[10%] left-[10%] w-[40%] h-[40%] bg-violet-600/10 blur-[120px] rounded-full animate-pulse duration-[10s]" />
-        <div className="absolute bottom-[10%] right-[10%] w-[40%] h-[40%] bg-blue-600/10 blur-[120px] rounded-full animate-pulse duration-[15s]" />
+        <motion.div 
+          animate={{ 
+            x: [0, 100, 0], 
+            y: [0, 50, 0],
+            scale: [1, 1.2, 1] 
+          }}
+          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-violet-600/10 blur-[150px] rounded-full" 
+        />
+        <motion.div 
+          animate={{ 
+            x: [0, -80, 0], 
+            y: [0, 120, 0],
+            scale: [1.2, 1, 1.2] 
+          }}
+          transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+          className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-blue-600/10 blur-[150px] rounded-full" 
+        />
+        <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-[0.03] mix-blend-overlay" />
       </div>
 
-      <aside className="hidden lg:flex w-80 border-r border-white/5 bg-zinc-950/40 backdrop-blur-3xl flex-col z-20 relative h-full">
-        <div className="p-8 flex flex-col h-full overflow-hidden">
-          <div className="mb-10 shrink-0">
-            <div className="relative group p-6 rounded-[2.5rem] bg-white/5 border border-white/10 backdrop-blur-2xl shadow-2xl overflow-hidden">
-              <div className="flex items-center gap-5 mb-6 relative z-10">
-                <div className="h-16 w-16 rounded-2xl border-2 border-white/10 p-0.5 relative z-10 bg-zinc-900 flex items-center justify-center shadow-lg">
-                  <ShieldAlert className="h-7 w-7 text-violet-400" />
-                </div>
-                <div>
-                  <p className="text-xl font-black text-white truncate tracking-tight">Admin Console</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <div className="h-2 w-2 rounded-full bg-violet-500 animate-pulse" />
-                    <p className="text-[10px] text-violet-400 font-black uppercase tracking-wider">Active</p>
-                  </div>
-                </div>
+      <main className="flex-1 relative z-10 w-full max-w-7xl mx-auto px-6 py-12 lg:px-10 pb-32">
+        <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-8">
+          <div>
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center gap-4 mb-3"
+            >
+              <div className="h-12 w-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center backdrop-blur-xl shadow-2xl">
+                <ShieldAlert className="h-6 w-6 text-violet-400" />
               </div>
-            </div>
+              <div>
+                <h1 className="text-sm font-black uppercase tracking-[0.2em] text-violet-400">Admin Command</h1>
+                <p className="text-4xl font-black tracking-tight text-white leading-none mt-1">Management</p>
+              </div>
+            </motion.div>
           </div>
 
-          <nav className="space-y-2.5 flex-1 pr-2">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${isActive ? 'bg-white/5 text-white border border-white/10 shadow-xl' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'}`}
+          <div className="flex items-center gap-4">
+            <AnimatePresence mode='wait'>
+              {lastSyncedAt && activeTab === 'dashboard' && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
                 >
-                  <div className={`p-2.5 rounded-xl ${isActive ? 'bg-violet-500/20 text-violet-400' : 'bg-transparent'}`}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <p className={`text-sm font-black tracking-tight ${isActive ? 'text-white' : 'text-zinc-500'}`}>{item.label}</p>
-                </button>
-              );
-            })}
-          </nav>
-
-          <div className="pt-8 border-t border-white/5">
-            <Button onClick={() => router.push('/')} variant="ghost" className="w-full flex items-center gap-4 p-4 rounded-2xl text-zinc-500 hover:text-white group">
-               Exit Admin
-            </Button>
-          </div>
-        </div>
-      </aside>
-
-      <main className="flex-1 overflow-y-auto relative z-10 custom-scrollbar">
-        <div className="max-w-6xl mx-auto px-6 py-8 lg:px-10">
-          <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-white leading-none">
-                  {navItems.find(i => i.id === activeTab)?.label}
-                </h1>
-                {lastSyncedAt && activeTab === 'dashboard' && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 border border-white/10 self-end mb-1 cursor-help hover:bg-zinc-800 transition-colors">
+                        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xl cursor-help hover:bg-white/10 transition-colors">
                           <div className={`w-1.5 h-1.5 rounded-full ${
                             dashboardData?.meta?.cached ? 'bg-amber-500' : 'bg-emerald-500'
-                          } ${!dashboardData?.meta?.cached ? 'animate-pulse' : ''}`} />
-                          
-                          <span className={`text-[9px] font-black uppercase tracking-tight ${
-                            dashboardData?.meta?.cached ? 'text-amber-400' : 'text-emerald-400'
-                          }`}>
-                            {dashboardData?.meta?.cached ? 'Cached' : 'Synced'} {lastSyncedAt && `• ${formatDistanceToNow(new Date(lastSyncedAt), { addSuffix: true })}`}
+                          } animate-pulse`} />
+                          <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
+                            Synced {formatDistanceToNow(new Date(lastSyncedAt), { addSuffix: true })}
                           </span>
                         </div>
                       </TooltipTrigger>
                       <TooltipContent className="bg-zinc-950 border-white/10 text-[10px] p-2">
-                        <div className="flex flex-col gap-1">
-                          <p className="font-bold text-white">Full System Sync Status</p>
-                          <p className="text-zinc-400">Exact Time: {format(new Date(lastSyncedAt), 'MMMM do, HH:mm:ss')}</p>
-                          <p className={`text-[9px] ${dashboardData?.meta?.cached ? 'text-amber-400/80' : 'text-emerald-400/80'}`}>
-                            Source: {dashboardData?.meta?.source || 'Unified Admin Backend'}
-                          </p>
-                        </div>
+                        <p className="font-bold text-white">Full System Sync: {format(new Date(lastSyncedAt), 'HH:mm:ss')}</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                )}
-                {isDashboardLoading && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 self-end mb-1">
-                    <Loader2 className="w-3 h-3 animate-spin text-violet-400" />
-                    <span className="text-[9px] font-black text-violet-400 uppercase tracking-tighter">Loading...</span>
-                  </div>
-                )}
-              </div>
-              <p className="text-zinc-500 font-bold text-xs max-w-md">{navItems.find(i => i.id === activeTab)?.desc}</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button 
-                onClick={handleForceRefresh} 
-                disabled={isSyncing || isDashboardLoading}
-                className="h-11 px-6 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-                Sync Data
-              </Button>
-            </div>
-          </header>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-          <Suspense fallback={<div className="flex h-64 items-center justify-center"><Loader2 className="animate-spin h-8 w-8 text-violet-500" /></div>}>
-            {activeTab === 'dashboard' && (
-              <DashboardTab 
-                stats={stats}
-                metrics={metrics}
-                healthScore={calculatedHealthScore}
-                totalMindmapsEver={totalMindmapsEver}
-                isMonthLoading={false}
-                selectedMonth={new Date()}
-                setSelectedMonth={() => {}}
-                topContributorsStatFilter={topContributorsStatFilter}
-                setTopContributorsStatFilter={setTopContributorsStatFilter}
-                setSelectedUser={setSelectedUser}
-                setIsUserDetailOpen={setIsUserDetailOpen}
-                setActiveTab={setActiveTab}
-              />
-            )}
-            {activeTab === 'users' && (
-              <UsersTab 
-                searchTerm={userSearchTerm}
-                setSearchTerm={setUserSearchTerm}
-                sortBy={userSortBy}
-                setSortBy={setUserSortBy as any}
-                filteredUsers={users.filter(u => 
-                  u.displayName?.toLowerCase().includes(userSearchTerm.toLowerCase()) || 
-                  u.email?.toLowerCase().includes(userSearchTerm.toLowerCase())
-                )}
-                isLoading={isDashboardLoading}
-                isDeepLoading={isExtraUsersLoading}
-                loadMoreFromFirebase={loadMoreUsersFromFirebase}
-                setSelectedUser={setSelectedUser}
-                setIsUserDetailOpen={setIsUserDetailOpen}
-              />
-            )}
-            {activeTab === 'logs' && (
-              <LogsTab 
-                activityLogs={activityLogs}
-                isLogsLoading={isDashboardLoading}
-                loadActivityLogs={refreshBundle}
-                logFilter={logFilter as any}
-                setLogFilter={setLogFilter as any}
-              />
-            )}
-            {activeTab === 'feedback' && (
-              <FeedbackCards data={feedbackData} adminUserId={user?.uid || ''} onRefresh={refreshBundle} isLoading={isDashboardLoading && feedbackData.length === 0} />
-            )}
-          </Suspense>
-        </div>
+            <Button 
+              onClick={handleForceRefresh} 
+              disabled={isSyncing || isDashboardLoading}
+              className="h-12 px-6 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 backdrop-blur-xl transition-all hover:scale-105 active:scale-95"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span className="font-bold text-xs uppercase tracking-widest">Sync</span>
+            </Button>
+          </div>
+        </header>
+
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <Suspense fallback={<div className="flex h-64 items-center justify-center"><Loader2 className="animate-spin h-8 w-8 text-violet-500" /></div>}>
+              {activeTab === 'dashboard' && (
+                <DashboardTab 
+                  stats={stats}
+                  metrics={metrics}
+                  healthScore={calculatedHealthScore}
+                  totalMindmapsEver={totalMindmapsEver}
+                  isMonthLoading={false}
+                  selectedMonth={new Date()}
+                  setSelectedMonth={() => {}}
+                  topContributorsStatFilter={topContributorsStatFilter}
+                  setTopContributorsStatFilter={setTopContributorsStatFilter}
+                  setSelectedUser={setSelectedUser}
+                  setIsUserDetailOpen={setIsUserDetailOpen}
+                  setActiveTab={setActiveTab}
+                />
+              )}
+              {activeTab === 'users' && (
+                <UsersTab 
+                  searchTerm={userSearchTerm}
+                  setSearchTerm={setUserSearchTerm}
+                  sortBy={userSortBy}
+                  setSortBy={setUserSortBy as any}
+                  filteredUsers={users.filter(u => 
+                    u.displayName?.toLowerCase().includes(userSearchTerm.toLowerCase()) || 
+                    u.email?.toLowerCase().includes(userSearchTerm.toLowerCase())
+                  )}
+                  isLoading={isDashboardLoading}
+                  isDeepLoading={false}
+                  loadMoreFromSupabase={async () => {}}
+                  setSelectedUser={setSelectedUser}
+                  setIsUserDetailOpen={setIsUserDetailOpen}
+                />
+              )}
+              {activeTab === 'logs' && (
+                <LogsTab 
+                  activityLogs={activityLogs}
+                  isLogsLoading={isDashboardLoading}
+                  loadActivityLogs={refreshBundle}
+                  logFilter={logFilter as any}
+                  setLogFilter={setLogFilter as any}
+                />
+              )}
+              {activeTab === 'feedback' && (
+                <FeedbackCards data={feedbackData} adminUserId={user?.uid || ''} onRefresh={refreshBundle} isLoading={isDashboardLoading && feedbackData.length === 0} />
+              )}
+            </Suspense>
+          </motion.div>
+        </AnimatePresence>
       </main>
 
-      <Suspense fallback={null}>
-        <UserDetailDialog 
-          user={selectedUser} 
-          isOpen={isUserDetailOpen} 
-          onClose={() => setIsUserDetailOpen(false)} 
-          onUserDeleted={refreshBundle}
-        />
-      </Suspense>
+      {/* Floating Bottom Dock */}
+      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50">
+        <motion.div 
+          initial={{ y: 100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ type: "spring", damping: 20, stiffness: 100 }}
+          className="flex items-center gap-2 p-2 rounded-[2.5rem] bg-zinc-900/40 backdrop-blur-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
+        >
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`group relative flex items-center gap-3 px-6 py-4 rounded-[2rem] transition-all duration-500 ${isActive ? 'bg-white/10 text-white shadow-2xl' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
+              >
+                <Icon className={`h-5 w-5 transition-transform duration-500 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
+                <span className={`text-xs font-black tracking-widest uppercase transition-all duration-500 overflow-hidden ${isActive ? 'max-w-[100px] opacity-100' : 'max-w-0 opacity-0 group-hover:max-w-[100px] group-hover:opacity-100'}`}>
+                  {item.label}
+                </span>
+                {isActive && (
+                  <motion.div 
+                    layoutId="dock-active"
+                    className="absolute inset-0 rounded-[2rem] border border-white/20 select-none pointer-events-none"
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  />
+                )}
+              </button>
+            );
+          })}
+          <div className="w-px h-8 bg-white/10 mx-2" />
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button 
+                  onClick={() => router.push('/')}
+                  className="p-4 rounded-full text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all duration-300"
+                >
+                  <LogOut className="h-5 w-5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="bg-zinc-950 border-white/10 text-[10px]">Exit Admin</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </motion.div>
+      </div>
+
+      <UserDetailDialog 
+        user={selectedUser} 
+        isOpen={isUserDetailOpen} 
+        onClose={() => setIsUserDetailOpen(false)} 
+        onUserDeleted={refreshBundle}
+      />
     </div>
   );
 }

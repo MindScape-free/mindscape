@@ -67,7 +67,7 @@ export function usePointsHistory(): UsePointsHistoryReturn {
       const { data, error } = await supabase
         .from('point_transactions')
         .select('*')
-        .eq('user_id', user.uid)
+        .eq('user_id', user.id)
         .order('timestamp', { ascending: false })
         .range(currentOffset, currentOffset + PAGE_SIZE - 1);
 
