@@ -9,16 +9,22 @@ export function getSupabaseClient(): SupabaseClient {
 
   if (!url || !key) {
     if (typeof window === 'undefined') {
-      console.warn('[Supabase] Environment variables missing during server-side execution/build.');
+      console.warn('[Supabase] Environment variables NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are missing.');
+    } else {
+      console.error('[Supabase] Missing configuration! Google Login and database features will not work until NEXT_PUBLIC_SUPABASE_URL is set.');
     }
-    // Return a dummy client or handle as needed. 
-    // To prevent crashes during build, we can return a proxy or just throw a more descriptive error that's caught.
-    // However, most of our code expects a real client.
-    // For build time, we can return a dummy.
-    return createClient('https://placeholder.supabase.co', 'placeholder', { auth: { persistSession: false } });
+    
+    // Fallback to the project URL if we can't find it in env, to prevent total failure in some contexts
+    // but still using placeholders to avoid leaking sensitive keys in source if not already there.
+    const fallbackUrl = 'https://dnwsjvxitcndeqepovvo.supabase.co';
+    const fallbackKey = key || 'placeholder'; 
+
+    return createClient(url || fallbackUrl, key || fallbackKey, { 
+      auth: { persistSession: false } 
+    });
   }
 
-  console.log('[Supabase] Creating client singleton');
+  console.log('[Supabase] Initializing client with:', url);
   clientInstance = createClient(url, key, {
     auth: {
       persistSession: true,
@@ -35,7 +41,10 @@ export function getSupabaseClientWithOptions(options?: { persistSession?: boolea
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
   if (!url || !key) {
-    return createClient('https://placeholder.supabase.co', 'placeholder', { auth: { persistSession: false } });
+    const fallbackUrl = 'https://dnwsjvxitcndeqepovvo.supabase.co';
+    return createClient(url || fallbackUrl, key || 'placeholder', { 
+      auth: { persistSession: options?.persistSession ?? true } 
+    });
   }
 
   clientInstance = createClient(url, key, {
@@ -46,6 +55,7 @@ export function getSupabaseClientWithOptions(options?: { persistSession?: boolea
   });
   return clientInstance;
 }
+
 
 export function getSupabaseAdmin(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;

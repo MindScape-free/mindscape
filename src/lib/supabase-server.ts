@@ -9,14 +9,16 @@ export function getSupabaseAdmin(): SupabaseClient {
 
   if (!url || !key) {
     if (typeof window === 'undefined') {
-      console.warn('[Supabase Admin] Credentials missing during server-side execution/build.');
+      console.warn('[Supabase Admin] Credentials missing. falling back to known project URL.');
     }
-    return createClient('https://placeholder.supabase.co', 'placeholder', { auth: { persistSession: false } });
+    const fallbackUrl = 'https://dnwsjvxitcndeqepovvo.supabase.co';
+    return createClient(url || fallbackUrl, key || 'placeholder', { auth: { persistSession: false } });
   }
 
   cachedAdmin = createClient(url, key, { auth: { persistSession: false } });
   return cachedAdmin;
 }
+
 
 export interface UserImageSettings {
   pollinationsApiKey?: string;
