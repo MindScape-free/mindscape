@@ -188,7 +188,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className={`fixed inset-0 z-50 bg-black/40 backdrop-blur-md transition-opacity duration-500 flex items-center justify-center p-4 lg:p-10 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-center justify-center p-4 lg:p-10"
       onClick={onClose}
     >
       <motion.div 
@@ -201,17 +201,17 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px] -ml-64 -mb-64 pointer-events-none" />
 
         {/* Header */}
-        <div className="relative flex items-center justify-between p-10 border-b border-white/5 shrink-0 z-10">
-          <div className="flex items-center gap-8">
+        <div className="relative flex items-center justify-between p-6 border-b border-white/5 shrink-0 z-10">
+          <div className="flex items-center gap-6">
             <div className="relative group/avatar">
               <motion.div 
                 animate={{ rotate: 360 }}
                 transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                className="absolute -inset-2 bg-gradient-to-br from-violet-500/30 via-transparent to-indigo-500/30 rounded-[2rem] opacity-50 blur-md" 
+                className="absolute -inset-1.5 bg-gradient-to-br from-violet-500/30 via-transparent to-indigo-500/30 rounded-2xl opacity-50 blur-md" 
               />
-              <Avatar className="h-24 w-24 rounded-[1.8rem] border-2 border-white/10 relative z-10 shadow-2xl transition-transform duration-500 group-hover/avatar:scale-105">
+              <Avatar className="h-16 w-16 rounded-xl border-2 border-white/10 relative z-10 shadow-2xl transition-transform duration-500 group-hover/avatar:scale-105">
                 <AvatarImage src={user.photoURL} className="object-cover" />
-                <AvatarFallback className="bg-zinc-900 text-2xl font-black text-violet-400">
+                <AvatarFallback className="bg-zinc-900 text-lg font-black text-violet-400">
                   {(user.displayName || user.email?.split('@')[0] || '??').substring(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
@@ -221,27 +221,27 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
             </div>
             
             <div>
-              <div className="flex items-center gap-4 mb-2">
-                <h2 className="text-4xl font-black text-white tracking-tighter">{user.displayName || user.email?.split('@')[0] || 'Explorer'}</h2>
+              <div className="flex items-center gap-3 mb-1.5">
+                <h2 className="text-2xl font-black text-white tracking-tighter">{user.displayName || user.email?.split('@')[0] || 'Explorer'}</h2>
                 <div className="flex items-center gap-2">
                   {rank && (
-                    <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-lg shadow-amber-500/10">
+                    <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20 text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest">
                       Top #{rank}
                     </Badge>
                   )}
-                  <Badge className="bg-white/5 border-white/10 text-zinc-500 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-[0.2em]">
-                    Identity Verified
+                  <Badge className="bg-white/5 border-white/10 text-zinc-500 text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-[0.2em]">
+                    Verified
                   </Badge>
                 </div>
               </div>
               
-              <div className="flex items-center gap-5">
-                <p className="text-sm font-bold text-zinc-500 tracking-tight">{user.email}</p>
-                <div className="w-1.5 h-1.5 rounded-full bg-white/10" />
+              <div className="flex items-center gap-4">
+                <p className="text-xs font-bold text-zinc-500 tracking-tight">{user.email}</p>
+                <div className="w-1 h-1 rounded-full bg-white/10" />
                 <div className="flex items-center gap-2 group/id">
-                  <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-tighter bg-white/[0.03] px-2 py-0.5 rounded-md border border-white/5 group-hover/id:border-white/20 transition-colors">{user.id}</span>
+                  <span className="text-[8px] font-mono text-zinc-600 uppercase tracking-tighter bg-white/[0.03] px-1.5 py-0.5 rounded-md border border-white/5 group-hover/id:border-white/20 transition-colors">{user.id}</span>
                   <button onClick={handleCopyId} className="p-1 hover:bg-white/10 rounded-lg transition-all text-zinc-600 hover:text-white">
-                    {copiedId ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                    {copiedId ? <Check className="h-2.5 w-2.5 text-emerald-400" /> : <Copy className="h-2.5 w-2.5" />}
                   </button>
                 </div>
               </div>
@@ -249,26 +249,26 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="flex flex-col items-end mr-6">
-              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em] mb-3">Integrity Score</span>
-              <div className="relative h-16 w-16">
-                <svg className="h-16 w-16 -rotate-90 drop-shadow-[0_0_10px_rgba(var(--accent-rgb),0.3)]">
-                  <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-white/5" />
+            <div className="flex flex-col items-end mr-2">
+              <span className="text-[8px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-2">Integrity Score</span>
+              <div className="relative h-12 w-12">
+                <svg className="h-12 w-12 -rotate-90">
+                  <circle cx="24" cy="24" r="21" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-white/5" />
                   <motion.circle 
-                    initial={{ strokeDashoffset: 176 }}
-                    animate={{ strokeDashoffset: 176 * (1 - userHealthScore / 100) }}
+                    initial={{ strokeDashoffset: 132 }}
+                    animate={{ strokeDashoffset: 132 * (1 - userHealthScore / 100) }}
                     transition={{ duration: 1.5, ease: "easeOut" }}
-                    cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" strokeDasharray="176" strokeLinecap="round" 
+                    cx="24" cy="24" r="21" stroke="currentColor" strokeWidth="4" fill="transparent" strokeDasharray="132" strokeLinecap="round" 
                     className={`${userHealthScore > 80 ? 'text-emerald-500' : userHealthScore > 50 ? 'text-amber-500' : 'text-red-500'}`} 
                   />
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-sm font-black tracking-tighter">{userHealthScore}</span>
+                  <span className="text-[10px] font-black tracking-tighter">{userHealthScore}</span>
                 </div>
               </div>
             </div>
 
-            <div className="h-10 w-px bg-white/5 mx-2" />
+            <div className="h-8 w-px bg-white/5 mx-1" />
 
             {!showDeleteConfirm ? (
               <motion.button
@@ -302,51 +302,53 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
               whileHover={{ rotate: 90, scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={onClose}
-              className="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white transition-all shadow-2xl"
+              className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white transition-all shadow-2xl"
             >
-              <X className="h-6 w-6" />
+              <X className="h-5 w-5" />
             </motion.button>
           </div>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-10 space-y-10 relative z-10">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8 relative z-10">
           {/* Stats Grid - Premium Refinement */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
             {[
-              { label: 'Total Sync', value: stats.totalMapsCreated || 0, icon: MapIcon, color: 'violet', trend: '+12%' },
-              { label: 'Active Mind', value: userMaps.length, icon: Brain, color: 'indigo' },
-              { label: 'Avg Density', value: avgNodesPerMap, icon: Layers, color: 'blue' },
-              { label: 'Total Mass', value: currentTotalNodes, icon: Zap, color: 'emerald' },
-              { label: 'Generations', value: stats.totalImagesGenerated || 0, icon: ImageIcon, color: 'pink' },
-              { label: 'Dialogues', value: chatCount ?? '-', icon: BarChart3, color: 'yellow' },
-              { label: 'Vigor Streak', value: `${stats.currentStreak || 0}d`, icon: Flame, color: 'orange' },
-              { label: 'Cognitive Time', value: `${Math.floor((stats.totalStudyTimeMinutes || 0) / 60)}h`, icon: Clock, color: 'sky' },
-              { label: 'Origin Date', value: userCreatedAt ? format(userCreatedAt, 'dd/MM/yy') : '-', icon: UserRound, color: 'violet' },
-              { label: 'Last Signal', value: stats.lastActiveDate 
+              { label: 'Total Created', value: stats.totalMapsCreated || 0, icon: MapIcon, color: 'violet', trend: '+12%' },
+              { label: 'Active Maps', value: userMaps.length, icon: Brain, color: 'indigo' },
+              { label: 'Avg Complexity', value: avgNodesPerMap, icon: Layers, color: 'blue' },
+              { label: 'Total Bubbles', value: currentTotalNodes, icon: Zap, color: 'emerald' },
+              { label: 'Images Created', value: stats.totalImagesGenerated || 0, icon: ImageIcon, color: 'pink' },
+              { label: 'AI Chats', value: chatCount ?? '-', icon: BarChart3, color: 'yellow' },
+              { label: 'Daily Streak', value: `${stats.currentStreak || 0}d`, icon: Flame, color: 'orange' },
+              { label: 'Time Spent', value: `${Math.floor((stats.totalStudyTimeMinutes || 0) / 60)}h`, icon: Clock, color: 'sky' },
+              { label: 'Joined Date', value: userCreatedAt ? format(userCreatedAt, 'dd/MM/yy') : '-', icon: UserRound, color: 'violet' },
+              { label: 'Last Active', value: stats.lastActiveDate 
                 ? format(new Date(stats.lastActiveDate), 'dd MMM')
                 : '-', icon: Globe, color: 'indigo' },
             ].map((stat, idx) => (
               <motion.div 
                 key={stat.label}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.05 }}
-                className="relative overflow-hidden p-6 rounded-[2rem] bg-white/5 border border-white/10 hover:border-white/20 transition-all group"
+                transition={{ delay: idx * 0.03 }}
+                className="relative overflow-hidden p-3.5 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 transition-all group"
               >
-                <div className={`absolute top-0 right-0 w-24 h-24 bg-${stat.color}-500/5 rounded-full blur-2xl group-hover:bg-${stat.color}-500/10 transition-colors pointer-events-none`} />
-                <div className="relative flex flex-col gap-4">
-                  <div className={`w-fit p-3 rounded-2xl bg-${stat.color}-500/10 border border-${stat.color}-500/20 group-hover:scale-110 transition-transform duration-500`}>
-                    <stat.icon className={`h-5 w-5 text-${stat.color}-400`} />
+                <div className={`absolute top-0 right-0 w-16 h-16 bg-${stat.color}-500/5 rounded-full blur-xl group-hover:bg-${stat.color}-500/10 transition-colors pointer-events-none`} />
+                <div className="relative flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`p-1.5 rounded-lg bg-${stat.color}-500/10 border border-${stat.color}-500/20 group-hover:scale-110 transition-transform duration-500`}>
+                        <stat.icon className={`h-3.5 w-3.5 text-${stat.color}-400`} />
+                      </div>
+                      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500">{stat.label}</p>
+                    </div>
+                    {stat.trend && <span className="text-[7px] font-black text-emerald-400 bg-emerald-500/5 px-1.5 py-0.5 rounded-md">{stat.trend}</span>}
                   </div>
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-3xl font-black text-white tracking-tighter leading-none">
-                        {stat.value}
-                      </p>
-                      {stat.trend && <span className="text-[8px] font-black text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-md">{stat.trend}</span>}
-                    </div>
-                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500">{stat.label}</p>
+                    <p className="text-2xl font-black text-white tracking-tighter leading-none">
+                      {stat.value}
+                    </p>
                   </div>
                 </div>
               </motion.div>
@@ -355,16 +357,16 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
 
           {/* Activity Insight */}
           {user.activity && Object.keys(user.activity).length > 0 && (
-            <div className="relative overflow-hidden rounded-[2.5rem] bg-white/5 border border-white/10 p-10 transition-all hover:border-white/20">
+            <div className="relative overflow-hidden rounded-3xl bg-white/5 border border-white/10 p-6 transition-all hover:border-white/20">
               <div className="absolute top-0 right-0 w-80 h-80 bg-violet-600/5 rounded-full blur-[100px] pointer-events-none" />
-              <div className="flex items-center justify-between mb-8 relative z-10">
-                <div className="flex items-center gap-4">
-                  <div className="p-4 bg-violet-500/10 rounded-2xl border border-violet-500/20">
-                    <Activity className="h-6 w-6 text-violet-400" />
+              <div className="flex items-center justify-between mb-6 relative z-10">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-violet-500/10 rounded-xl border border-violet-500/20">
+                    <Activity className="h-5 w-5 text-violet-400" />
                   </div>
                   <div>
-                    <h3 className="text-2xl font-black text-white tracking-tighter">Neural Activity Heatmap</h3>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 mt-1">Spatio-temporal engagement metrics</p>
+                    <h3 className="text-xl font-black text-white tracking-tighter">Neural Activity Heatmap</h3>
+                    <p className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500 mt-0.5">Engagement metrics</p>
                   </div>
                 </div>
 
@@ -428,16 +430,16 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
             </div>
           )}
 
-          <div className="relative overflow-hidden rounded-[2.5rem] bg-white/5 border border-white/10 p-10 transition-all hover:border-white/20">
+          <div className="relative overflow-hidden rounded-3xl bg-white/5 border border-white/10 p-6 transition-all hover:border-white/20">
             <div className="absolute top-0 left-0 w-80 h-80 bg-indigo-600/5 rounded-full blur-[100px] pointer-events-none" />
-            <div className="flex items-center justify-between mb-8 relative z-10">
-              <div className="flex items-center gap-4">
-                <div className="p-4 bg-indigo-500/10 rounded-2xl border border-indigo-500/20">
-                  <Library className="h-6 w-6 text-indigo-400" />
+            <div className="flex items-center justify-between mb-6 relative z-10">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
+                  <Library className="h-5 w-5 text-indigo-400" />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-black text-white tracking-tighter">Subject Library ({userMaps.length})</h3>
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 mt-1">Comprehensive index of cognitive mindmaps</p>
+                  <h3 className="text-xl font-black text-white tracking-tighter">Subject Library ({userMaps.length})</h3>
+                  <p className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500 mt-0.5">Mindmap index</p>
                 </div>
               </div>
             </div>
@@ -473,46 +475,46 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
                             animate={{ opacity: 1, x: 0 }}
                             className="group/row"
                           >
-                            <td className="py-4 pl-6 bg-white/[0.02] rounded-l-3xl border-y border-l border-white/5 group-hover/row:bg-white/[0.05] transition-all duration-300">
-                              <div className="flex items-center gap-4">
-                                <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-violet-600/20 to-indigo-600/20 flex items-center justify-center border border-white/10 shadow-lg group-hover/row:scale-110 group-hover/row:rotate-3 transition-transform duration-500">
-                                  <MapIcon className="h-6 w-6 text-violet-400" />
+                            <td className="py-2.5 pl-4 bg-white/[0.02] rounded-l-2xl border-y border-l border-white/5 group-hover/row:bg-white/[0.05] transition-all duration-300">
+                              <div className="flex items-center gap-3">
+                                <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-violet-600/20 to-indigo-600/20 flex items-center justify-center border border-white/10 shadow-lg group-hover/row:scale-110 group-hover/row:rotate-3 transition-transform duration-500">
+                                  <MapIcon className="h-4 w-4 text-violet-400" />
                                 </div>
                                 <div className="min-w-0">
-                                  <span className="text-sm font-black text-white group-hover/row:text-violet-400 transition-colors truncate block max-w-[280px]">
+                                  <span className="text-xs font-black text-white group-hover/row:text-violet-400 transition-colors truncate block max-w-[240px]">
                                     {m.shortTitle || m.topic || 'Untitled Knowledge'}
                                   </span>
-                                  <span className="text-[9px] font-black text-zinc-500 uppercase tracking-tighter">
+                                  <span className="text-[7px] font-black text-zinc-600 uppercase tracking-tighter">
                                     SIG: {(m.id || '').substring((m.id || '').length - 8).toUpperCase()}
                                   </span>
                                 </div>
                               </div>
                             </td>
-                            <td className="py-4 text-center bg-white/[0.02] border-y border-white/5 group-hover/row:bg-white/[0.05] transition-colors">
-                              <span className="text-[11px] font-black text-zinc-400 tracking-tighter uppercase">{m.createdAt ? format(toDate(m.createdAt), 'MMM dd, HH:mm') : '-'}</span>
+                            <td className="py-2.5 text-center bg-white/[0.02] border-y border-white/5 group-hover/row:bg-white/[0.05] transition-colors">
+                              <span className="text-[9px] font-black text-zinc-500 tracking-tighter uppercase">{m.createdAt ? format(toDate(m.createdAt), 'MMM dd, HH:mm') : '-'}</span>
                             </td>
-                            <td className="py-4 text-center bg-white/[0.02] border-y border-white/5 group-hover/row:bg-white/[0.05] transition-colors">
-                              <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px] font-black px-3 py-1 rounded-full">{m.nodeCount || 0}</Badge>
+                            <td className="py-2.5 text-center bg-white/[0.02] border-y border-white/5 group-hover/row:bg-white/[0.05] transition-colors">
+                              <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[8px] font-black px-2 py-0.5 rounded-full">{m.nodeCount || 0}</Badge>
                             </td>
-                            <td className="py-4 text-center bg-white/[0.02] border-y border-white/5 group-hover/row:bg-white/[0.05] transition-colors">
-                              <div className="flex items-center justify-center gap-2">
-                                <Eye className="h-3.5 w-3.5 text-emerald-500" />
-                                <span className="text-[11px] font-black text-emerald-400">{m.publicViews || 0}</span>
+                            <td className="py-2.5 text-center bg-white/[0.02] border-y border-white/5 group-hover/row:bg-white/[0.05] transition-colors">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <Eye className="h-3 w-3 text-emerald-500" />
+                                <span className="text-[9px] font-black text-emerald-400">{m.publicViews || 0}</span>
                               </div>
                             </td>
-                            <td className="py-4 text-center bg-white/[0.02] border-y border-white/5 group-hover/row:bg-white/[0.05] transition-colors">
-                              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/5 text-[9px] font-black uppercase tracking-tighter text-zinc-400">
+                            <td className="py-2.5 text-center bg-white/[0.02] border-y border-white/5 group-hover/row:bg-white/[0.05] transition-colors">
+                              <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/5 border border-white/5 text-[8px] font-black uppercase tracking-tighter text-zinc-500">
                                 {m.sourceFileType === 'youtube' ? '🎥' : m.sourceFileType === 'pdf' ? '📄' : '📝'} {m.sourceFileType || 'Text'}
                               </div>
                             </td>
-                            <td className="py-4 text-right pr-6 bg-white/[0.02] rounded-r-3xl border-y border-r border-white/5 group-hover/row:bg-white/[0.05] transition-colors">
+                            <td className="py-2.5 text-right pr-4 bg-white/[0.02] rounded-r-2xl border-y border-r border-white/5 group-hover/row:bg-white/[0.05] transition-colors">
                               <motion.button 
-                                whileHover={{ scale: 1.1, x: -5 }}
+                                whileHover={{ scale: 1.1, x: -3 }}
                                 whileTap={{ scale: 0.9 }}
                                 onClick={() => window.open(`/canvas?mapId=${m.id}&ownerId=${user.id}`, '_blank')}
-                                className="p-3 rounded-[1.2rem] bg-white/5 hover:bg-violet-600 text-zinc-400 hover:text-white border border-white/10 transition-all shadow-xl"
+                                className="p-2.5 rounded-lg bg-white/5 hover:bg-violet-600 text-zinc-400 hover:text-white border border-white/10 transition-all shadow-xl"
                               >
-                                <ExternalLink className="h-4 w-4" />
+                                <ExternalLink className="h-3.5 w-3.5" />
                               </motion.button>
                             </td>
                           </motion.tr>

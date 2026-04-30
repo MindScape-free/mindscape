@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth, useUser } from '@/lib/auth-context';
 import { getSupabaseClient } from '@/lib/supabase-db';
@@ -45,6 +46,7 @@ import { useAIConfig } from '@/contexts/ai-config-context';
 // Types
 interface UserProfile {
     uid?: string;
+    createdAt?: string;
     displayName: string;
     email: string;
     photoURL?: string;
@@ -158,6 +160,7 @@ function ProfileContent() {
                         displayName: data.display_name || user.displayName || 'ADMIN',
                         email: data.email || user.email || '',
                         photoURL: data.photo_url || undefined,
+                        createdAt: data.created_at || undefined,
                         activeBadgeId: data.active_badge_id,
                         preferences: {
                             preferredLanguage: data.preferences?.preferred_language || 'en',
@@ -197,6 +200,7 @@ function ProfileContent() {
                         displayName: user.displayName || 'ADMIN',
                         email: user.email || '',
                         photoURL: undefined,
+                        createdAt: undefined,
                         preferences: {
                             preferredLanguage: 'en',
                             defaultAIPersona: 'concise',
@@ -519,15 +523,42 @@ function ProfileContent() {
 
     if (!user || !profile) {
         return (
-            <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
-                <Card className="bg-zinc-900/90 border-zinc-800 max-w-sm w-full text-center p-8">
-                    <LogOut className="h-12 w-12 text-violet-400 mx-auto mb-4" />
-                    <h2 className="text-xl font-semibold text-white mb-2">Not Signed In</h2>
-                    <p className="text-zinc-400 text-sm mb-6">Sign in to view your profile</p>
-                    <Button onClick={() => router.push('/')} className="bg-violet-600 hover:bg-violet-700">
-                        Go Home
-                    </Button>
-                </Card>
+            <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4 relative overflow-hidden">
+                <div className="absolute inset-0 bg-primary/5 blur-[120px] -z-10" />
+                <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="max-w-md w-full"
+                >
+                    <Card className="bg-black/40 backdrop-blur-3xl border-white/5 rounded-[2.5rem] p-8 shadow-2xl text-center overflow-hidden relative">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-3xl rounded-full -translate-y-16 translate-x-16" />
+                        
+                        <div className="h-20 w-20 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner ring-1 ring-white/10">
+                            <Lock className="h-10 w-10 text-primary" />
+                        </div>
+                        
+                        <h2 className="text-3xl font-black text-white mb-4 tracking-tight">Identity Required</h2>
+                        <p className="text-zinc-400 mb-10 leading-relaxed">
+                            Your profile, learning statistics, and custom preferences are protected. Sign in to access your personal workspace.
+                        </p>
+                        
+                        <div className="grid grid-cols-1 gap-4">
+                            <Button 
+                                onClick={() => window.dispatchEvent(new CustomEvent('mindscape:trigger-login'))} 
+                                className="h-14 rounded-2xl bg-primary hover:bg-primary/90 text-white font-bold text-lg shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95"
+                            >
+                                Sign In to MindScape
+                            </Button>
+                            <Button 
+                                variant="ghost"
+                                onClick={() => router.push('/')} 
+                                className="h-12 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 font-bold uppercase tracking-widest text-xs"
+                            >
+                                Back to Home
+                            </Button>
+                        </div>
+                    </Card>
+                </motion.div>
             </div>
         );
     }
@@ -669,8 +700,8 @@ function ProfileContent() {
             
             {/* Professional Background Layer */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-                <div className="absolute top-[10%] left-[10%] w-[40%] h-[40%] bg-violet-600/10 blur-[120px] rounded-full animate-pulse duration-[10s]" />
-                <div className="absolute bottom-[10%] right-[10%] w-[40%] h-[40%] bg-blue-600/10 blur-[120px] rounded-full animate-pulse duration-[15s]" />
+                <div className="absolute top-[10%] left-[10%] w-[40%] h-[40%] bg-violet-600/10 blur-[120px] rounded-full animate-pulse" style={{ animationDuration: '10s' }} />
+                <div className="absolute bottom-[10%] right-[10%] w-[40%] h-[40%] bg-blue-600/10 blur-[120px] rounded-full animate-pulse" style={{ animationDuration: '15s' }} />
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02)_0%,transparent_70%)] opacity-50" />
                 <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none" />
             </div>

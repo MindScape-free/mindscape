@@ -31,6 +31,8 @@ import {
   Loader2,
   Copy,
   Brain,
+  RefreshCw,
+  Signal,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -139,36 +141,36 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
       ) : (
         <>
           {/* Health Score + Primary Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <motion.div 
-              whileHover={{ y: -5, scale: 1.02 }}
-              className="relative overflow-hidden rounded-[2rem] bg-white/5 border border-white/10 p-6 flex flex-col items-center justify-center backdrop-blur-3xl shadow-2xl group transition-all duration-500"
+              whileHover={{ y: -3, scale: 1.01 }}
+              className="relative overflow-hidden rounded-[1.5rem] bg-white/5 border border-white/10 p-4 flex flex-col items-center justify-center backdrop-blur-3xl shadow-xl group transition-all duration-500"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              <div className="relative mb-3">
-                <svg className="w-16 h-16 -rotate-90">
-                  <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" strokeWidth="6" className="text-white/5" />
+              <div className="relative mb-2">
+                <svg className="w-12 h-12 -rotate-90">
+                  <circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" strokeWidth="4" className="text-white/5" />
                   <motion.circle 
-                    initial={{ strokeDasharray: "0 175.9" }}
-                    animate={{ strokeDasharray: `${(healthScore / 100) * 175.9} 175.9` }}
+                    initial={{ strokeDasharray: "0 131.9" }}
+                    animate={{ strokeDasharray: `${(healthScore / 100) * 131.9} 131.9` }}
                     transition={{ duration: 1.5, ease: "easeOut" }}
-                    cx="32" cy="32" r="28" fill="none" 
-                    stroke="currentColor" strokeWidth="6" 
+                    cx="24" cy="24" r="21" fill="none" 
+                    stroke="currentColor" strokeWidth="4" 
                     strokeLinecap="round"
                     className={healthScore >= 70 ? 'text-emerald-400' : healthScore >= 40 ? 'text-amber-400' : 'text-rose-400'}
                   />
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className={`text-xl font-black tracking-tighter ${healthScore >= 70 ? 'text-emerald-400' : healthScore >= 40 ? 'text-amber-400' : 'text-rose-400'}`}>
+                  <span className={`text-sm font-black tracking-tighter ${healthScore >= 70 ? 'text-emerald-400' : healthScore >= 40 ? 'text-amber-400' : 'text-rose-400'}`}>
                     {healthScore}
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-2 mb-2 relative z-10">
-                <Heart className={`h-3 w-3 ${healthScore >= 70 ? 'text-emerald-400' : healthScore >= 40 ? 'text-amber-400' : 'text-rose-400'}`} />
-                <span className="text-[10px] font-black uppercase tracking-[0.1em] text-zinc-400">Health</span>
+              <div className="flex items-center gap-1.5 mb-1.5 relative z-10">
+                <Heart className={`h-2.5 w-2.5 ${healthScore >= 70 ? 'text-emerald-400' : healthScore >= 40 ? 'text-amber-400' : 'text-rose-400'}`} />
+                <span className="text-[9px] font-black uppercase tracking-[0.1em] text-zinc-400">Health</span>
               </div>
-              <Badge className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${
+              <Badge className={`text-[7px] font-black uppercase px-1.5 py-0 rounded-full ${
                 healthScore >= 70 
                   ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
                   : healthScore >= 40 
@@ -180,79 +182,62 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
             </motion.div>
 
             {[
-              { label: 'Total Users', value: stats?.totalUsers || 0, icon: Users, color: 'violet', glow: 'shadow-violet-500/20' },
-              { label: 'Public Maps', value: stats?.totalMaps || 0, icon: Globe, color: 'blue', glow: 'shadow-blue-500/20' },
-              { label: 'Created Ever', value: totalMindmapsEver, icon: Layers, color: 'cyan', glow: 'shadow-cyan-500/20', tooltip: 'Includes all mindmaps ever created.' },
-              { label: 'Total Chats', value: stats?.totalChats || 0, icon: MessageSquare, color: 'rose', glow: 'shadow-rose-500/20' },
-              { label: 'Active 24h', value: metrics?.activeUsers24h ?? 0, icon: Zap, color: 'amber', glow: 'shadow-amber-500/20', tooltip: 'Users active in the last 24 hours.' },
-            ].map((stat, i) => (
+              { label: 'Users', value: stats?.totalUsers || 0, icon: Users, color: 'violet', glow: 'shadow-violet-500/5' },
+              { key: 'totalMaps', label: 'Total Maps', value: stats?.totalMaps || 0, icon: MapIcon, color: 'blue' },
+              { key: 'totalSyncs', label: 'Total Created', value: totalMindmapsEver, icon: RefreshCw, color: 'indigo' },
+              { key: 'totalChats', label: 'AI Chats', value: stats?.totalChats || 0, icon: MessageSquare, color: 'violet' },
+              { key: 'activeUsers24h', label: 'Active Today', value: metrics?.activeUsers24h || 0, icon: Zap, color: 'emerald' },
+            ].map((stat: any, i) => (
               <motion.div 
                 key={stat.label}
-                whileHover={{ y: -5, scale: 1.02 }}
-                className={`relative overflow-hidden rounded-[2rem] bg-white/5 border border-white/10 p-6 flex flex-col justify-between backdrop-blur-3xl shadow-2xl group transition-all duration-500 ${stat.glow}`}
+                whileHover={{ y: -2, scale: 1.01 }}
+                className={`relative overflow-hidden rounded-xl bg-white/5 border border-white/10 p-3 flex flex-col backdrop-blur-3xl shadow-xl group transition-all duration-500 ${stat.glow || ''}`}
               >
-                <div className={`absolute inset-0 bg-gradient-to-br from-${stat.color}-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
-                <div className="flex items-center justify-between relative z-10">
-                  <div className={`p-3 bg-${stat.color}-500/10 rounded-2xl border border-${stat.color}-500/20 group-hover:scale-110 transition-transform duration-500`}>
-                    <stat.icon className={`h-5 w-5 text-${stat.color}-400`} />
+                <div className={`absolute inset-0 bg-gradient-to-br from-${stat.color}-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+                
+                <div className="flex items-center justify-between mb-2 relative z-10">
+                  <div className="flex items-center gap-1.5">
+                    <div className={`p-1.5 bg-${stat.color}-500/10 rounded-lg border border-${stat.color}-500/20 group-hover:bg-${stat.color}-500/20 transition-colors`}>
+                      <stat.icon className={`h-3.5 w-3.5 text-${stat.color}-400`} />
+                    </div>
+                    <span className={`text-[10px] font-black uppercase tracking-wider text-${stat.color}-400/80`}>{stat.label}</span>
                   </div>
-                  {stat.tooltip && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger><Clock className="h-3 w-3 text-white/20 hover:text-white/40 transition-colors" /></TooltipTrigger>
-                        <TooltipContent className="bg-zinc-950 border-white/10 text-[10px]">{stat.tooltip}</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
                 </div>
-                <div className="mt-4 relative z-10">
-                  <p className="text-3xl font-black text-white tracking-tighter">{(stat.value).toLocaleString()}</p>
-                  <p className={`text-[10px] font-black uppercase tracking-[0.1em] text-${stat.color}-400/70 mt-1`}>{stat.label}</p>
+                
+                <div className="relative z-10">
+                  <p className="text-2xl font-black text-white tracking-tighter">{(stat.value).toLocaleString()}</p>
                 </div>
               </motion.div>
             ))}
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
               { label: 'Engagement', value: `${Math.round(metrics?.engagementRate ?? 0)}%`, icon: ActivityIcon, color: 'violet' },
-              { 
-                label: 'New Users', 
-                value: metrics?.newUsersToday ?? 0, 
-                icon: UserPlus, 
-                color: 'indigo',
-                sub: `${metrics?.newUsersYesterday ?? 0} prev`,
-                trend: (metrics?.newUsersToday ?? 0) >= (metrics?.newUsersYesterday ?? 0)
-              },
-              { 
-                label: 'New Maps', 
-                value: metrics?.newMapsToday ?? 0, 
-                icon: MapIcon, 
-                color: 'blue',
-                sub: `${metrics?.newMapsYesterday ?? 0} prev`,
-                trend: (metrics?.newMapsToday ?? 0) >= (metrics?.newMapsYesterday ?? 0)
-              },
-              { label: 'Maps/User', value: metrics?.avgMapsPerUser?.toFixed(1) ?? 0, icon: TrendingUp, color: 'emerald' },
-              { label: 'Chats/User', value: metrics?.avgChatsPerUser?.toFixed(1) ?? 0, icon: BarChart3, color: 'amber' },
-              { label: 'Avg Nodes', value: Number(safeMapAnalytics.avgNodesPerMap).toFixed(1), icon: Layers, color: 'rose' },
+              { label: 'New Users', value: metrics?.newUsersToday || 0, icon: UserPlus, color: 'blue', sub: metrics?.newUsersYesterday || 0, trend: (metrics?.newUsersToday || 0) >= (metrics?.newUsersYesterday || 0) },
+              { label: 'New Maps', value: metrics?.newMapsToday || 0, icon: MapIcon, color: 'indigo', sub: metrics?.newMapsYesterday || 0, trend: (metrics?.newMapsToday || 0) >= (metrics?.newMapsYesterday || 0) },
+              { label: 'Maps per User', value: metrics?.avgMapsPerUser?.toFixed(1) ?? 0, icon: Signal, color: 'violet' },
+              { label: 'Chats per User', value: metrics?.avgChatsPerUser?.toFixed(1) ?? 0, icon: BarChart3, color: 'amber' },
+              { label: 'Avg Complexity', value: Number(safeMapAnalytics.avgNodesPerMap).toFixed(1), icon: Layers, color: 'rose' },
             ].map((stat) => (
               <motion.div 
                 key={stat.label}
-                whileHover={{ y: -5 }}
-                className="relative overflow-hidden rounded-3xl bg-white/5 border border-white/10 p-5 backdrop-blur-3xl shadow-xl group transition-all duration-500"
+                whileHover={{ y: -2 }}
+                className="relative overflow-hidden rounded-xl bg-white/5 border border-white/10 p-3 backdrop-blur-3xl shadow-lg group transition-all duration-500"
               >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className={`p-2 bg-${stat.color}-500/10 rounded-xl group-hover:bg-${stat.color}-500/20 transition-colors`}>
-                    <stat.icon className={`h-4 w-4 text-${stat.color}-400`} />
+                <div className="flex items-center gap-2 mb-2 relative z-10">
+                  <div className={`p-1 bg-${stat.color}-500/10 rounded-md group-hover:bg-${stat.color}-500/20 transition-colors`}>
+                    <stat.icon className={`h-3 w-3 text-${stat.color}-400`} />
                   </div>
-                  <span className="text-[9px] font-black uppercase tracking-[0.1em] text-zinc-500">{stat.label}</span>
+                  <span className="text-[9px] font-black uppercase tracking-wider text-zinc-500">{stat.label}</span>
                 </div>
-                <div className="flex items-end justify-between">
-                  <p className="text-2xl font-black text-white tracking-tighter">{stat.value}</p>
-                  {stat.sub && (
-                    <div className="flex items-center gap-1">
-                      {stat.trend ? <ArrowUpRight className="h-3 w-3 text-emerald-400" /> : <ArrowDownRight className="h-3 w-3 text-rose-400" />}
-                      <span className="text-[9px] font-bold text-zinc-500">{stat.sub}</span>
+                
+                <div className="flex items-end justify-between relative z-10">
+                  <p className="text-xl font-black text-white tracking-tighter">{stat.value}</p>
+                  {'sub' in stat && (
+                    <div className="flex items-center gap-1 mb-0.5">
+                      {stat.trend ? <ArrowUpRight className="h-2.5 w-2.5 text-emerald-400" /> : <ArrowDownRight className="h-2.5 w-2.5 text-rose-400" />}
+                      <span className="text-[9px] font-bold text-zinc-600">{stat.sub}</span>
                     </div>
                   )}
                 </div>
@@ -261,53 +246,64 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
           </div>
 
           <motion.div 
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            className="rounded-[2.5rem] bg-white/5 border border-white/10 p-8 backdrop-blur-3xl shadow-2xl relative overflow-hidden"
+            className="rounded-2xl bg-white/5 border border-white/10 p-5 backdrop-blur-3xl shadow-xl relative overflow-hidden group"
           >
-            <div className="absolute top-0 right-0 w-64 h-64 bg-violet-500/5 rounded-full blur-[100px] pointer-events-none" />
-            <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-6 relative z-10">
-              <div>
-                <p className="text-xl font-black text-white tracking-tight">System Pulse</p>
-                <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] mt-1">Monthly Activity Heatmap</p>
+            <div className="absolute top-0 right-0 w-64 h-64 bg-violet-500/5 rounded-full blur-[80px] pointer-events-none" />
+            
+            <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4 relative z-10">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-violet-500/10 rounded-xl border border-violet-500/20 shadow-lg shadow-violet-500/10">
+                  <ActivityIcon className="h-4 w-4 text-violet-400" />
+                </div>
+                <div>
+                  <p className="text-base font-black text-white tracking-tight">Daily Activity</p>
+                  <p className="text-[9px] text-zinc-500 font-black uppercase tracking-[0.2em] mt-0.5">User interactions per day</p>
+                </div>
               </div>
-              <div className="flex items-center gap-4 bg-zinc-900/50 p-1.5 rounded-2xl border border-white/5">
-                <button
-                  onClick={() => setSelectedMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 1, 1))}
-                  disabled={isMonthLoading}
-                  className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-50 transition-all"
-                >
-                  <ChevronLeft className="h-4 w-4 text-zinc-400" />
-                </button>
-                <span className="text-xs font-black text-white min-w-[120px] text-center uppercase tracking-widest">
-                  {isMonthLoading ? <Loader2 className="h-4 w-4 animate-spin mx-auto text-violet-400" /> : format(selectedMonth, 'MMMM yyyy')}
-                </span>
-                <button
-                  onClick={() => setSelectedMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 1))}
-                  disabled={isMonthLoading || isSameMonth(selectedMonth, new Date())}
-                  className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-50 transition-all"
-                >
-                  <ChevronRight className="h-4 w-4 text-zinc-400" />
-                </button>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-3 mb-6 bg-zinc-900/30 w-fit px-4 py-2 rounded-full border border-white/5">
-              <span className="text-[10px] text-zinc-500 font-black uppercase tracking-tighter">Quiet</span>
-              {[
-                'bg-zinc-800/50', 
-                'bg-violet-900/40 border border-violet-500/20', 
-                'bg-violet-700/60 border border-violet-400/20', 
-                'bg-violet-500/80 border border-violet-300/20', 
-                'bg-violet-400 shadow-[0_0_15px_rgba(167,139,250,0.4)]'
-              ].map((c, i) => (
-                <div key={i} className={`h-3 w-3 rounded-[3px] ${c}`} />
-              ))}
-              <span className="text-[10px] text-zinc-500 font-black uppercase tracking-tighter">Surge</span>
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-3 bg-zinc-950/40 px-3 py-1.5 rounded-full border border-white/5">
+                  <span className="text-[8px] text-zinc-600 font-black uppercase tracking-tighter">Quiet</span>
+                  <div className="flex gap-1.5">
+                    {[
+                      'bg-zinc-800/50', 
+                      'bg-violet-900/40 border border-violet-500/20', 
+                      'bg-violet-700/60 border border-violet-400/20', 
+                      'bg-violet-500/80 border border-violet-300/20', 
+                      'bg-violet-400 shadow-[0_0_10px_rgba(167,139,250,0.4)]'
+                    ].map((c, i) => (
+                      <div key={i} className={`h-2.5 w-2.5 rounded-[2px] ${c}`} />
+                    ))}
+                  </div>
+                  <span className="text-[8px] text-zinc-600 font-black uppercase tracking-tighter">Surge</span>
+                </div>
+
+                <div className="flex items-center gap-3 bg-zinc-900/50 p-1 rounded-xl border border-white/5">
+                  <button
+                    onClick={() => setSelectedMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 1, 1))}
+                    disabled={isMonthLoading}
+                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-50 transition-all"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5 text-zinc-400" />
+                  </button>
+                  <span className="text-[10px] font-black text-white min-w-[100px] text-center uppercase tracking-widest">
+                    {isMonthLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto text-violet-400" /> : format(selectedMonth, 'MMMM yyyy')}
+                  </span>
+                  <button
+                    onClick={() => setSelectedMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 1))}
+                    disabled={isMonthLoading || isSameMonth(selectedMonth, new Date())}
+                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-50 transition-all"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5 text-zinc-400" />
+                  </button>
+                </div>
+              </div>
             </div>
 
             <TooltipProvider delayDuration={0}>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(28px,1fr))] gap-1.5 relative z-10">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(28px,1fr))] gap-2 relative z-10">
                 {(() => {
                   const year = selectedMonth.getFullYear();
                   const month = selectedMonth.getMonth();
@@ -394,17 +390,18 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
               )}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Maps by Mode */}
               <motion.div 
-                whileHover={{ y: -5 }}
-                className="relative overflow-hidden rounded-[2rem] bg-white/5 border border-white/10 p-8 backdrop-blur-3xl shadow-2xl group"
+                whileHover={{ y: -3 }}
+                className="relative overflow-hidden rounded-[1.5rem] bg-white/5 border border-white/10 p-6 backdrop-blur-3xl shadow-xl group"
               >
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="p-2.5 bg-violet-500/10 rounded-2xl border border-violet-500/20">
-                    <MapIcon className="h-5 w-5 text-violet-400" />
+                <div className="flex items-center gap-2.5 mb-6">
+                  <div className="p-2 bg-violet-500/10 rounded-xl border border-violet-500/20">
+                    <MapIcon className="h-4 w-4 text-violet-400" />
                   </div>
-                  <p className="text-lg font-black text-white tracking-tight">Interaction Modes</p>
+                  <p className="text-base font-black text-white tracking-tight">Map Styles</p>
+                  <p className="text-[9px] text-zinc-500 font-black uppercase tracking-[0.1em] mt-0.5">Single vs Multiple topics</p>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   {([
@@ -414,13 +411,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                   ] as const).map(({ key, label, value, color, icon: Icon }) => {
                     const percentage = Math.round((value / (safeMapAnalytics.totalAnalyzed || 1)) * 100);
                     return (
-                      <div key={key} className="flex flex-col gap-3">
-                        <div className={`rounded-2xl bg-${color}-500/5 border border-${color}-500/15 p-4 group-hover:bg-${color}-500/10 transition-colors`}>
-                          <Icon className={`h-4 w-4 text-${color}-400 mb-2`} />
-                          <p className="text-2xl font-black text-white tracking-tighter">{value.toLocaleString()}</p>
-                        </div>
-                        <div className="flex items-center justify-between px-1">
+                      <div key={key} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-3.5 group-hover:bg-${color}-500/10 transition-all`}>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Icon className={`h-4 w-4 text-${color}-400`} />
                           <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">{label}</span>
+                        </div>
+                        <div className="flex items-end justify-between">
+                          <p className="text-2xl font-black text-white tracking-tighter">{value.toLocaleString()}</p>
                           <span className={`text-[10px] font-black text-${color}-400`}>{percentage}%</span>
                         </div>
                       </div>
@@ -431,14 +428,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
 
               {/* Maps by Depth */}
               <motion.div 
-                whileHover={{ y: -5 }}
-                className="relative overflow-hidden rounded-[2rem] bg-white/5 border border-white/10 p-8 backdrop-blur-3xl shadow-2xl group"
+                whileHover={{ y: -3 }}
+                className="relative overflow-hidden rounded-[1.5rem] bg-white/5 border border-white/10 p-6 backdrop-blur-3xl shadow-xl group"
               >
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="p-2.5 bg-rose-500/10 rounded-2xl border border-rose-500/20">
-                    <Zap className="h-5 w-5 text-rose-400" />
+                <div className="flex items-center gap-2.5 mb-6">
+                  <div className="p-2 bg-rose-500/10 rounded-xl border border-rose-500/20">
+                    <Zap className="h-4 w-4 text-rose-400" />
                   </div>
-                  <p className="text-lg font-black text-white tracking-tight">Knowledge Depth</p>
+                  <p className="text-base font-black text-white tracking-tight">Map Complexity</p>
+                  <p className="text-[9px] text-zinc-500 font-black uppercase tracking-[0.1em] mt-0.5">Quick vs Detailed notes</p>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   {([
@@ -448,13 +446,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                   ] as const).map(({ key, label, value, color, icon: Icon }) => {
                     const percentage = Math.round((value / (safeMapAnalytics.totalAnalyzed || 1)) * 100);
                     return (
-                      <div key={key} className="flex flex-col gap-3">
-                        <div className={`rounded-2xl bg-${color}-500/5 border border-${color}-500/15 p-4 group-hover:bg-${color}-500/10 transition-colors`}>
-                          <Icon className={`h-4 w-4 text-${color}-400 mb-2`} />
-                          <p className="text-2xl font-black text-white tracking-tighter">{value.toLocaleString()}</p>
-                        </div>
-                        <div className="flex items-center justify-between px-1">
+                      <div key={key} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-3.5 group-hover:bg-${color}-500/10 transition-all`}>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Icon className={`h-4 w-4 text-${color}-400`} />
                           <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">{label}</span>
+                        </div>
+                        <div className="flex items-end justify-between">
+                          <p className="text-2xl font-black text-white tracking-tighter">{value.toLocaleString()}</p>
                           <span className={`text-[10px] font-black text-${color}-400`}>{percentage}%</span>
                         </div>
                       </div>
@@ -466,18 +464,18 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
 
             {/* Source Types */}
             <motion.div 
-              whileHover={{ y: -5 }}
-              className="relative overflow-hidden rounded-[2rem] bg-white/5 border border-white/10 p-8 backdrop-blur-3xl shadow-2xl group"
+              whileHover={{ y: -2 }}
+              className="relative overflow-hidden rounded-xl bg-white/5 border border-white/10 p-4 backdrop-blur-3xl shadow-xl group"
             >
-              <div className="absolute top-0 left-0 w-64 h-64 bg-blue-500/5 rounded-full blur-[100px] pointer-events-none" />
+              <div className="absolute top-0 left-0 w-32 h-32 bg-blue-500/5 rounded-full blur-[60px] pointer-events-none" />
               <div className="relative">
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="p-2.5 bg-blue-500/10 rounded-2xl border border-blue-500/20">
-                    <Globe className="h-5 w-5 text-blue-400" />
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="p-1.5 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                    <Globe className="h-3 w-3 text-blue-400" />
                   </div>
                   <div>
-                    <p className="text-lg font-black text-white tracking-tight">Source Intelligence</p>
-                    <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.1em] mt-1">Content origin distribution</p>
+                    <p className="text-sm font-black text-white tracking-tight">Information Sources</p>
+                    <p className="text-[8px] text-zinc-500 font-black uppercase tracking-[0.1em] mt-0.5">Where content comes from</p>
                   </div>
                 </div>
                 {safeMapAnalytics ? (
@@ -522,19 +520,19 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
               </div>
             </motion.div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Sub-Maps Stats */}
               <motion.div 
-                whileHover={{ y: -5 }}
-                className="relative overflow-hidden rounded-[2rem] bg-white/5 border border-white/10 p-8 backdrop-blur-3xl shadow-2xl group"
+                whileHover={{ y: -3 }}
+                className="relative overflow-hidden rounded-[1.5rem] bg-white/5 border border-white/10 p-6 backdrop-blur-3xl shadow-xl group"
               >
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="p-2.5 bg-emerald-500/10 rounded-2xl border border-emerald-500/20">
-                    <Layers className="h-5 w-5 text-emerald-400" />
+                <div className="flex items-center gap-2.5 mb-6">
+                  <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                    <Layers className="h-4 w-4 text-emerald-400" />
                   </div>
                   <div>
-                    <p className="text-lg font-black text-white tracking-tight">Recursive Expansion</p>
-                    <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.1em] mt-1">Nested structure analytics</p>
+                    <p className="text-base font-black text-white tracking-tight">Sub-Map Links</p>
+                    <p className="text-[9px] text-zinc-500 font-black uppercase tracking-[0.1em] mt-0.5">Nested branching details</p>
                   </div>
                 </div>
                 {safeMapAnalytics ? (
@@ -544,13 +542,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                       { label: 'Parent Maps', value: safeMapAnalytics.subMapStats?.parents ?? 0, color: 'indigo', icon: MapIcon, desc: 'Roots' },
                       { label: 'Avg / Parent', value: safeMapAnalytics.subMapStats?.avgPerParent ?? 0, color: 'emerald', icon: TrendingUp, desc: 'Ratio' },
                     ].map(({ label, value, color, icon: Icon, desc }) => (
-                      <div key={label} className={`rounded-2xl bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10 group/card`}>
-                        <div className="flex items-center gap-2 mb-3">
+                      <div key={label} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-3.5 transition-all hover:bg-${color}-500/10 group/card`}>
+                        <div className="flex items-center gap-2 mb-2">
                           <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
-                          <span className={`text-[8px] font-black uppercase tracking-wider text-${color}-400/60`}>{label}</span>
+                          <span className={`text-[9px] font-black uppercase tracking-wider text-zinc-500`}>{label}</span>
                         </div>
-                        <p className="text-2xl font-black text-white tracking-tighter">{typeof value === 'number' ? value.toLocaleString() : value}</p>
-                        <p className="text-[7px] text-zinc-500 mt-1 uppercase font-black tracking-widest">{desc}</p>
+                        <div className="flex items-end justify-between">
+                          <p className="text-xl font-black text-white tracking-tighter">{typeof value === 'number' ? value.toLocaleString() : value}</p>
+                          <span className="text-[8px] text-zinc-600 uppercase font-black tracking-widest">{desc}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -563,16 +563,16 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
 
               {/* Public vs Private */}
               <motion.div 
-                whileHover={{ y: -5 }}
-                className="relative overflow-hidden rounded-[2rem] bg-white/5 border border-white/10 p-8 backdrop-blur-3xl shadow-2xl group"
+                whileHover={{ y: -3 }}
+                className="relative overflow-hidden rounded-[1.5rem] bg-white/5 border border-white/10 p-6 backdrop-blur-3xl shadow-xl group"
               >
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="p-2.5 bg-amber-500/10 rounded-2xl border border-amber-500/20">
-                    <Globe className="h-5 w-5 text-amber-400" />
+                <div className="flex items-center gap-2.5 mb-6">
+                  <div className="p-2 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                    <Globe className="h-4 w-4 text-amber-400" />
                   </div>
                   <div>
-                    <p className="text-lg font-black text-white tracking-tight">Access Control</p>
-                    <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.1em] mt-1">Visibility distribution</p>
+                    <p className="text-base font-black text-white tracking-tight">Public vs Private</p>
+                    <p className="text-[9px] text-zinc-500 font-black uppercase tracking-[0.1em] mt-0.5">Sharing distribution</p>
                   </div>
                 </div>
                 {safeMapAnalytics ? (
@@ -582,12 +582,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                       { label: 'Private', value: safeMapAnalytics.publicPrivate.private, color: 'amber', icon: Lock },
                       { label: 'Public Rate', value: safeMapAnalytics.totalAnalyzed > 0 ? Math.round((safeMapAnalytics.publicPrivate.public / safeMapAnalytics.totalAnalyzed) * 100) : 0, color: 'rose', icon: TrendingUp, isPercent: true },
                     ].map(({ label, value, color, icon: Icon, isPercent }) => (
-                      <div key={label} className={`rounded-2xl bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10`}>
-                        <div className="flex items-center gap-2 mb-3">
+                      <div key={label} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-3.5 transition-all hover:bg-${color}-500/10`}>
+                        <div className="flex items-center gap-2 mb-2">
                           <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
-                          <span className={`text-[8px] font-black uppercase tracking-wider text-${color}-400/60`}>{label}</span>
+                          <span className={`text-[9px] font-black uppercase tracking-wider text-zinc-500`}>{label}</span>
                         </div>
-                        <p className="text-2xl font-black text-white tracking-tighter">{isPercent ? `${value}%` : value.toLocaleString()}</p>
+                        <p className="text-xl font-black text-white tracking-tighter">{isPercent ? `${value}%` : value.toLocaleString()}</p>
                       </div>
                     ))}
                   </div>
@@ -599,19 +599,19 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
               </motion.div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Persona Distribution */}
               <motion.div 
-                whileHover={{ y: -5 }}
-                className="relative overflow-hidden rounded-[2rem] bg-white/5 border border-white/10 p-8 backdrop-blur-3xl shadow-2xl group"
+                whileHover={{ y: -3 }}
+                className="relative overflow-hidden rounded-[1.5rem] bg-white/5 border border-white/10 p-6 backdrop-blur-3xl shadow-xl group"
               >
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="p-2.5 bg-violet-500/10 rounded-2xl border border-violet-500/20">
-                    <Brain className="h-5 w-5 text-violet-400" />
+                <div className="flex items-center gap-2.5 mb-6">
+                  <div className="p-2 bg-violet-500/10 rounded-xl border border-violet-500/20">
+                    <Brain className="h-4 w-4 text-violet-400" />
                   </div>
                   <div>
-                    <p className="text-lg font-black text-white tracking-tight">AI Archetypes</p>
-                    <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.1em] mt-1">Persona influence breakdown</p>
+                    <p className="text-base font-black text-white tracking-tight">AI Styles</p>
+                    <p className="text-[9px] text-zinc-500 font-black uppercase tracking-[0.1em] mt-0.5">Preferred AI personalities</p>
                   </div>
                 </div>
                 {safeMapAnalytics?.personaCounts ? (
@@ -626,10 +626,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                       const percentage = (safeMapAnalytics.totalAnalyzed || 1) > 0 ? Math.round((count / (safeMapAnalytics.totalAnalyzed || 1)) * 100) : 0;
                       
                       return (
-                        <div key={key} className={`rounded-2xl bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10`}>
+                        <div key={key} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-3.5 transition-all hover:bg-${color}-500/10`}>
                           <div className="flex items-center gap-2 mb-3">
                             <Icon className={`h-4 w-4 text-${color}-400`} />
-                            <span className={`text-[10px] font-black uppercase tracking-wider text-${color}-400/60`}>{label}</span>
+                            <span className={`text-[10px] font-black uppercase tracking-wider text-zinc-500`}>{label}</span>
                           </div>
                           <div className="flex items-end justify-between">
                             <p className="text-2xl font-black text-white tracking-tighter">{count.toLocaleString()}</p>
@@ -648,17 +648,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
 
               {/* Top Contributors */}
               <motion.div 
-                whileHover={{ y: -5 }}
-                className="relative overflow-hidden rounded-[2rem] bg-white/5 border border-white/10 p-8 backdrop-blur-3xl shadow-2xl group"
+                whileHover={{ y: -3 }}
+                className="relative overflow-hidden rounded-[1.5rem] bg-white/5 border border-white/10 p-6 backdrop-blur-3xl shadow-xl group"
               >
-                <div className="flex items-center justify-between mb-8">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-amber-500/10 rounded-2xl border border-amber-500/20">
-                      <Trophy className="h-5 w-5 text-amber-400" />
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                      <Trophy className="h-4 w-4 text-amber-400" />
                     </div>
                     <div>
-                      <p className="text-lg font-black text-white tracking-tight">Hall of Fame</p>
-                      <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.1em] mt-1">Top system contributors</p>
+                      <p className="text-base font-black text-white tracking-tight">Hall of Fame</p>
+                      <p className="text-[9px] text-zinc-500 font-black uppercase tracking-[0.1em] mt-0.5">Top system contributors</p>
                     </div>
                   </div>
                   <div className="flex gap-1 p-1 bg-zinc-900/50 rounded-xl border border-white/5">
@@ -729,19 +729,19 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
           </div>
 
           {/* Activity Section */}
-          <div className="grid grid-cols-1 gap-8">
+          <div className="grid grid-cols-1 gap-6">
             <motion.div 
-               whileHover={{ y: -5 }}
-               className="rounded-[2.5rem] bg-white/5 border border-white/10 overflow-hidden backdrop-blur-3xl shadow-2xl group"
+               whileHover={{ y: -3 }}
+               className="rounded-[1.5rem] bg-white/5 border border-white/10 overflow-hidden backdrop-blur-3xl shadow-xl group"
             >
-              <div className="p-8 border-b border-white/5 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-indigo-500/10 rounded-2xl border border-indigo-500/20">
-                    <UserPlus className="h-5 w-5 text-indigo-400" />
+              <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
+                    <UserPlus className="h-4 w-4 text-indigo-400" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-black text-white tracking-tight">Recent Arrivals</h3>
-                    <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] mt-1">Latest system registrations</p>
+                    <h3 className="text-lg font-black text-white tracking-tight">New Users</h3>
+                    <p className="text-[9px] text-zinc-500 font-black uppercase tracking-[0.2em] mt-0.5">Latest people to join</p>
                   </div>
                 </div>
                 <button onClick={() => setActiveTab('users')} className="px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black text-white hover:bg-white/10 uppercase tracking-[0.2em] transition-all">

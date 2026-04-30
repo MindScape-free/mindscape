@@ -423,7 +423,7 @@ CRITICAL SAFETY & OUTPUT RULES:
 export async function checkPollinationsBalance(apiKey: string): Promise<number> {
     try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
+        const timeout = setTimeout(() => controller.abort(), 10000);
 
         const response = await fetch('https://gen.pollinations.ai/account/balance', {
             headers: { 'Authorization': `Bearer ${apiKey}` },

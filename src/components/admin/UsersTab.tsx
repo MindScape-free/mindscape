@@ -29,7 +29,7 @@ interface UsersTabProps {
 }
 
 const VIRTUALIZATION_THRESHOLD = 50;
-const CARD_HEIGHT = 200;
+const CARD_HEIGHT = 150;
 const BUFFER_CARDS = 3;
 
 export const UsersTab: React.FC<UsersTabProps> = memo(({
@@ -97,8 +97,8 @@ export const UsersTab: React.FC<UsersTabProps> = memo(({
   return (
     <div className="space-y-8 pb-32">
       <div className="relative group">
-        <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
-          <Users className="h-5 w-5 text-zinc-500 group-focus-within:text-violet-400 transition-colors" />
+        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+          <Users className="h-4 w-4 text-zinc-500 group-focus-within:text-violet-400 transition-colors" />
         </div>
         <input 
           value={searchTerm}
@@ -107,8 +107,8 @@ export const UsersTab: React.FC<UsersTabProps> = memo(({
             setPage(1);
             setVisibleRange({ start: 0, end: VIRTUALIZATION_THRESHOLD });
           }}
-          placeholder="Lookup system entities by name, email, or digital signature..."
-          className="w-full h-16 bg-white/5 border border-white/10 rounded-[1.5rem] pl-16 pr-8 text-sm font-medium text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500/30 transition-all backdrop-blur-2xl shadow-2xl"
+          placeholder="Lookup system entities..."
+          className="w-full h-12 bg-white/5 border border-white/10 rounded-xl pl-12 pr-6 text-sm font-medium text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500/30 transition-all backdrop-blur-2xl shadow-xl"
         />
         <div className="absolute inset-y-0 right-6 flex items-center">
           <Badge className="bg-white/5 border-white/10 text-zinc-600 text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg">
@@ -153,10 +153,10 @@ export const UsersTab: React.FC<UsersTabProps> = memo(({
       {isLoading ? (
         <UsersTabSkeleton />
       ) : filteredUsers.length > 0 ? (
-        <div className="space-y-6">
+        <div className="space-y-4">
           <div 
             ref={containerRef}
-            className="grid grid-cols-1 xl:grid-cols-2 gap-6 overflow-y-auto px-1 custom-scrollbar"
+            className="grid grid-cols-1 xl:grid-cols-2 gap-4 overflow-y-auto px-1 custom-scrollbar"
             style={{ 
               maxHeight: 'calc(100vh - 400px)',
               contain: 'content',
@@ -175,7 +175,7 @@ export const UsersTab: React.FC<UsersTabProps> = memo(({
                       height: CARD_HEIGHT,
                       transform: `translateY(${(filteredUsers.indexOf(u)) * CARD_HEIGHT}px)`,
                     }}
-                    className="pb-6"
+                    className="pb-4"
                   >
                     <UserCard 
                       user={u} 
@@ -189,7 +189,7 @@ export const UsersTab: React.FC<UsersTabProps> = memo(({
               </div>
             ) : (
               paginatedUsers.map((u) => (
-                <div key={u.id} className="pb-6">
+                <div key={u.id} className="pb-4">
                   <UserCard
                     user={u}
                     onSelect={() => {
@@ -244,53 +244,53 @@ interface UserCardProps {
 
 const UserCard = memo(({ user: u, onSelect }: UserCardProps) => (
   <motion.button
-    whileHover={{ y: -5, scale: 1.01 }}
+    whileHover={{ y: -3, scale: 1.01 }}
     whileTap={{ scale: 0.99 }}
     onClick={onSelect}
-    className="w-full relative overflow-hidden rounded-[2rem] p-6 bg-white/5 border border-white/10 hover:border-violet-500/30 transition-all duration-500 text-left backdrop-blur-3xl shadow-2xl group"
+    className="w-full relative overflow-hidden rounded-[1.25rem] p-4 bg-white/5 border border-white/10 hover:border-violet-500/30 transition-all duration-500 text-left backdrop-blur-3xl shadow-xl group"
   >
     <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-    <div className="flex items-center gap-6 relative z-10">
+    <div className="flex items-center gap-4 relative z-10">
       <div className="relative">
-        <Avatar className="h-16 w-16 rounded-2xl border-2 border-white/10 shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500 shadow-2xl">
+        <Avatar className="h-12 w-12 rounded-xl border border-white/10 shrink-0 group-hover:scale-105 transition-transform duration-500">
           <AvatarImage src={u.photoURL} className="object-cover" />
-          <AvatarFallback className="bg-zinc-800 text-lg font-black text-violet-400">
+          <AvatarFallback className="bg-zinc-800 text-xs font-black text-violet-400">
             {u.displayName?.substring(0, 2).toUpperCase() || (u.email ? u.email.substring(0,2).toUpperCase() : '??')}
           </AvatarFallback>
         </Avatar>
-        <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-zinc-950 flex items-center justify-center border border-white/10">
-           <div className={`h-2.5 w-2.5 rounded-full ${u.statistics?.lastActiveDate ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-zinc-700'}`} />
+        <div className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full bg-zinc-950 flex items-center justify-center border border-white/10">
+           <div className={`h-2 w-2 rounded-full ${u.statistics?.lastActiveDate ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]' : 'bg-zinc-700'}`} />
         </div>
       </div>
       
       <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-lg font-black text-white group-hover:text-violet-400 transition-colors truncate tracking-tight">
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-sm font-black text-white group-hover:text-violet-400 transition-colors truncate tracking-tight">
             {u.displayName || u.email?.split('@')[0] || 'Unknown Explorer'}
           </p>
-          <Badge className="bg-white/5 border-white/10 text-zinc-600 text-[8px] font-black uppercase px-2 py-0.5 rounded-full group-hover:border-violet-500/30 group-hover:text-violet-400 transition-all">
+          <Badge className="bg-white/5 border-white/10 text-zinc-600 text-[7px] font-black uppercase px-1.5 py-0 rounded-full group-hover:border-violet-500/30 group-hover:text-violet-400 transition-all">
             Identity Verified
           </Badge>
         </div>
-        <p className="text-xs text-zinc-500 truncate mb-4 font-bold border-b border-white/5 pb-2 group-hover:border-violet-500/10 transition-colors">{u.email || '@digital_citizen'}</p>
+        <p className="text-[10px] text-zinc-500 truncate mb-3 font-bold border-b border-white/5 pb-1 group-hover:border-violet-500/10 transition-colors">{u.email || '@digital_citizen'}</p>
         
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-violet-500/10 rounded-lg">
-                <MapIcon className="h-3.5 w-3.5 text-violet-400" />
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <div className="p-1 bg-violet-500/10 rounded-lg">
+                <MapIcon className="h-3 w-3 text-violet-400" />
               </div>
-              <span className="text-xs font-black text-white tracking-tighter">{u.statistics?.totalMapsCreated || 0}</span>
-              <span className="text-[10px] text-zinc-600 font-bold uppercase tracking-tighter">Maps</span>
+              <span className="text-[11px] font-black text-white tracking-tighter">{u.statistics?.totalMapsCreated || 0}</span>
+              <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-tighter">Maps</span>
             </div>
             
             <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-white/5 rounded-lg">
-                <Clock className="h-3.5 w-3.5 text-zinc-500" />
+              <div className="p-1 bg-white/5 rounded-lg">
+                <Clock className="h-3 w-3 text-zinc-500" />
               </div>
               <div className="flex flex-col">
-                <span className="text-[9px] text-zinc-600 font-black uppercase tracking-tighter">Last Seen</span>
-                <span className="text-[10px] font-black text-zinc-400">
+                <span className="text-[8px] text-zinc-600 font-black uppercase tracking-tighter">Last Seen</span>
+                <span className="text-[9px] font-black text-zinc-400">
                   {u.statistics?.lastActiveDate 
                     ? (u.statistics.lastActiveDate.includes('T') 
                         ? format(new Date(u.statistics.lastActiveDate), 'dd MMM yyyy')
@@ -301,8 +301,8 @@ const UserCard = memo(({ user: u, onSelect }: UserCardProps) => (
             </div>
           </div>
           
-          <div className="h-10 w-10 rounded-2xl bg-white/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 group-hover:bg-violet-500 shadow-xl group-hover:translate-x-0 translate-x-4">
-             <ChevronRight className="h-5 w-5 text-white" />
+          <div className="h-8 w-8 rounded-xl bg-white/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 group-hover:bg-violet-500 shadow-lg group-hover:translate-x-0 translate-x-2">
+             <ChevronRight className="h-4 w-4 text-white" />
           </div>
         </div>
       </div>

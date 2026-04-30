@@ -61,7 +61,8 @@ if (typeof window !== 'undefined') {
 }
 import { chatAction, summarizeChatAction, generateRelatedQuestionsAction, generateQuizAction } from '@/app/actions';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { cn, formatText, cleanCitations } from '@/lib/utils';
+import { cn, formatShortDistanceToNow, cleanCitations } from '@/lib/utils';
+import { MarkdownRenderer } from './chat/markdown-renderer';
 import { Separator } from './ui/separator';
 import { formatDistanceToNow } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -141,6 +142,7 @@ interface ChatPanelProps {
   onQuizDeepen?: (weakSections: { tag: string; score: number }[], quizTopic: string) => void;
   initialView?: 'chat' | 'history' | 'pins' | 'canvas-pins';
   rememberLastView?: boolean;
+  onTopicClick?: (topic: string) => void;
 }
 
 const allSuggestionPrompts = [
@@ -191,6 +193,7 @@ export function ChatPanel({
   onAllPinsUnpin,
   initialView,
   onQuizDeepen,
+  onTopicClick,
 }: ChatPanelProps) {
   const { toast } = useToast();
   const { user } = useUser();
@@ -235,6 +238,7 @@ export function ChatPanel({
   const [createMindmapContent, setCreateMindmapContent] = useState('');
   const [createMindmapUserMessage, setCreateMindmapUserMessage] = useState('');
   const [unpinConfirmId, setUnpinConfirmId] = useState<string | null>(null);
+  const [agentMode, setAgentMode] = useState(false);
 
   // ATTACHMENTS STATE
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -249,6 +253,10 @@ export function ChatPanel({
   const [lastView, setLastView] = useLocalStorage<'chat' | 'history' | 'pins' | 'canvas-pins' | 'pin-chat'>('mindscape-chat-last-view', 'chat');
   const [hasOpenedBefore, setHasOpenedBefore] = useLocalStorage('mindscape-chat-opened', false);
   const [savedView, setSavedView] = useState<'chat' | 'history' | 'pins' | 'canvas-pins' | 'pin-chat'>('chat');
+  
+  // URL SCRAPING STATE
+  const [processedUrls, setProcessedUrls] = useState<Set<string>>(new Set());
+  const [isScrapingUrl, setIsScrapingUrl] = useState(false);
 
 
 
@@ -293,7 +301,7 @@ export function ChatPanel({
   const [streamingMessages, setStreamingMessages] = useState<Record<string, string>>({});
   const [streamingIds, setStreamingIds] = useState<Set<string>>(new Set());
 
-  const { startStream, stopStream, reset: resetStream, text: streamText, isStreaming, error: streamError } = useStreamingChat({
+  const { startStream, stopStream, reset: resetStream, text: streamText, isStreaming, error: streamError, reasoning, toolCalls } = useStreamingChat({
     onChunk: (chunk) => {
       // Chunk updates handled via effect below
     },
@@ -565,6 +573,7 @@ export function ChatPanel({
       attachments: combinedAttachments as any,
       apiKey: providerOptions.apiKey,
       model: providerOptionsConfig.pollinationsModel || 'openai',
+      agentMode,
     });
 
   }, [input, attachments, activeSessionId, activeSession?.messages, topic, persona, providerOptions, mindMapData, updateSession, startStream]);
@@ -745,6 +754,75 @@ export function ChatPanel({
       }
     }
   }, [activeSession, activeSessionId, updateSession, onQuizDeepen, topic]);
+  
+  const handleInlineQuizSubmit = useCallback(async (quiz: Quiz, answers: Record<string, string>) => {
+    if (!activeSession || !activeSessionId) return;
+
+    const results: QuizResult = {
+      score: 0,
+      totalQuestions: quiz.questions.length,
+      correctAnswers: [],
+      wrongAnswers: [],
+      weakAreas: {},
+      strongAreas: []
+    };
+
+    const strongAreaTags = new Set<string>();
+    const sessionWeakTags = new Set<string>(activeSession.weakTags || []);
+
+    quiz.questions.forEach(q => {
+      if (answers[q.id] === q.correctOptionId) {
+        results.score++;
+        results.correctAnswers.push(q.id);
+        strongAreaTags.add(q.conceptTag);
+      } else {
+        results.wrongAnswers.push(q.id);
+        results.weakAreas[q.conceptTag] = (results.weakAreas[q.conceptTag] || 0) + 1;
+        sessionWeakTags.add(q.conceptTag);
+      }
+    });
+
+    results.strongAreas = Array.from(strongAreaTags).filter(tag => !results.weakAreas[tag]);
+
+    const resultMessage: ChatMessage = {
+      id: `msg-${Date.now()}-result`,
+      role: 'ai',
+      content: `Inline Quiz Results: You scored ${results.score}/${results.totalQuestions}`,
+      type: 'quiz-result',
+      quizResult: results,
+      quiz: quiz,
+      timestamp: Date.now()
+    };
+
+    updateSession(activeSessionId, { 
+      messages: [...activeSession.messages, resultMessage],
+      quizHistory: [...(activeSession.quizHistory || []), results],
+      weakTags: Array.from(sessionWeakTags)
+    });
+
+    // Award XP
+    awardXP('QUIZ_COMPLETED', { score: results.score, total: results.totalQuestions }).catch(() => {});
+    
+    // Adaptive deepening
+    if (onQuizDeepen) {
+      const tagQuestionCounts = quiz.questions.reduce((acc: Record<string, number>, q) => {
+        acc[q.conceptTag] = (acc[q.conceptTag] || 0) + 1;
+        return acc;
+      }, {});
+
+      const weakSections = Object.entries(results.weakAreas)
+        .map(([tag, mistakeCount]) => ({
+          tag,
+          score: Math.round(((tagQuestionCounts[tag] - mistakeCount) / tagQuestionCounts[tag]) * 100)
+        }))
+        .filter(s => s.score < 60)
+        .sort((a, b) => a.score - b.score);
+
+      if (weakSections.length > 0) {
+        setTimeout(() => onQuizDeepen(weakSections, topic), 800);
+      }
+    }
+  }, [activeSession, activeSessionId, updateSession, awardXP, onQuizDeepen, topic]);
 
   /**
    * Handles adaptive quiz regeneration
@@ -797,6 +875,119 @@ export function ChatPanel({
       loadPreferences();
     }
   }, [isOpen, user]);
+
+  // Global listener for code block buttons (Copy/Run)
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      
+      // Handle Copy Button
+      const copyBtn = target.closest('.code-copy-btn');
+      if (copyBtn) {
+        const base64Code = copyBtn.getAttribute('data-code');
+        if (base64Code) {
+          try {
+            const code = decodeURIComponent(escape(atob(base64Code)));
+            navigator.clipboard.writeText(code);
+            toast({
+              title: "Copied!",
+              description: "Code copied to clipboard",
+            });
+          } catch (err) {
+            console.error('Failed to copy code:', err);
+          }
+        }
+        return;
+      }
+
+      // Handle Run Button
+      const runBtn = target.closest('.code-run-btn');
+      if (runBtn) {
+        const lang = runBtn.getAttribute('data-lang');
+        toast({
+          title: "Code Execution",
+          description: `${lang} runner is coming soon to MindScape!`,
+        });
+        return;
+      }
+
+      // Handle Table Copy Button
+      const tableCopyBtn = target.closest('.table-copy-btn');
+      if (tableCopyBtn) {
+        const base64Markdown = tableCopyBtn.getAttribute('data-markdown');
+        if (base64Markdown) {
+          try {
+            const markdown = decodeURIComponent(escape(atob(base64Markdown)));
+            navigator.clipboard.writeText(markdown);
+            toast({
+              title: "Table Copied!",
+              description: "Markdown table copied to clipboard",
+            });
+          } catch (err) {
+            console.error('Failed to copy table:', err);
+          }
+        }
+        return;
+      }
+    };
+
+    document.addEventListener('click', handleGlobalClick);
+    return () => document.removeEventListener('click', handleGlobalClick);
+  }, [toast]);
+
+  // handleUrlScrape function
+  const handleUrlScrape = useCallback(async (url: string) => {
+    setIsScrapingUrl(true);
+    try {
+      const response = await fetch('/api/scrape-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      });
+      
+      if (!response.ok) throw new Error('Failed to scrape URL');
+      
+      const data = await response.json();
+      if (data.content) {
+        setAttachments(prev => [
+          ...prev, 
+          { 
+            type: 'text', 
+            name: data.title || 'Linked Content', 
+            content: `--- CONTENT FROM ${url} ---\n${data.content}\n---` 
+          }
+        ]);
+        toast({
+          title: "Link Processed",
+          description: `Added context from: ${data.title || url}`,
+        });
+      }
+    } catch (err) {
+      console.error('URL Scrape Error:', err);
+    } finally {
+      setIsScrapingUrl(false);
+    }
+  }, [toast]);
+
+  // URL AUTO-SCRAPE DETECTION
+  useEffect(() => {
+    const detectUrls = async () => {
+      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      const matches = input.match(urlRegex);
+      
+      if (!matches) return;
+
+      for (const url of matches) {
+        if (!processedUrls.has(url)) {
+          setProcessedUrls(prev => new Set(prev).add(url));
+          await handleUrlScrape(url);
+        }
+      }
+    };
+
+    const timeoutId = setTimeout(detectUrls, 1000); // Debounce to avoid excessive calls
+    return () => clearTimeout(timeoutId);
+  }, [input, processedUrls, handleUrlScrape]);
 
   // Shuffle prompts when starting a fresh 'General Conversation' chat
   useEffect(() => {
@@ -1560,7 +1751,7 @@ export function ChatPanel({
                           )}
                           {message.role === 'user' && (
                             <div className="px-4 pt-3 pb-0 flex items-center gap-1.5">
-                              <span className="font-orbitron text-[9px] uppercase tracking-widest text-zinc-600">You</span>
+                              <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-600">You</span>
                             </div>
                           )}
                           <div className="p-4">
@@ -1611,7 +1802,7 @@ export function ChatPanel({
                                       size="sm"
                                       onClick={() => handleStartQuiz(d.id as any, index)}
                                       className={cn(
-                                        "h-10 px-6 text-[10px] font-black font-orbitron uppercase tracking-[0.2em] rounded-2xl border hover:scale-105 active:scale-95 transition-all backdrop-blur-md",
+                                        "h-10 px-6 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl border hover:scale-105 active:scale-95 transition-all backdrop-blur-md",
                                         d.color
                                       )}
                                     >
@@ -1624,13 +1815,13 @@ export function ChatPanel({
                               <p className="text-sm text-zinc-200 leading-relaxed">{message.content}</p>
                             ) : (
                               <div
-                                className="text-sm prose prose-sm max-w-none leading-relaxed prose-invert break-words whitespace-pre-wrap"
+                                className="text-sm prose prose-sm max-w-none leading-relaxed prose-invert break-words"
                                 style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}
                               >
                                 {(() => {
                                   const displayContent = streamingMessages[message.id] ?? message.content;
                                   const isCurrentlyStreaming = streamingIds.has(message.id);
-                                  if (isCurrentlyStreaming && !displayContent) {
+                                  if (isCurrentlyStreaming && !displayContent && !reasoning && toolCalls.length === 0) {
                                     return (
                                       <div className="flex items-center gap-1 py-1">
                                         <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -1640,12 +1831,57 @@ export function ChatPanel({
                                     );
                                   }
                                   return (
-                                    <>
-                                      <span dangerouslySetInnerHTML={{ __html: formatText(displayContent) }} />
-                                      {isCurrentlyStreaming && (
-                                        <span className="inline-block w-0.5 h-4 bg-primary ml-0.5 animate-pulse" />
-                                      )}
-                                    </>
+                                      <div className="markdown-container space-y-4">
+                                        {/* Reasoning Block */}
+                                        {isCurrentlyStreaming && reasoning && (
+                                          <motion.div 
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{ opacity: 1, height: 'auto' }}
+                                            className="bg-magenta-500/5 border border-magenta-500/10 rounded-xl p-3 mb-4"
+                                          >
+                                            <div className="flex items-center gap-2 mb-2">
+                                              <BrainCircuit className="w-3.5 h-3.5 text-magenta-400 animate-pulse" />
+                                              <span className="text-[10px] font-black text-magenta-400 uppercase tracking-widest">Thinking</span>
+                                            </div>
+                                            <p className="text-xs text-zinc-400 italic line-clamp-3 hover:line-clamp-none transition-all">
+                                              {reasoning}
+                                            </p>
+                                          </motion.div>
+                                        )}
+
+                                        {/* Tool Calls Block */}
+                                        {isCurrentlyStreaming && toolCalls.length > 0 && (
+                                          <div className="flex flex-col gap-2 mb-4">
+                                            {toolCalls.map((tool, tIdx) => (
+                                              <motion.div 
+                                                key={tIdx}
+                                                initial={{ opacity: 0, x: -10 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[11px]"
+                                              >
+                                                {tool.status === 'calling' ? (
+                                                  <Loader2 className="w-3 h-3 animate-spin text-yellow-400" />
+                                                ) : (
+                                                  <Check className="w-3 h-3 text-emerald-400" />
+                                                )}
+                                                <span className="font-mono text-zinc-400">
+                                                  Using <span className="text-zinc-200 font-bold">{tool.name}</span>
+                                                  {tool.status === 'completed' && <span className="text-zinc-500"> (done)</span>}
+                                                </span>
+                                              </motion.div>
+                                            ))}
+                                          </div>
+                                        )}
+
+                                        <MarkdownRenderer 
+                                          content={displayContent} 
+                                          onEntityClick={onTopicClick}
+                                          onQuizSubmit={handleInlineQuizSubmit}
+                                        />
+                                        {isCurrentlyStreaming && displayContent && (
+                                          <span className="inline-block w-0.5 h-4 bg-primary ml-0.5 animate-pulse align-middle" />
+                                        )}
+                                      </div>
                                   );
                                 })()}
                               </div>
@@ -1877,6 +2113,19 @@ export function ChatPanel({
                     </button>
                   </motion.div>
                 ))}
+                
+                {isScrapingUrl && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex items-center gap-2 p-1.5 pr-3 bg-primary/10 border border-primary/20 rounded-xl animate-pulse shadow-inner"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    </div>
+                    <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Scraping Link...</span>
+                  </motion.div>
+                )}
               </AnimatePresence>
             </div>
           )}
@@ -1971,6 +2220,27 @@ export function ChatPanel({
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent side="top">Attach File</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                              "h-8 w-8 rounded-full transition-all shadow-none",
+                              agentMode ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-white/10"
+                            )}
+                            onClick={() => setAgentMode(!agentMode)}
+                            disabled={isLoading}
+                          >
+                            <BrainCircuit className={cn("h-4 w-4", agentMode && "animate-pulse")} />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">Toggle Agent Mode (Tool Use)</TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
 
@@ -2093,11 +2363,12 @@ export function ChatPanel({
                       )}>
                         <div className="p-4">
                           {msg.role === 'ai' ? (
-                            <div
-                              className="text-sm prose prose-sm max-w-none leading-relaxed prose-invert break-words whitespace-pre-wrap"
-                              style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}
-                            >
-                              <span dangerouslySetInnerHTML={{ __html: formatText(msg.content) }} />
+                            <div className="markdown-container">
+                              <MarkdownRenderer 
+                                content={msg.content} 
+                                onEntityClick={onTopicClick}
+                                onQuizSubmit={handleInlineQuizSubmit}
+                              />
                             </div>
                           ) : (
                             <p className="text-sm leading-relaxed">{msg.content}</p>

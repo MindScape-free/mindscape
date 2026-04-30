@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { User, LogOut, Menu, Zap } from 'lucide-react';
+import { User, LogOut, Menu, Zap, MessageSquare } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -56,11 +56,7 @@ export function Navbar() {
   const navItems = [
     { href: '/', label: 'Home' },
     { href: '/community', label: 'Community' },
-    { href: '/use-cases/ai-mind-map-generator', label: 'AI Generator' },
-    { href: '/about', label: 'About' },
     { href: '/library', label: 'Library' },
-    { href: '/feedback', label: 'Feedback' },
-    ...(isAdmin ? [{ href: '/admin', label: 'Admin' }] : []),
   ];
 
   const handleLogout = async () => {
@@ -163,12 +159,12 @@ export function Navbar() {
             </div>
 
             {/* Center Section: Navigation */}
-            <nav className="hidden md:flex items-center gap-1 rounded-xl bg-zinc-900/40 p-1 ring-1 ring-white/5">
+            <nav className="hidden lg:flex items-center gap-0.5 rounded-xl bg-zinc-900/40 p-1 ring-1 ring-white/5">
               {navItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="relative rounded-lg px-4 py-1.5 text-xs font-bold text-zinc-400 transition-all hover:text-zinc-100 uppercase tracking-wider font-orbitron"
+                  className="relative rounded-lg px-1.5 xl:px-2.5 py-1.5 text-[10px] xl:text-xs font-bold text-zinc-400 transition-all hover:text-zinc-100 uppercase tracking-wider font-orbitron"
                 >
                   {pathname === item.href && (
                     <motion.span
@@ -177,44 +173,48 @@ export function Navbar() {
                       transition={{ type: 'spring', stiffness: 350, damping: 30 }}
                     />
                   )}
-                  <span className="relative z-10">{item.label}</span>
+                  <span className="relative z-10 px-0.5">{item.label}</span>
                 </Link>
               ))}
             </nav>
 
             {/* Right Section: Auth & Profile */}
-            <div className="flex flex-1 items-center justify-end gap-3">
-              {user && rankInfo && ledger && (
-                <button
-                  onClick={() => setIsPointsOpen(true)}
-                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all hover:scale-105 active:scale-95"
-                  style={{}} 
-                >
-                  <RankBadge rankInfo={rankInfo} totalPoints={ledger.totalPoints} size="sm" showPoints={true} />
-                </button>
-              )}
+            <div className="flex flex-1 items-center justify-end gap-2 xl:gap-3">
               {user && (
-                <Link
-                  href="/profile?tab=lab"
-                  className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 hover:bg-violet-500/20 transition-all group min-w-[80px] justify-center"
-                >
-                  <span className="text-base group-hover:scale-110 transition-transform inline-block">🍄</span>
-                  {isBalanceLoading ? (
-                    <div className="h-4 w-12 bg-violet-500/20 animate-pulse rounded" />
-                  ) : pollenBalance !== null ? (
-                    <span className="text-xs font-black tracking-wider font-orbitron">
-                      {pollenBalance.toLocaleString()}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-black text-violet-400/50">--</span>
+                <div className="hidden sm:flex items-center gap-1 p-1 rounded-2xl bg-zinc-900/50 border border-white/5 shadow-inner">
+                  <Link
+                    href="/profile?tab=lab"
+                    className="flex items-center gap-2 px-2.5 py-1 rounded-xl text-violet-400 hover:bg-violet-500/10 transition-all group min-w-[70px] justify-center"
+                  >
+                    <span className="text-base group-hover:scale-110 transition-transform inline-block">🍄</span>
+                    {isBalanceLoading ? (
+                      <div className="h-4 w-10 bg-violet-500/20 animate-pulse rounded" />
+                    ) : pollenBalance !== null ? (
+                      <span className="text-xs font-black tracking-wider font-orbitron">
+                        {pollenBalance.toLocaleString()}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-black text-violet-400/50">--</span>
+                    )}
+                  </Link>
+
+                  <div className="w-[1px] h-4 bg-white/10 mx-0.5" />
+
+                  {rankInfo && ledger && (
+                    <button
+                      onClick={() => setIsPointsOpen(true)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl transition-all hover:bg-white/5 active:scale-95"
+                    >
+                      <RankBadge rankInfo={rankInfo} totalPoints={ledger.totalPoints} size="sm" showPoints={true} />
+                    </button>
                   )}
-                </Link>
+                </div>
               )}
               <NotificationCenter />
               {renderUserAuth()}
 
               {/* Mobile Hamburger Menu */}
-              <div className="md:hidden">
+              <div className="lg:hidden">
                 <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
                   <SheetTrigger asChild>
                     <Button
@@ -238,23 +238,25 @@ export function Navbar() {
                         </div>
                       </SheetTitle>
                     </SheetHeader>
-                    <div className="flex flex-col py-4">
-                      {navItems.map((item) => (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          onClick={() => setIsMobileMenuOpen(false)}
-                          className={cn(
-                            "flex items-center px-6 py-4 text-sm font-bold tracking-widest uppercase font-orbitron transition-all",
-                            pathname === item.href
-                              ? "bg-primary/10 text-primary border-r-2 border-primary"
-                              : "text-zinc-400 hover:bg-white/5 hover:text-white"
-                          )}
-                        >
-                          {item.label}
-                        </Link>
-                      ))}
-                    </div>
+                      <div className="flex flex-col py-4">
+                        {navItems.map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            className={cn(
+                              "flex items-center px-6 py-4 text-sm font-bold tracking-widest uppercase font-orbitron transition-all",
+                              pathname === item.href
+                                ? "bg-primary/10 text-primary border-r-2 border-primary"
+                                : "text-zinc-400 hover:bg-white/5 hover:text-white"
+                            )}
+                          >
+                            {item.label}
+                          </Link>
+                        ))}
+                        
+
+                      </div>
 
                     <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-white/5">
                       <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-[0.2em]">

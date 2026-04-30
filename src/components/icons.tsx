@@ -1,4 +1,4 @@
-import { LucideProps, ShieldAlert } from 'lucide-react';
+import { LucideProps, ShieldAlert, ChevronDown } from 'lucide-react';
 import Image from 'next/image';
 
 /**
@@ -8,10 +8,13 @@ import Image from 'next/image';
  */
 export const Icons = {
   logo: (props: Omit<LucideProps, 'ref'>) => (
-    <Image src="/MindScape-Logo.png" alt="MindScape Logo" width={28} height={28} className={props.className} style={props.style} />
+    <Image src="/MindScape-Logo.png" alt="MindScape Logo" width={28} height={28} className={props.className} style={props.style} priority />
   ),
   shield: (props: Omit<LucideProps, 'ref'>) => (
     <ShieldAlert {...props} />
+  ),
+  chevronDown: (props: Omit<LucideProps, 'ref'>) => (
+    <ChevronDown {...props} />
   ),
   export: (props: Omit<LucideProps, 'ref'>) => (
     <svg

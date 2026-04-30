@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Icons } from '../icons';
 
-const generationSteps = [
+const baseSteps = [
     'Initializing Nerve Center...',
     'Mapping Synaptic Architecture...',
     'Synthesizing Knowledge Nodes...',
@@ -15,9 +15,16 @@ const generationSteps = [
 
 const stepDurations = [2000, 3000, 4000, 5000, 2000];
 
-export function NeuralLoader() {
+export function NeuralLoader({ message, sourceType }: { message?: string, sourceType?: string }) {
     const [currentStep, setCurrentStep] = useState(0);
     const [seconds, setSeconds] = useState(0);
+
+    const generationSteps = [...baseSteps];
+    if (sourceType === 'youtube') generationSteps.unshift('Transcribing Video Content...');
+    if (sourceType === 'pdf') generationSteps.unshift('Parsing Document Structure...');
+    if (sourceType === 'website') generationSteps.unshift('Scraping Web Content...');
+    if (sourceType === 'multi') generationSteps.unshift('Merging Multiple Sources...');
+    if (message) generationSteps.unshift(message);
 
     useEffect(() => {
         const interval = setInterval(() => {

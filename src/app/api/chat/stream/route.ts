@@ -1,25 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateSearchContext } from '@/app/actions/generateSearchContext';
 import { z } from 'zod';
+import { OpenRouter } from '@openrouter/sdk';
+import { createAgent } from '@/ai/agent';
+import type { Tool } from '@openrouter/sdk/lib/tool-types.js';
+import { EventEmitter } from 'eventemitter3';
 
 const ChatStreamInputSchema = z.object({
   question: z.string(),
-  topic: z.string(),
-  history: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() })).optional(),
-  persona: z.enum(['Teacher', 'Concise', 'Creative', 'Sage']).optional().default('Teacher'),
-  attachments: z.array(z.object({ type: z.enum(['text', 'pdf', 'image']), name: z.string(), content: z.string() })).optional(),
-  pdfContext: z.object({ summary: z.string(), concepts: z.array(z.object({ title: z.string(), description: z.string() })) }).optional(),
+  topic: z.string().optional().default('General Conversation'),
+  history: z.array(z.object({ 
+    role: z.enum(['user', 'assistant', 'ai', 'system']), 
+    content: z.string() 
+  })).optional(),
+  persona: z.string().optional().default('Teacher'),
+  attachments: z.array(z.any()).optional(),
+  pdfContext: z.object({ 
+    summary: z.string(), 
+    concepts: z.array(z.object({ title: z.string(), description: z.string() })) 
+  }).optional(),
   usePdfContext: z.boolean().optional(),
   sessionId: z.string().optional(),
   apiKey: z.string().optional(),
   model: z.string().optional(),
+  agentMode: z.boolean().optional().default(false),
 });
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const input = ChatStreamInputSchema.parse(body);
-    const { apiKey: effectiveApiKey, topic, persona, history, question, attachments, pdfContext, model: requestedModel } = input;
+    const { apiKey: effectiveApiKey, topic, persona, history, question, attachments, pdfContext, model: requestedModel, agentMode } = input;
 
     const apiKey = effectiveApiKey || process.env.POLLINATIONS_API_KEY;
 
@@ -103,10 +114,13 @@ ${historyText}
 
 ## RESPONSE REQUIREMENTS
 - Use Markdown formatting (bullets, bold, tables for comparisons).
+- Use \`\`\`mermaid blocks for diagrams when explaining processes, algorithms, or complex systems.
+- Use standard LaTeX for mathematical formulas (wrap in \( ... \) for inline or \[ ... \] for display).
+- **Use [[Topic Name]] syntax for key entities, concepts, or terms that the user might want to explore further in a mind map.**
+- Provide YouTube links or direct image URLs when a visual reference would significantly enhance the explanation.
 - Start with a brief intro.
 - Maintain conversation continuity - refer to previous exchanges when relevant.
 - NO HALLUCINATION: If unsure → say "Not in current context" rather than guessing.
-- DO NOT include any URLs, links, or web addresses in your response.
 - Answer directly without asking clarifying questions unless absolutely necessary.
 ${!isUserGuideMode ? `- Adjust style for persona: ${persona}` : ''}
 
@@ -114,110 +128,90 @@ Provide your response as plain text (no JSON wrapper). Stream the response word 
 
     const userPrompt = `Provide your response.`;
 
-    // Build messages for streaming
+    // Extract image attachments for the orchestrator
     const images = attachments?.filter(a => a.type === 'image').map(a => {
       const base64Data = a.content.split(',')[1] || a.content;
       const mimeMatch = a.content.match(/data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+).*,.*/);
       return { inlineData: { mimeType: mimeMatch ? mimeMatch[1] : 'image/jpeg', data: base64Data } };
     });
 
-    const messages: any[] = [
-      { role: 'system', content: systemPrompt }
-    ];
-
-    let userContent: any;
-    if (images && images.length > 0) {
-      userContent = [{ type: 'text', text: userPrompt }];
-      images.forEach(img => {
-        userContent.push({
-          type: 'image_url',
-          image_url: {
-            url: `data:${img.inlineData.mimeType};base64,${img.inlineData.data}`
-          }
-        });
-      });
-    } else {
-      userContent = userPrompt;
-    }
-
-    messages.push({ role: 'user', content: userContent });
-
-    // Create streaming response
+    // Create streaming response via orchestrator
     const encoder = new TextEncoder();
     
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-              messages,
-              model: requestedModel || 'openai',
-              stream: true,
-              max_tokens: 8192,
-            })
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            controller.enqueue(encoder.encode(`[ERROR] ${response.status}: ${errorText}`));
-            controller.close();
-            return;
-          }
-
-          const reader = response.body?.getReader();
-          if (!reader) {
-            controller.enqueue(encoder.encode('[ERROR] No response body'));
-            controller.close();
-            return;
-          }
-
-          const decoder = new TextDecoder();
-          let buffer = '';
-
-          while (true) {
-            const { done, value } = await reader.read();
+          if (agentMode) {
+            const { createAgent } = await import('@/ai/agent');
+            const { defaultTools } = await import('@/ai/tools');
             
-            if (done) break;
+            const agent = createAgent({
+              apiKey,
+              model: requestedModel || 'openrouter/auto',
+              instructions: systemPrompt,
+              tools: defaultTools,
+            });
 
-            buffer += decoder.decode(value, { stream: true });
-            
-            // Process SSE lines
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6);
-                
-                if (data === '[DONE]') {
-                  controller.close();
-                  return;
-                }
-
-                try {
-                  const parsed = JSON.parse(data);
-                  const content = parsed.choices?.[0]?.delta?.content;
-                  
-                  if (content) {
-                    controller.enqueue(encoder.encode(content));
-                  }
-                } catch {
-                  // Skip malformed JSON
-                }
-              }
+            if (history) {
+              agent.setMessages(history as any);
             }
+
+            // Hook into agent events and enqueue to stream
+            agent.on('stream:delta', (delta) => {
+              controller.enqueue(encoder.encode(`T:${delta}`));
+            });
+
+            agent.on('reasoning:update', (text) => {
+              // We only want the delta or the full text? 
+              // Agent class reasoning:update seems to give full text so far.
+              // Let's send it as R:full_text
+              controller.enqueue(encoder.encode(`R:${text}`));
+            });
+
+            agent.on('tool:call', (name, args) => {
+              controller.enqueue(encoder.encode(`C:${JSON.stringify({ name, args })}`));
+            });
+
+            agent.on('tool:result', (callId, result) => {
+              controller.enqueue(encoder.encode(`O:${JSON.stringify({ callId, result })}`));
+            });
+
+            await agent.send(question);
+            controller.close();
+            return;
           }
 
-          controller.close();
+          const { orchestrateStream } = await import('@/ai/providers/orchestrator');
+
+          await orchestrateStream(
+            {
+              systemPrompt,
+              userPrompt,
+              images: images && images.length > 0 ? images : undefined,
+              capability: 'creative',
+              model: requestedModel || undefined,
+              apiKey,
+              stream: true,
+            },
+            (chunk) => {
+              if (chunk.text) {
+                // For non-agent mode, we just send raw text to maintain backward compatibility
+                controller.enqueue(encoder.encode(chunk.text));
+              }
+              if (chunk.done) {
+                controller.close();
+                return;
+              }
+            },
+            { taskType: 'chat-stream' }
+          );
+
+          // Ensure stream is closed if orchestrateStream resolves without emitting done
+          try { controller.close(); } catch { /* already closed */ }
         } catch (error: any) {
           console.error('Stream error:', error);
           controller.enqueue(encoder.encode(`[ERROR] ${error.message || 'Stream failed'}`));
-          controller.close();
+          try { controller.close(); } catch { /* already closed */ }
         }
       }
     });

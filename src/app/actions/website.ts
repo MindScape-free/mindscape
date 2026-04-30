@@ -67,22 +67,42 @@ export async function extractWebsiteContent(url: string) {
     const cleanedHtml = $.html();
 
     // 5. Extract Main Content via internal API (Node.js runtime required for JSDOM)
-    const host = headers().get("host");
-    const protocol = process.env.NODE_ENV === "development" ? "http" : "https";
-    const apiResponse = await fetch(`${protocol}://${host}/api/extract`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ html: cleanedHtml, url: validatedUrl.origin }),
-    });
+    let articleData = null;
+    try {
+      const headersList = await headers();
+      const host = headersList.get("host") || 'localhost:3000';
+      const protocol = headersList.get("x-forwarded-proto") || (process.env.NODE_ENV === "development" ? "http" : "https");
+      
+      const apiResponse = await fetch(`${protocol}://${host}/api/extract`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html: cleanedHtml, url: validatedUrl.origin }),
+      });
 
-    if (!apiResponse.ok) {
-      throw new Error(`Failed to extract content via API: ${apiResponse.statusText}`);
+      if (apiResponse.ok) {
+        articleData = await apiResponse.json();
+      }
+    } catch (apiErr) {
+      console.warn("Internal API extraction failed, using basic fallback:", apiErr);
     }
 
-    const { article, error } = await apiResponse.json();
+    const article = articleData?.article;
+    const error = articleData?.error;
 
     if (error || !article) {
-      throw new Error(error || "Failed to extract article content from the page.");
+      // Basic fallback if API fails
+      const title = $('title').text() || $('h1').first().text() || url;
+      const textContent = $('body').text().replace(/\s+/g, ' ').trim();
+      
+      return {
+        success: true,
+        title,
+        textContent: textContent.substring(0, 5000),
+        excerpt: textContent.substring(0, 200),
+        textBlocks: [],
+        url: url,
+        isFallback: true
+      };
     }
 
     // 6. Further Structure Extraction (Headings & Paragraphs)

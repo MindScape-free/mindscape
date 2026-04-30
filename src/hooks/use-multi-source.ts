@@ -46,9 +46,9 @@ export function useMultiSource(options?: MultiSourceOptions) {
       if (type === 'text') {
         updateSourceItem(id, { content: value, status: 'ready' });
       } else if (type === 'youtube') {
-        // Extract video ID
-        const videoIdMatch = value.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
-        const videoId = videoIdMatch ? videoIdMatch[1] : null;
+        // Extract video ID using shared utility
+        const { getVideoId } = await import('@/utils/youtube/extract-id');
+        const videoId = getVideoId(value);
         
         if (!videoId) throw new Error('Invalid YouTube URL');
 

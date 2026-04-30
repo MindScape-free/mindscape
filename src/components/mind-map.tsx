@@ -336,6 +336,22 @@ export const MindMap = ({
 
 
 
+  // Enrichment state — keyed by node name, generated once per node
+  const [enrichments, setEnrichments] = useState<Record<string, NodeEnrichment>>(data.enrichments || {});
+  const [isEnrichmentLoading, setIsEnrichmentLoading] = useState(false);
+  const enrichmentInFlightRef = useRef<Set<string>>(new Set());
+
+  // Confidence ratings — keyed by node name
+  const [confidenceRatings, setConfidenceRatings] = useState<Record<string, ConfidenceLevel>>(data.confidenceRatings || {});
+
+  // Micro quiz answers — keyed by node name
+  const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>(data.quizAnswers || {});
+
+  // State for images and expansions is initialized from data prop
+  const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>(data.savedImages || []);
+  const [nestedExpansions, setNestedExpansions] = useState<NestedExpansionItem[]>(propNestedExpansions || data.nestedExpansions || []);
+  const [explanations, setExplanations] = useState<Record<string, string[]>>(data.explanations || {});
+
   const mergedExpansions = useMemo(() => {
     const expansionMap = new Map<string, any>();
     
@@ -455,21 +471,7 @@ export const MindMap = ({
   // #10 — Quiz-adaptive deepening state
   const [deepeningTags, setDeepeningTags] = useState<string[]>([]);
 
-  // Enrichment state — keyed by node name, generated once per node
-  const [enrichments, setEnrichments] = useState<Record<string, NodeEnrichment>>(data.enrichments || {});
-  const [isEnrichmentLoading, setIsEnrichmentLoading] = useState(false);
-  const enrichmentInFlightRef = useRef<Set<string>>(new Set());
 
-  // Confidence ratings — keyed by node name
-  const [confidenceRatings, setConfidenceRatings] = useState<Record<string, ConfidenceLevel>>(data.confidenceRatings || {});
-
-  // Micro quiz answers — keyed by node name
-  const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>(data.quizAnswers || {});
-
-  // State for images and expansions is initialized from data prop
-  const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>(data.savedImages || []);
-  const [nestedExpansions, setNestedExpansions] = useState<NestedExpansionItem[]>(propNestedExpansions || data.nestedExpansions || []);
-  const [explanations, setExplanations] = useState<Record<string, string[]>>(data.explanations || {});
 
   // Update available modes whenever explanations change for the active node
   useEffect(() => {

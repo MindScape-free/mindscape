@@ -1,6 +1,6 @@
 'use server';
 
-import { generateContentWithPollinations } from '@/ai/pollinations-client';
+import { orchestrate } from '@/ai/providers/orchestrator';
 
 const SUMMARIZE_SYSTEM_PROMPT = `You are a concise document summarizer.
 Given a section of a document, extract the 3–6 most important key ideas as bullet points.
@@ -19,18 +19,24 @@ export async function summarizeChunk(
 ): Promise<string> {
     const { apiKey, attempt = 0 } = options;
 
-    const result = await generateContentWithPollinations(
-        SUMMARIZE_SYSTEM_PROMPT,
-        `Summarize this text section in bullet points:\n\n${chunk}`,
-        undefined,
-        { capability: 'fast', apiKey, attempt, _stripParameters: true }
+    const result = await orchestrate(
+        {
+            systemPrompt: SUMMARIZE_SYSTEM_PROMPT,
+            userPrompt: `Summarize this text section in bullet points:\n\n${chunk}`,
+            capability: 'fast',
+            apiKey,
+            attempt,
+            strict: false,
+        },
+        { taskType: 'summarize-chunk' }
     );
 
-    if (typeof result === 'string') return result.trim();
-    if (result?.content) return String(result.content).trim();
-    if (result?.text) return String(result.text).trim();
-    if (result?.choices?.[0]?.message?.content) return String(result.choices[0].message.content).trim();
-    return String(result).trim();
+    const content = result.content;
+    if (typeof content === 'string') return content.trim();
+    if (content?.content) return String(content.content).trim();
+    if (content?.text) return String(content.text).trim();
+    if (content?.choices?.[0]?.message?.content) return String(content.choices[0].message.content).trim();
+    return String(content).trim();
 }
 
 export async function summarizeChunksParallel(

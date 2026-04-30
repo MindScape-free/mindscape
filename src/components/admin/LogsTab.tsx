@@ -61,11 +61,11 @@ export const LogsTab: React.FC<LogsTabProps> = React.memo(({
 
       {/* Activity Log Container */}
       <motion.div 
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-[2.5rem] bg-white/5 border border-white/10 overflow-hidden backdrop-blur-3xl shadow-2xl relative"
+        className="rounded-[1.5rem] bg-white/5 border border-white/10 overflow-hidden backdrop-blur-3xl shadow-xl relative"
       >
-        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-[100px] pointer-events-none" />
+        <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/5 rounded-full blur-[80px] pointer-events-none" />
         
         {isLogsLoading && activityLogs.length === 0 ? (
           <ActivityLogSkeleton count={8} />
@@ -103,11 +103,11 @@ export const LogsTab: React.FC<LogsTabProps> = React.memo(({
               {groupLogsByDate(filtered).map((group, groupIndex) => (
                 <div key={group.title}>
                   {/* Date Group Header */}
-                  <div className="sticky top-0 z-20 bg-zinc-950/80 backdrop-blur-3xl border-b border-white/5 px-8 py-4">
+                  <div className="sticky top-0 z-20 bg-zinc-950/80 backdrop-blur-3xl border-b border-white/5 px-6 py-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Calendar className="h-3 w-3 text-amber-500/50" />
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-2.5 w-2.5 text-amber-500/50" />
+                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400">
                           {group.title}
                         </span>
                       </div>

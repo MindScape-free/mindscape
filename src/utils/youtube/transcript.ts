@@ -53,7 +53,7 @@ export async function fetchTranscriptParts(videoId: string): Promise<TranscriptP
     const transcript = await YoutubeTranscript.fetchTranscript(videoId);
 
     if (!transcript || transcript.length === 0) {
-      throw new Error('No transcript found for this video.');
+      throw new Error('TRANSCRIPT_EMPTY');
     }
 
     return transcript.map(part => ({
@@ -63,10 +63,17 @@ export async function fetchTranscriptParts(videoId: string): Promise<TranscriptP
     }));
   } catch (error: any) {
     console.error('DEBUG: YouTube transcript fetch error details:', error.message || error);
-    if (error.message?.includes('Could not find transcript')) {
-      throw new Error('Transcripts are disabled or unavailable for this video.');
+    
+    const msg = error.message || '';
+    if (msg.includes('Could not find transcript') || msg.includes('TRANSCRIPT_EMPTY') || msg.includes('disabled')) {
+      throw new Error('Transcripts are disabled or unavailable for this video. Falling back to video metadata and description.');
     }
-    throw new Error('Failed to fetch video transcript. Please try another video.');
+    
+    if (msg.includes('Too Many Requests') || msg.includes('429')) {
+      throw new Error('YouTube is currently rate-limiting transcript requests. Please try again in a few minutes or use a different source.');
+    }
+
+    throw new Error('Failed to fetch video transcript. This may be due to regional restrictions or video settings.');
   }
 }
 

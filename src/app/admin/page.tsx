@@ -448,12 +448,16 @@ export default function AdminDashboard() {
         </motion.div>
       </div>
 
-      <UserDetailDialog 
-        user={selectedUser} 
-        isOpen={isUserDetailOpen} 
-        onClose={() => setIsUserDetailOpen(false)} 
-        onUserDeleted={refreshBundle}
-      />
+      <AnimatePresence>
+        {isUserDetailOpen && selectedUser && (
+          <UserDetailDialog 
+            user={selectedUser} 
+            isOpen={isUserDetailOpen} 
+            onClose={() => setIsUserDetailOpen(false)} 
+            onUserDeleted={refreshBundle}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -95,15 +95,33 @@ type SavedMindMap = GenerateMindMapOutput & {
 type SortOption = 'recent' | 'alphabetical' | 'oldest';
 
 function NotLoggedIn() {
-  const router = useRouter();
+  const handleLoginClick = () => {
+    window.dispatchEvent(new CustomEvent('mindscape:trigger-login'));
+  };
+
   return (
-    <div className="container mx-auto p-4 sm:p-8">
-      <div className="text-center py-16 border-2 border-dashed rounded-lg">
-        <LogIn className="mx-auto h-12 w-12 text-muted-foreground" />
-        <h3 className="mt-4 text-lg font-semibold">Please Log In</h3>
-        <p className="mt-2 text-sm text-muted-foreground">You need to be logged in to view your saved mind maps.</p>
-        <Button className="mt-6" onClick={() => router.push('/login')}>Log In</Button>
-      </div>
+    <div className="container mx-auto p-4 sm:p-8 flex items-center justify-center min-h-[60vh]">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="max-w-md w-full text-center py-16 px-8 rounded-[2.5rem] border border-white/5 bg-black/40 backdrop-blur-2xl shadow-2xl relative overflow-hidden"
+      >
+        <div className="absolute inset-0 bg-primary/5 blur-[80px] -z-10" />
+        <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+          <LogIn className="h-8 w-8 text-primary" />
+        </div>
+        <h3 className="text-2xl font-black mb-3">Your Library Awaits.</h3>
+        <p className="text-zinc-500 mb-8 leading-relaxed">
+          Log in to access your personal collection of AI-generated mind maps and continue your learning journey.
+        </p>
+        <Button 
+          size="lg"
+          className="w-full rounded-2xl h-14 bg-primary hover:bg-primary/90 text-white font-bold text-lg shadow-lg shadow-primary/20"
+          onClick={handleLoginClick}
+        >
+          Sign In to MindScape
+        </Button>
+      </motion.div>
     </div>
   );
 }
@@ -1133,13 +1151,34 @@ export default function DashboardPage() {
               <Skeleton key={i} className="h-full rounded-2xl glassmorphism" />
             ))}
           </div>
-        ) : filteredAndSortedMaps.length > 0 ? (
+        ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 auto-rows-[300px]">
             <AnimatePresence mode="popLayout">
-            {filteredAndSortedMaps.map((rawMap, idx) => {
-              // Sanitize map to prevent Firestore Timestamp serialization errors
-              const map = sanitizeMapForState(rawMap);
-              const mapId = map.id || `temp-map-${idx}`;
+              {/* Create New Card */}
+              <motion.div
+                key="create-new-card"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.4 }}
+                className="h-full w-full"
+                onClick={() => router.push('/')}
+              >
+                <div className="group relative cursor-pointer rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] backdrop-blur-xl p-6 flex flex-col h-full w-full overflow-hidden border border-dashed border-white/20 transition-all duration-500 hover:border-primary/50 hover:shadow-[0_0_40px_rgba(139,92,246,0.15)] items-center justify-center text-center group">
+                  <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-primary/20 transition-all duration-500">
+                    <Plus className="w-8 h-8 text-primary animate-pulse" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="font-bold text-xl text-white font-orbitron tracking-tight">Create New</h3>
+                    <p className="text-xs text-zinc-500 font-medium">Generate a fresh knowledge map</p>
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                </div>
+              </motion.div>
+
+              {filteredAndSortedMaps.map((rawMap, idx) => {
+                // Sanitize map to prevent Firestore Timestamp serialization errors
+                const map = sanitizeMapForState(rawMap);
+                const mapId = map.id || `temp-map-${idx}`;
 
               // Robust date parsing for display
               const getDisplayDate = (d: any) => {
@@ -1371,19 +1410,6 @@ export default function DashboardPage() {
               );
             })}
             </AnimatePresence>
-          </div>
-        ) : (
-          <div className="text-center py-16 border-2 border-dashed rounded-lg mt-12">
-            <Icons.logo className="mx-auto h-12 w-12 text-muted-foreground" />
-            <h3 className="mt-4 text-lg font-semibold">
-              {searchQuery ? 'No Mind Maps Found' : 'No Saved Mind Maps'}
-            </h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {searchQuery ? 'Try a different search term.' : "You haven't saved any mind maps yet."}
-            </p>
-            <Button className="mt-6" onClick={() => router.push('/')}>
-              Generate a Mind Map
-            </Button>
           </div>
         )}
       </div>

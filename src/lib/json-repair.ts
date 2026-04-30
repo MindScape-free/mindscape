@@ -3,9 +3,11 @@
 /**
  * Runtime JSON validation and self-correction utility.
  * Used across all AI generation flows to ensure valid JSON output.
+ *
+ * MIGRATION: Now routes through the AI orchestrator instead of direct Pollinations calls.
  */
 
-import { generateContentWithPollinations } from '@/ai/pollinations-client';
+import { orchestrate } from '@/ai/providers/orchestrator';
 
 /**
  * Attempts to parse JSON. If it fails, sends the broken string back to the AI
@@ -30,15 +32,20 @@ export async function parseOrRepairJSON(
         // continue to AI repair
     }
 
-    // 3. AI self-correction
+    // 3. AI self-correction via orchestrator (schema: null for plain text output)
     try {
-        const repaired = await generateContentWithPollinations(
-            'Fix JSON formatting only. Do not change any content or values. Return ONLY valid JSON with no extra text.',
-            raw,
-            undefined,
-            { capability: 'fast', apiKey, _stripParameters: true }
+        const result = await orchestrate(
+            {
+                systemPrompt: 'Fix JSON formatting only. Do not change any content or values. Return ONLY valid JSON with no extra text.',
+                userPrompt: raw,
+                capability: 'fast',
+                apiKey,
+                strict: false,
+            },
+            { taskType: 'json-repair' }
         );
 
+        const repaired = result.content;
         if (typeof repaired === 'string') return JSON.parse(repaired);
         if (typeof repaired === 'object') return repaired;
     } catch (e) {

@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import 'katex/dist/katex.min.css';
+import 'prismjs/themes/prism-tomorrow.css';
 
 export const runtime = 'nodejs';
 import { Toaster } from '@/components/ui/toaster';

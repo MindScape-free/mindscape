@@ -1,6 +1,5 @@
 
-
-import { generateContentWithPollinations } from '@/ai/pollinations-client';
+import { orchestrate } from '@/ai/providers/orchestrator';
 
 export interface ExtractedConcept {
     title: string;
@@ -30,22 +29,29 @@ export async function extractConcepts(
     const { apiKey, attempt = 0 } = options;
 
     try {
-        const result = await generateContentWithPollinations(
-            CONCEPT_EXTRACTION_PROMPT,
-            `Extract key concepts from this text:\n\n${chunk}`,
-            undefined,
-            { capability: 'fast', apiKey, attempt }
+        const result = await orchestrate(
+            {
+                systemPrompt: CONCEPT_EXTRACTION_PROMPT,
+                userPrompt: `Extract key concepts from this text:\n\n${chunk}`,
+                capability: 'fast',
+                apiKey,
+                attempt,
+                strict: false,
+            },
+            { taskType: 'concept-extraction' }
         );
 
-        if (Array.isArray(result)) {
-            return result.filter((c: any) => c && c.title).map((c: any) => ({
+        const content = result.content;
+
+        if (Array.isArray(content)) {
+            return content.filter((c: any) => c && c.title).map((c: any) => ({
                 title: String(c.title).trim(),
                 description: String(c.description || '').trim(),
             }));
         }
 
-        if (typeof result === 'string') {
-            const match = result.match(/\[[\s\S]*\]/);
+        if (typeof content === 'string') {
+            const match = content.match(/\[[\s\S]*\]/);
             if (match) {
                 return JSON.parse(match[0]).filter((c: any) => c && c.title).map((c: any) => ({
                     title: String(c.title).trim(),
@@ -54,8 +60,8 @@ export async function extractConcepts(
             }
         }
 
-        if (result && typeof result === 'object') {
-            const arr = (result as any).concepts || (result as any).data || (result as any).results;
+        if (content && typeof content === 'object') {
+            const arr = (content as any).concepts || (content as any).data || (content as any).results;
             if (Array.isArray(arr)) {
                 return arr.filter((c: any) => c && c.title).map((c: any) => ({
                     title: String(c.title).trim(),

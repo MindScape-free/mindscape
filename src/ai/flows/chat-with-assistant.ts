@@ -110,9 +110,32 @@ USER QUESTION: "${question}"
 
 RESPONSE RULES:
 - Use Markdown formatting (bullets, bold, tables for comparisons).
-- Start with a brief intro.
+- **ENTITY LINKING**: Use [[Topic Name]] to link to important concepts. This allows the user to explore that topic visually.
+- **VISUALS**: Use \`\`\`mermaid\`\`\` blocks for flowcharts, mindmaps, or sequence diagrams. **IMPORTANT**: Always wrap node labels in double quotes (e.g., A["Result + Data"]) to prevent syntax errors with special characters.
+- **MATH**: Use LaTeX syntax with $ for inline (e.g. $E=mc^2$) and $$ for blocks.
+- **ACTIVE LEARNING**: If explaining a complex topic, you may occasionally include a short quiz at the end using this format:
+\`\`\`quiz
+{
+  "type": "quiz",
+  "topic": "Topic Name",
+  "difficulty": "Beginner/Intermediate/Expert",
+  "questions": [
+    {
+      "id": "q1",
+      "question": "Question text here?",
+      "options": [
+        {"id": "A", "text": "Option A"},
+        {"id": "B", "text": "Option B"}
+      ],
+      "correctOptionId": "A",
+      "explanation": "Why A is correct",
+      "conceptTag": "specific-concept"
+    }
+  ]
+}
+\`\`\`
 - NO HALLUCINATION: If unsure → say "Not in current context" rather than guessing.
-- DO NOT include any URLs, links, or web addresses in your response.
+- DO NOT include any external URLs (e.g., https://...) in your response. Only use [[Topic]] for internal links.
 ${!isUserGuideMode ? `- Adjust style for persona: ${persona}` : ''}
 
 Return ONLY this JSON:

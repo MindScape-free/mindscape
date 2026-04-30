@@ -601,12 +601,13 @@ function MindMapPageContent() {
                 navigateToMap(savedId!);
 
                 // Award points for creating a new map
+                const topicName = result.data!.topic;
                 if (currentMode === 'compare') {
-                  awardXP('MAP_COMPARE', { topic: result.data.topic }).catch(() => {});
+                  awardXP('MAP_COMPARE', { topic: topicName }).catch(() => {});
                 } else if (currentMode === 'multi-source') {
-                  awardXP('MAP_MULTI_SOURCE', { topic: result.data.topic }).catch(() => {});
+                  awardXP('MAP_MULTI_SOURCE', { topic: topicName }).catch(() => {});
                 } else {
-                  awardXP('MAP_CREATED', { topic: result.data.topic, mode: currentMode }).catch(() => {});
+                  awardXP('MAP_CREATED', { topic: topicName, mode: currentMode }).catch(() => {});
                 }
               }
             });
@@ -634,7 +635,12 @@ function MindMapPageContent() {
   // Track views for community maps
   useEffect(() => {
     if (mindMap?.id && (mindMap as any).isPublic) {
-      supabase.from('public_mindmaps').update({ views: supabase.rpc('increment', { x: 1 }) }).eq('id', mindMap.id).catch(() => {});
+      supabase.from('public_mindmaps')
+        .update({ views: ((mindMap as any).views || 0) + 1 })
+        .eq('id', mindMap.id)
+        .then(({ error }) => {
+          if (error) console.error('Failed to update views:', error);
+        });
     }
   }, [mindMap?.id, (mindMap as any)?.isPublic]);
 
@@ -877,7 +883,10 @@ function MindMapPageContent() {
       }
     }
 
-    if (user) await supabase.from('mindmaps').delete().eq('id', id).eq('user_id', user.id).catch(console.error);
+    if (user) {
+      const { error } = await supabase.from('mindmaps').delete().eq('id', id).eq('user_id', user.id);
+      if (error) console.error('Failed to delete nested map:', error);
+    }
     toast({ title: "Nested Map Deleted", description: "The link has been removed." });
   }, [mindMap, handleUpdateCurrentMap, handleSaveMap, toast, user]);
 
@@ -963,7 +972,7 @@ function MindMapPageContent() {
     } finally { setIsSharing(false); }
   }, [mindMap, isSharing, user, toast]);
 
-  if (isLoading) return <NeuralLoader />;
+  if (isLoading) return <NeuralLoader sourceType={sourceFileType || undefined} />;
 
   if (error) {
     const isAuthError = error.toLowerCase().includes('api key') || error.toLowerCase().includes('unauthorized') || error.toLowerCase().includes('401');
@@ -1229,7 +1238,7 @@ function MindMapPageContent() {
         }}
         onRemoveMindMapPin={(messageId) => {
           const pinToRemove = pinnedMessages.find(p => 
-            p.question.messageId === messageId || p.soloMessage?.messageId === messageId
+            p.question?.messageId === messageId || p.soloMessage?.messageId === messageId
           );
           if (pinToRemove) {
             removePinnedMessage(pinToRemove.id);
@@ -1238,6 +1247,7 @@ function MindMapPageContent() {
         onQuizDeepen={(weakSections, quizTopic) => {
           quizDeepenRef.current?.(weakSections, quizTopic);
         }}
+        onTopicClick={(topic) => handleGenerateAndOpenSubMap(topic, undefined, undefined, 'foreground')}
       />
 
     </>
