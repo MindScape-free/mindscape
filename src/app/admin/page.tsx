@@ -13,6 +13,7 @@ import {
   Activity,
   LogOut,
   ChevronUp,
+  BarChart3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -31,6 +32,7 @@ import { normalizeTimestamp, sortByTimestamp } from '@/lib/timestamp-utils';
 const DashboardTab = lazy(() => import('@/components/admin/DashboardTab').then(m => ({ default: m.DashboardTab })));
 const UsersTab = lazy(() => import('@/components/admin/UsersTab').then(m => ({ default: m.UsersTab })));
 const LogsTab = lazy(() => import('@/components/admin/LogsTab').then(m => ({ default: m.LogsTab })));
+const AITelemetryTab = lazy(() => import('@/components/admin/AITelemetryTab').then(m => ({ default: m.AITelemetryTab })));
 const UserDetailDialog = lazy(() => import('@/components/admin/UserDetailDialog'));
 
 import { FeedbackCards } from '@/components/feedback/FeedbackCards';
@@ -169,10 +171,13 @@ export default function AdminDashboard() {
       setStats({
         date: format(new Date(), 'yyyy-MM-dd'),
         totalUsers: stats.totalUsers,
-        totalMaps: extendedData.totalPublicMaps || 0,
+        totalMaps: stats.totalMindmaps,
         totalMindmaps: stats.totalMindmaps,
         totalMindmapsEver: extendedData.totalMindmapsEver || 0,
         totalChats: stats.totalChats,
+        totalNodes: stats.totalNodes || 0,
+        totalNodesActive: stats.totalNodesActive || 0,
+        totalImages: stats.totalImages || 0,
         dailyActiveUsers: stats.activeUsers,
       });
 
@@ -207,6 +212,17 @@ export default function AdminDashboard() {
       setTotalMindmapsEver(extendedData.totalMindmapsEver || 0);
       setLastSyncedAt(stats.timestamp);
       setCalculatedHealthScore(stats.healthScore);
+
+      // Auto-sync if data is older than 15 minutes
+      const lastUpdated = stats.lastUpdated;
+      if (lastUpdated) {
+        const now = Date.now();
+        const fifteenMinutes = 15 * 60 * 1000;
+        if (now - lastUpdated > fifteenMinutes && !isSyncing) {
+          console.log('🔄 [Admin] Data stale (>15m), auto-syncing...');
+          handleForceRefresh();
+        }
+      }
     }
   }, [dashboardData]);
 
@@ -249,6 +265,7 @@ export default function AdminDashboard() {
     { id: 'dashboard' as AdminTab, label: 'Overview', icon: Brain, desc: 'System overview and metrics' },
     { id: 'users' as AdminTab, label: 'Users', icon: Users, desc: 'Manage user accounts' },
     { id: 'logs' as AdminTab, label: 'Activity', icon: Activity, desc: 'Live event stream' },
+    { id: 'ai_telemetry' as AdminTab, label: 'Telemetry', icon: BarChart3, desc: 'AI Performance & Usage' },
     { id: 'feedback' as AdminTab, label: 'Feedback', icon: MessageSquare, desc: 'User reports' },
   ];
 
@@ -394,6 +411,9 @@ export default function AdminDashboard() {
               )}
               {activeTab === 'feedback' && (
                 <FeedbackCards data={feedbackData} adminUserId={user?.uid || ''} onRefresh={refreshBundle} isLoading={isDashboardLoading && feedbackData.length === 0} />
+              )}
+              {activeTab === 'ai_telemetry' && (
+                <AITelemetryTab logs={activityLogs} isLoading={isDashboardLoading} />
               )}
             </Suspense>
           </motion.div>

@@ -22,31 +22,38 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: 'No events to process' });
     }
 
-    const { admin, supabase } = { supabase: getSupabaseAdmin() };
+    const supabase = getSupabaseAdmin();
 
-    if (!supabase || !admin) {
-      console.warn('[AnalyticsAPI] Firebase not initialized, skipping analytics write');
-      return NextResponse.json({ success: false, error: 'Firebase not initialized' }, { status: 500 });
+    if (!supabase) {
+      console.warn('[AnalyticsAPI] Supabase not initialized, skipping analytics write');
+      return NextResponse.json({ success: false, error: 'Supabase not initialized' }, { status: 500 });
     }
-
-    const batch = supabase.batch();
-    const analyticsRef = supabase.collection('analyticsEvents');
 
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
     const monthStr = dateStr.substring(0, 7);
 
-    events.forEach((event: AnalyticsEvent) => {
-      const eventRef = analyticsRef.doc();
-      batch.set(eventRef, {
-        ...event,
-        receivedAt: admin.supabase.Timestamp.now(),
-        date: dateStr,
-        month: monthStr,
-      });
-    });
+    // Prepare events for insertion into Supabase
+    const eventsToInsert = events.map((event: AnalyticsEvent) => ({
+      event_name: event.eventName,
+      category: event.category,
+      properties: event.properties || {},
+      timestamp: event.timestamp,
+      session_id: event.sessionId,
+      user_id: event.userId || null,
+      duration: event.duration || null,
+      metadata: event.metadata || {},
+      received_at: now.toISOString(),
+      date: dateStr,
+      month: monthStr,
+    }));
 
-    await batch.commit();
+    const { error } = await supabase.from('analytics_events').insert(eventsToInsert);
+
+    if (error) {
+      console.error('[AnalyticsAPI] Database error:', error);
+      throw error;
+    }
 
     return NextResponse.json({ success: true, processed: events.length });
   } catch (error: any) {
@@ -57,3 +64,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

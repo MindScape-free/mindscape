@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const maxDuration = 60; // 60s timeout for serverless environments
+
 // Hardcoded Fallback Models (Verified Stable)
 const FALLBACK_MODELS = {
   'flux': { cost: 0.001, quality: 'high', description: 'Flux Schnell - Fast high-quality image generation', paid_only: false },
@@ -27,7 +29,7 @@ async function getDynamicModels() {
 
   console.log("🌐 [DynamicModels] Fetching from Pollinations...");
   try {
-    const response = await fetch('https://gen.pollinations.ai/image/models', { next: { revalidate: 3600 } });
+    const response = await fetch('https://image.pollinations.ai/models', { next: { revalidate: 3600 } });
     if (!response.ok) throw new Error(`Pollinations Status: ${response.status}`);
     
     const rawModels = await response.json();
@@ -235,8 +237,13 @@ export async function POST(req: Request) {
       lighting,
       width = 1024,
       height = 1024,
+      userId,
       userApiKey
     } = body;
+
+    // Safety caps for dimensions
+    const safeWidth = Math.min(Math.max(width, 256), 1280);
+    const safeHeight = Math.min(Math.max(height, 256), 1280);
 
     // Map legacy or incorrect model names to current valid models
     let model = requestedModel;
@@ -295,21 +302,24 @@ export async function POST(req: Request) {
     const rotationPool = userApiKey ? Object.keys(POLLINATIONS_MODELS) : DEFAULT_ROTATION;
     
     let rotationIndex = rotationPool.indexOf(currentModel as any);
-    if (rotationIndex === -1) rotationIndex = 0;
+    if (rotationIndex === -1) {
+      console.warn(`⚠️ Requested model ${currentModel} not found in pool, using ${rotationPool[0]}`);
+      rotationIndex = 0;
+    }
     currentModel = rotationPool[rotationIndex];
 
-    const maxRetries = 3;
+    const maxRetries = 5; // Increased retries for better stability
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        console.log(`🎨 Attempt ${attempt + 1}: Generating image with model: ${currentModel}`);
+        console.log(`🎨 Attempt ${attempt + 1}/${maxRetries}: Generating image with model: ${currentModel}`);
 
-        // Build Pollinations API URL with extra protection params
-        const baseUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(enhancedPrompt)}`;
+        // Build Pollinations API URL
+        const baseUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}`;
         const params = new URLSearchParams({
           model: currentModel,
-          width: width.toString(),
-          height: height.toString(),
+          width: safeWidth.toString(),
+          height: safeHeight.toString(),
           seed: Math.floor(Math.random() * 1000000).toString(),
           nologo: 'true',
           enhance: 'false'
@@ -322,13 +332,15 @@ export async function POST(req: Request) {
           headers: {
             'Authorization': `Bearer ${apiKey}`,
             'Accept': 'image/jpeg, image/png'
-          }
+          },
+          signal: AbortSignal.timeout(60000) 
         });
 
         if (!response.ok) {
           const errorText = await response.text();
           const isModeration = errorText.includes('moderation_blocked') || errorText.includes('safety system');
-          const isRetryable = response.status >= 500 || response.status === 429 || response.status === 530;
+          const is429 = response.status === 429;
+          const isRetryable = response.status >= 500 || is429 || response.status === 530;
           const isRotationCandidate = isRetryable || isModeration || response.status === 401 || response.status === 403;
 
           console.error(`❌ Pollinations API error [Model: ${currentModel}]: ${response.status} - ${errorText.substring(0, 100)}...`);
@@ -338,12 +350,12 @@ export async function POST(req: Request) {
               rotationIndex = (rotationIndex + 1) % rotationPool.length;
               currentModel = rotationPool[rotationIndex];
               console.warn(`🔄 Rotating to next model: ${currentModel} due to ${response.status}...`);
-            } else {
-              console.warn(`⏳ Retrying same model: ${currentModel} due to transient error...`);
             }
 
-            // Exponential backoff
-            const delay = 1000 * (attempt + 1);
+            // Exponential backoff with jitter
+            const baseDelay = is429 ? 3000 : 1000;
+            const delay = (baseDelay * Math.pow(2, attempt)) + (Math.random() * 1000);
+            console.log(`⏳ Waiting ${Math.round(delay)}ms before retry...`);
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
           }
@@ -352,9 +364,11 @@ export async function POST(req: Request) {
             {
               error: `Image generation failed: ${response.status}`,
               details: errorText,
-              suggestion: response.status === 401 || response.status === 403
-                ? (userApiKey ? 'Your API key may be invalid or restricted. Try clearing it in settings or check your balance.' : 'Server API key error. Please try again later.')
-                : 'Moderation or capacity error. Please try a more general prompt.'
+              suggestion: is429 
+                ? 'The AI provider is temporarily rate-limiting requests. We are retrying with different models, but please try again in a few moments.'
+                : response.status === 401 || response.status === 403
+                  ? (userApiKey ? 'Your API key may be invalid or restricted.' : 'Server API key error.')
+                  : 'Moderation or capacity error. Please try a more general prompt.'
             },
             { status: response.status }
           );
@@ -375,12 +389,22 @@ export async function POST(req: Request) {
           model: currentModel,
           cost: (POLLINATIONS_MODELS as any)[currentModel]?.cost || 0.04,
           quality: (POLLINATIONS_MODELS as any)[currentModel]?.quality || 'custom',
-          size: { width, height },
+          size: { width: safeWidth, height: safeHeight },
           usingUserKey: !!userApiKey
         });
 
       } catch (error: any) {
-        console.error(`💥 Error in attempt ${attempt + 1}:`, error);
+        const isTimeout = error.name === 'AbortError' || error.message.includes('timeout');
+        console.error(`💥 Error in attempt ${attempt + 1}:`, error.message);
+        
+        if (attempt < maxRetries - 1) {
+          rotationIndex = (rotationIndex + 1) % rotationPool.length;
+          currentModel = rotationPool[rotationIndex];
+          const delay = 1000 * (attempt + 1);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
         if (attempt === maxRetries - 1) throw error;
       }
     }

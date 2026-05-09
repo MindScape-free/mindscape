@@ -48,6 +48,7 @@ export interface AIStreamChunk {
   text: string;                          // Incremental text
   done: boolean;
   model?: string;
+  reasoning?: string;                    // Incremental or full reasoning text
 }
 
 export type AIStreamCallback = (chunk: AIStreamChunk) => void;

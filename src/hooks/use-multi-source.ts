@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { SourceItem, SourceType } from '@/types/multi-source';
 import { detectInputType } from '@/lib/detect-source-type';
 import { parsePdfContent } from '@/lib/pdf-processor';
+import { parseDocxContent } from '@/lib/doc-processor';
 import { mergeSourceContents, calculateContextUsage } from '@/lib/source-merger';
 import { analyzeImageContentAction } from '@/app/actions';
 
@@ -33,8 +34,8 @@ export function useMultiSource(options?: MultiSourceOptions) {
       
     const newItem: SourceItem = {
       id,
-      type: type === 'youtube' ? 'youtube' : type === 'website' ? 'website' : 'text',
-      label: type === 'website' || type === 'youtube' ? value : value.slice(0, 30) + (value.length > 30 ? '...' : ''),
+      type: type === 'youtube' ? 'youtube' : type === 'website' ? 'website' : type === 'image' ? 'image' : 'text',
+      label: type === 'website' || type === 'youtube' || type === 'image' ? value : value.slice(0, 30) + (value.length > 30 ? '...' : ''),
       rawValue: value,
       content: '',
       status: 'loading'
@@ -75,6 +76,10 @@ export function useMultiSource(options?: MultiSourceOptions) {
           content: data.content, 
           status: 'ready' 
         });
+      } else if (type === 'image') {
+        // For image URLs, we treat it as a website for now or show error if scrape-url doesn't handle images
+        // Ideal: convert to data URI and analyze. For now, let's treat it as a note or use scrape-url
+        updateSourceItem(id, { content: `Image URL: ${value}`, status: 'ready' });
       }
     } catch (err: any) {
       updateSourceItem(id, { status: 'error', error: err.message });
@@ -83,7 +88,10 @@ export function useMultiSource(options?: MultiSourceOptions) {
 
   const addFile = useCallback(async (file: File) => {
     const id = Math.random().toString(36).substr(2, 9);
-    const type: SourceType = file.type === 'application/pdf' ? 'pdf' : file.type.startsWith('image/') ? 'image' : 'text';
+    const isDoc = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.name.endsWith('.docx');
+    const type: SourceType = file.type === 'application/pdf' ? 'pdf' : 
+                          file.type.startsWith('image/') ? 'image' : 
+                          isDoc ? 'doc' : 'text';
 
     const newItem: SourceItem = {
       id,
@@ -102,6 +110,10 @@ export function useMultiSource(options?: MultiSourceOptions) {
         const { content } = await parsePdfContent(buffer, (progress) => {
            updateSourceItem(id, { progress: (progress.current / progress.total) * 100 });
         });
+        updateSourceItem(id, { content, status: 'ready' });
+      } else if (type === 'doc') {
+        const buffer = await file.arrayBuffer();
+        const { content } = await parseDocxContent(buffer);
         updateSourceItem(id, { content, status: 'ready' });
       } else if (type === 'image') {
         const reader = new FileReader();

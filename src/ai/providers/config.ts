@@ -65,8 +65,8 @@ export function loadAIConfig(): AIProviderSystemConfig {
   const reasoningProviders = process.env.AI_REASONING_PROVIDERS;
   if (reasoningProviders) pipelineOverrides['reasoning'] = reasoningProviders.split(',').map(s => s.trim());
 
-  // Shadow testing provider
-  const shadowProvider = process.env.AI_SHADOW_PROVIDER || undefined;
+  // Shadow testing provider - DISABLED by default to prevent parallel execution latency
+  const shadowProvider = undefined;
 
   _cachedConfig = {
     multiProviderEnabled,

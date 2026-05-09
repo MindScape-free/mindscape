@@ -109,6 +109,44 @@ export async function awardPoints(
     updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id' });
 
+  // --- Achievement & Statistics Integration ---
+  try {
+    const { updateUserStatistics } = await import('@/lib/activity-tracker');
+    
+    // Map point events to statistical updates
+    const statUpdates: any = {};
+    if (['MAP_CREATED', 'MAP_COMPARE', 'MAP_MULTI_SOURCE'].includes(eventType)) {
+      statUpdates.mapsCreated = 1;
+    } else if (eventType === 'SUB_MAP_CREATED') {
+      statUpdates.nestedExpansions = 1;
+    } else if (eventType === 'IMAGE_GENERATED') {
+      statUpdates.imagesGenerated = 1;
+    } else if (eventType === 'STUDY_TIME_CANVAS' || eventType === 'STUDY_TIME_CHAT') {
+      statUpdates.studyTimeMinutes = metadata?.minutes || 5;
+    }
+
+    // Update statistics and check for new achievements
+    const newlyUnlocked = await updateUserStatistics(supabase, userId, statUpdates);
+    
+    // Award bonus points for achievements (if any)
+    if (newlyUnlocked && newlyUnlocked.length > 0) {
+      for (const achievement of newlyUnlocked) {
+        const achievementType = 
+          achievement.tier === 'platinum' ? 'ACHIEVEMENT_PLATINUM' : 
+          achievement.tier === 'gold' ? 'ACHIEVEMENT_GOLD' :
+          achievement.tier === 'silver' ? 'ACHIEVEMENT_SILVER' : 'ACHIEVEMENT_BRONZE';
+        
+        // Award points for the achievement itself
+        // Note: we use a fire-and-forget approach or careful await to avoid blocking main flow
+        awardPoints(userId, achievementType as any, { achievementId: achievement.id }).catch(err => 
+          console.error(`Failed to award points for achievement ${achievement.id}:`, err)
+        );
+      }
+    }
+  } catch (statError) {
+    console.error('Error in achievement/stat integration:', statError);
+  }
+
   // Log transaction
   const event: PointEvent = { id: generateId(), type: eventType, basePoints, bonusPoints, totalPoints: totalEarned, multiplier, timestamp: Date.now(), metadata };
   await supabase.from('point_transactions').insert({ user_id: userId, ...event });

@@ -4,6 +4,7 @@ import { isValid } from 'date-fns';
 export interface ChatAttachment {
   name: string;
   type: 'text' | 'pdf' | 'image';
+  content?: string;
 }
 
 export interface ChatMessage {
@@ -16,6 +17,11 @@ export interface ChatMessage {
   quizResult?: QuizResult;
   attachments?: ChatAttachment[];
   isPinned?: boolean;
+  reasoning?: string;
+  thoughtChain?: {
+    type: 'hypothesis' | 'analysis' | 'synthesis' | 'tool';
+    content: string;
+  }[];
 }
 
 export interface PinnedMessageContent {
@@ -53,6 +59,9 @@ export interface AdminStats {
   totalMindmaps: number; // Current mindmaps (active docs)
   totalMindmapsEver: number; // All mindmaps ever created (including deleted)
   totalChats: number;
+  totalNodes?: number;
+  totalNodesActive?: number;
+  totalImages?: number;
   dailyActiveUsers: number;
   healthScore?: number;
 }

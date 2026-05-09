@@ -1,6 +1,6 @@
 import { AdminStats } from './chat';
 
-export type AdminTab = 'dashboard' | 'users' | 'logs' | 'feedback';
+export type AdminTab = 'dashboard' | 'users' | 'logs' | 'feedback' | 'ai_telemetry';
 export type StatsRange = 'all';
 
 // Default safe schemas - always return these to avoid undefined errors

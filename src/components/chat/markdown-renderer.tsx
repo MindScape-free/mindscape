@@ -8,12 +8,15 @@ import rehypeKatex from 'rehype-katex';
 import mermaid from 'mermaid';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Copy, Play, Check, Code, ExternalLink, Image as ImageIcon } from 'lucide-react';
+import { Copy, Play, Check, Code, ExternalLink, Image as ImageIcon, Maximize2, Download, X, Quote } from 'lucide-react';
+import { QuizRenderer } from './quiz-renderer';
+import { RecallChallenge } from './recall-challenge';
+import { toPascalCase } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { remarkEntityLink } from './remark-entity-link';
 import { QuizCard } from './quiz-card';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // Initialize Mermaid once globally
 if (typeof window !== 'undefined') {
@@ -21,30 +24,31 @@ if (typeof window !== 'undefined') {
     startOnLoad: false,
     theme: 'base',
     themeVariables: {
-      primaryColor: '#8b5cf6',
-      primaryTextColor: '#ffffff',
-      primaryBorderColor: '#a78bfa',
-      lineColor: '#6366f1',
-      secondaryColor: '#1e1b4b',
-      tertiaryColor: '#0f172a',
-      mainBkg: '#18181b',
+      primaryColor: '#18181b', // zinc-900
+      primaryTextColor: '#f4f4f5', // zinc-100
+      primaryBorderColor: '#3f3f46', // zinc-700
+      lineColor: '#52525b', // zinc-600
+      secondaryColor: '#27272a', // zinc-800
+      tertiaryColor: '#09090b', // zinc-950
+      mainBkg: '#09090b',
       nodeBorder: '#3f3f46',
-      clusterBkg: '#09090b',
-      clusterBorder: '#27272a',
-      defaultLinkColor: '#6366f1',
+      clusterBkg: '#18181b',
+      clusterBorder: '#3f3f46',
+      defaultLinkColor: '#71717a',
       titleColor: '#ffffff',
-      edgeLabelBackground: '#27272a',
-      nodeRadius: '12px',
+      edgeLabelBackground: '#18181b',
+      nodeRadius: '6px', // Slight rounding, mostly flat
       fontSize: '14px',
+      fontFamily: 'sans-serif', // Use standard sans-serif for perfect width calculation
     },
     securityLevel: 'loose',
-    fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
+    fontFamily: 'sans-serif',
     flowchart: {
-      htmlLabels: true,
+      htmlLabels: true, // Enable HTML labels for natural text wrapping
       curve: 'basis',
-      padding: 30,
-      nodeSpacing: 60,
-      rankSpacing: 80,
+      padding: 20,
+      nodeSpacing: 50,
+      rankSpacing: 60,
     },
     suppressErrorRendering: true,
   });
@@ -58,6 +62,8 @@ function MermaidBlock({ code }: { code: string }) {
   const [svg, setSvg] = useState<string>('');
   const [isRendering, setIsRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSource, setShowSource] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const id = React.useMemo(() => `mermaid-${crypto.randomUUID()}`, []);
 
   useEffect(() => {
@@ -65,20 +71,14 @@ function MermaidBlock({ code }: { code: string }) {
       if (!ref.current || !code) return;
       setIsRendering(true);
 
-      // Basic sanitization
       let cleanCode = code.trim();
       if (cleanCode.startsWith('```mermaid')) cleanCode = cleanCode.replace(/^```mermaid\n?/, '').replace(/\n?```$/, '');
       if (cleanCode.startsWith('```')) cleanCode = cleanCode.replace(/^```\n?/, '').replace(/\n?```$/, '');
 
-      // Smart Quoting: Proactively wrap unquoted labels in quotes
-      // This fixes errors like A[Some + Text] by turning them into A["Some + Text"]
       cleanCode = cleanCode.replace(/(\w+)(\[|\(|\{\{|\{|\(\(|\>)([^"'][^\]\)\}]*)([\]\)\}]+\>|\]|\)\)|\)|\}\}|\})/g, (match, id, open, content, close) => {
         const trimmed = content.trim();
         if (!trimmed) return match;
-
-        // Escape internal double quotes and wrap in double quotes
         const escaped = trimmed.replace(/"/g, '#quot;');
-
         if (/[:+&?|]/.test(escaped) || escaped.includes(' ') || escaped.includes('#quot;')) {
           return `${id}${open}"${escaped}"${close}`;
         }
@@ -100,7 +100,19 @@ function MermaidBlock({ code }: { code: string }) {
     renderDiagram();
   }, [code, id]);
 
-  const [showSource, setShowSource] = useState(false);
+  const downloadSvg = () => {
+    if (!svg) return;
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mindscape-flowchart-${Date.now()}.svg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: 'Downloaded', description: 'Flowchart saved successfully.' });
+  };
 
   if (error) {
     return (
@@ -119,7 +131,7 @@ function MermaidBlock({ code }: { code: string }) {
           {showSource ? 'Hide Blueprint' : 'Examine Blueprint'}
         </button>
         {showSource && (
-          <pre className="p-4 bg-black/60 rounded-xl text-[10px] text-zinc-400 overflow-x-auto border border-white/5 font-mono">
+          <pre className="p-4 bg-zinc-900 rounded-xl text-[10px] text-zinc-400 overflow-x-auto border border-zinc-800 font-mono">
             {code}
           </pre>
         )}
@@ -127,113 +139,62 @@ function MermaidBlock({ code }: { code: string }) {
     );
   }
 
+  const containerClasses = isFullscreen
+    ? "fixed inset-0 z-[100] bg-zinc-950 flex items-center justify-center overflow-auto"
+    : "w-full bg-zinc-950/50 rounded-2xl border border-zinc-800 flex items-center justify-center relative group/container";
+
   return (
-    <div className="my-10 flex flex-col items-center group/mermaid w-full">
+    <div className="my-6 flex flex-col items-center w-full">
       <style jsx global>{`
-        .mermaid-svg .edgeLabel {
-          background-color: #18181b !important;
-          color: #a1a1aa !important;
-          font-weight: 700 !important;
-          padding: 4px 8px !important;
-          border-radius: 6px !important;
-          border: 1px solid rgba(255,255,255,0.05) !important;
-        }
-        .mermaid-svg .edgeLabel rect {
-          fill: #18181b !important;
-          fill-opacity: 0.95 !important;
-          stroke: #3f3f46 !important;
-          rx: 6px !important;
-        }
-        .mermaid-svg .node rect, 
-        .mermaid-svg .node circle, 
-        .mermaid-svg .node ellipse, 
-        .mermaid-svg .node polygon, 
-        .mermaid-svg .node path {
-          stroke-width: 2px !important;
-          filter: drop-shadow(0 6px 12px rgba(0,0,0,0.3)) !important;
-          transition: all 0.3s ease !important;
-        }
-        .mermaid-svg .node:hover rect,
-        .mermaid-svg .node:hover circle {
-          stroke: #8b5cf6 !important;
-          fill: #2e1065 !important;
-        }
-        .mermaid-svg .label {
-          color: #ffffff !important;
-          font-weight: 600 !important;
-          font-family: 'Inter', sans-serif !important;
-        }
-        .mermaid-svg .flowchart-link {
-          stroke-width: 2px !important;
-          stroke: #4338ca !important;
-          opacity: 0.6 !important;
-          transition: all 0.3s ease !important;
-        }
-        .mermaid-svg:hover .flowchart-link {
-          opacity: 1 !important;
-          stroke: #6366f1 !important;
-        }
+        /* Clean Flat CSS */
         .mermaid-svg svg {
           max-width: 100% !important;
           height: auto !important;
+          display: block;
+        }
+        .mermaid-svg .nodeLabel {
+          line-height: 1.4 !important;
+          padding: 8px !important;
         }
       `}</style>
-      <div className="w-full bg-[#09090b]/80 backdrop-blur-2xl p-6 sm:p-10 rounded-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] min-h-[200px] flex items-center justify-center relative overflow-hidden">
-        {/* Animated background highlights */}
-        <div className="absolute top-0 left-1/4 w-1/2 h-1/2 bg-primary/10 blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-0 right-1/4 w-1/2 h-1/2 bg-blue-500/5 blur-[120px] pointer-events-none" />
+      
+      <div className={containerClasses}>
+        
+        {/* Simple Action Bar */}
+        <div className="absolute top-3 right-3 flex items-center gap-2 z-30 opacity-0 group-hover/container:opacity-100 transition-opacity duration-200">
+           <button onClick={() => setShowSource(!showSource)} className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white transition-colors" title="View Source"><Code className="w-4 h-4" /></button>
+           <button onClick={downloadSvg} className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white transition-colors" title="Download SVG"><Download className="w-4 h-4" /></button>
+           <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white transition-colors" title={isFullscreen ? "Close Fullscreen" : "Fullscreen"}>
+             {isFullscreen ? <X className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+           </button>
+        </div>
 
         {isRendering && (
-          <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/60 backdrop-blur-xl z-20">
-            <div className="flex flex-col items-center gap-4">
-              <div className="relative">
-                <div className="w-12 h-12 border-2 border-primary/20 rounded-full" />
-                <div className="absolute inset-0 w-12 h-12 border-t-2 border-primary rounded-full animate-spin" />
-              </div>
-              <div className="text-[11px] font-black text-primary uppercase tracking-[0.3em] animate-pulse">Architecting Knowledge...</div>
-            </div>
+          <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/80 z-20">
+            <span className="text-sm font-medium text-zinc-400">Rendering...</span>
           </div>
         )}
 
         <div
           ref={ref}
           className={cn(
-            "mermaid-svg w-full overflow-x-auto flex justify-center transition-all duration-1000 ease-out py-4",
-            isRendering ? "opacity-0 scale-95 blur-xl" : "opacity-100 scale-100 blur-0"
+            "mermaid-svg w-full overflow-x-auto flex justify-center py-8 px-4",
+            isFullscreen ? "h-full items-center p-8" : ""
           )}
-          style={{
-            filter: 'drop-shadow(0 15px 35px rgba(0,0,0,0.4))',
-          }}
           dangerouslySetInnerHTML={{ __html: svg }}
         />
       </div>
 
-      <div className="mt-5 flex items-center gap-4 opacity-0 group-hover/mermaid:opacity-100 transition-all duration-500 transform translate-y-2 group-hover/mermaid:translate-y-0">
-        <button
-          onClick={() => setShowSource(!showSource)}
-          className="flex items-center gap-2 text-[10px] font-black text-zinc-500 hover:text-white uppercase tracking-[0.2em] px-4 py-2 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 hover:bg-white/10 transition-all shadow-lg"
-        >
-          <Code className="w-3 h-3" />
-          {showSource ? 'Hide Structural Blueprint' : 'View Structural Blueprint'}
-        </button>
-      </div>
-
       <AnimatePresence>
-        {showSource && (
+        {showSource && !isFullscreen && (
           <motion.div
-            initial={{ opacity: 0, height: 0, y: -10 }}
-            animate={{ opacity: 1, height: 'auto', y: 0 }}
-            exit={{ opacity: 0, height: 0, y: -10 }}
-            className="w-full mt-6 overflow-hidden"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="w-full mt-4 overflow-hidden"
           >
-            <div className="p-6 bg-zinc-950/90 backdrop-blur-3xl rounded-[24px] border border-white/10 font-mono shadow-inner">
-              <div className="flex items-center gap-2 mb-4 border-b border-white/5 pb-3">
-                <div className="w-2 h-2 rounded-full bg-red-500" />
-                <div className="w-2 h-2 rounded-full bg-yellow-500" />
-                <div className="w-2 h-2 rounded-full bg-green-500" />
-                <span className="ml-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Source Code</span>
-              </div>
-              <pre className="text-[12px] text-zinc-400 overflow-x-auto leading-relaxed scrollbar-thin scrollbar-thumb-white/10">
+            <div className="p-4 bg-zinc-900 rounded-xl border border-zinc-800 font-mono">
+              <pre className="text-xs text-zinc-400 overflow-x-auto leading-relaxed scrollbar-thin">
                 {code}
               </pre>
             </div>
@@ -297,26 +258,28 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
   }
 
   return (
-    <div className="block w-full relative my-6 group rounded-[20px] overflow-hidden border border-white/10 bg-[#121212] shadow-2xl not-prose">
-      <div className="flex items-center justify-between px-5 py-3 bg-white/[0.03] border-b border-white/5">
-        <div className="flex items-center gap-2">
-          <Code className="w-3.5 h-3.5 text-zinc-500" />
-          <span className="text-[11px] font-bold tracking-tight text-zinc-300 capitalize">{language || 'text'}</span>
-        </div>
+    <div className="block w-full relative my-8 group rounded-3xl overflow-hidden border border-white/10 bg-zinc-950 shadow-2xl not-prose transition-all duration-500 hover:border-white/20">
+      <div className="flex items-center justify-between px-6 py-4 bg-white/[0.02] border-b border-white/5">
         <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center">
+            <Code className="w-4 h-4 text-zinc-500 group-hover:text-primary transition-colors" />
+          </div>
+          <span className="text-xs font-bold tracking-widest text-zinc-400 uppercase">{language || 'text'}</span>
+        </div>
+        <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
           <button
             onClick={handleCopy}
-            className="p-1.5 text-zinc-500 hover:text-white transition-colors"
+            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all"
             title="Copy code"
           >
             {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
           </button>
           <button
             onClick={handleRun}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold text-zinc-300 hover:bg-white/10 hover:text-white transition-all active:scale-95"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 border border-primary/20 text-[10px] font-bold text-primary hover:bg-primary/20 transition-all active:scale-95"
           >
-            <Play className="w-3 h-3 fill-current" />
-            Run
+            <Play className="w-3.5 h-3.5 fill-current" />
+            RUN
           </button>
         </div>
       </div>
@@ -325,10 +288,11 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
         style={vscDarkPlus}
         customStyle={{
           margin: 0,
-          padding: '1.5rem',
+          padding: '2rem',
           background: 'transparent',
           fontSize: '13px',
-          lineHeight: '1.6',
+          lineHeight: '1.7',
+          fontFamily: 'var(--font-mono)',
         }}
       >
         {code.trim()}
@@ -344,8 +308,6 @@ function TableBlock({ children, node }: any) {
   const tableRef = useRef<HTMLDivElement>(null);
 
   const handleCopyMarkdown = useCallback(() => {
-    // Basic markdown table reconstructor
-    // This is a bit simplified, but works for standard tables
     const table = tableRef.current?.querySelector('table');
     if (!table) return;
 
@@ -369,18 +331,18 @@ function TableBlock({ children, node }: any) {
   }, []);
 
   return (
-    <div className="group relative my-8 w-fit max-w-full">
-      <div className="absolute -top-10 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
+    <div className="group relative my-10 w-fit max-w-full">
+      <div className="absolute -top-12 right-0 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
         <button
           onClick={handleCopyMarkdown}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 border border-white/10 text-[10px] font-bold text-zinc-300 hover:bg-zinc-700 transition-all"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-900 border border-white/10 text-[10px] font-bold text-zinc-400 hover:text-white hover:border-white/20 transition-all shadow-2xl shadow-black"
         >
-          <Copy className="w-3 h-3" />
-          Copy Markdown
+          <Copy className="w-3.5 h-3.5" />
+          COPY MARKDOWN
         </button>
       </div>
-      <div ref={tableRef} className="overflow-x-auto rounded-[20px] border border-white/10 bg-[#121212] shadow-2xl not-prose">
-        <table className="w-full border-collapse text-left text-[14px] font-medium">
+      <div ref={tableRef} className="overflow-x-auto rounded-[2rem] border border-white/5 bg-zinc-950 shadow-2xl not-prose p-1">
+        <table className="w-full border-collapse text-left text-sm font-medium">
           {children}
         </table>
       </div>
@@ -414,8 +376,27 @@ export function MarkdownRenderer({ content, className, onEntityClick, onQuizSubm
                 </code>
               );
             }
+            if (language === 'recall') {
+              try {
+                const recallData = JSON.parse(String(children));
+                return (
+                  <RecallChallenge 
+                    {...recallData} 
+                    onAccept={() => {
+                      const chatInput = document.getElementById('chat-input') as HTMLTextAreaElement;
+                      if (chatInput) {
+                        chatInput.focus();
+                        chatInput.placeholder = "Explain the connection...";
+                      }
+                    }} 
+                  />
+                );
+              } catch (e) {
+                console.error('Failed to parse recall challenge:', e);
+              }
+            }
 
-            if (language === 'quiz' || (language === 'json' && children.toString().includes('"type": "quiz"'))) {
+            if (language === 'quiz' || (language === 'json' && String(children).includes('"type": "quiz"'))) {
               try {
                 const quizData = JSON.parse(String(children));
                 if (quizData.type === 'quiz') {
@@ -496,19 +477,78 @@ export function MarkdownRenderer({ content, className, onEntityClick, onQuizSubm
           },
 
           // Typography
-          h1: ({ children }) => <h1 className="text-2xl font-bold mt-8 mb-4 font-orbitron tracking-tight text-white border-b border-white/10 pb-2">{children}</h1>,
-          h2: ({ children }) => <h2 className="text-xl font-bold mt-6 mb-3 font-orbitron tracking-tight text-zinc-100">{children}</h2>,
-          h3: ({ children }) => <h3 className="text-lg font-bold mt-4 mb-2 font-orbitron tracking-tight text-zinc-200">{children}</h3>,
-          p: ({ children }) => <p className="mb-4 leading-relaxed text-zinc-300 last:mb-0">{children}</p>,
-          ul: ({ children }) => <ul className="list-disc pl-6 mb-4 space-y-2 text-zinc-300">{children}</ul>,
-          ol: ({ children }) => <ol className="list-decimal pl-6 mb-4 space-y-2 text-zinc-300">{children}</ol>,
-          li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-          blockquote: ({ children }) => (
-            <blockquote className="border-l-4 border-primary/50 bg-primary/5 px-6 py-4 my-6 rounded-r-xl italic text-zinc-200">
+          h1: ({ children }) => (
+            <h1 className="text-2xl font-bold mt-10 mb-6 font-orbitron tracking-[0.1em] text-white flex items-center gap-3">
+              <span className="w-1 h-6 bg-primary rounded-full" />
               {children}
+            </h1>
+          ),
+          h2: ({ children }) => (
+            <h2 className="text-xl font-bold mt-8 mb-4 font-orbitron tracking-[0.05em] text-zinc-100 flex items-center gap-2">
+              <span className="w-1 h-4 bg-primary/40 rounded-full" />
+              {children}
+            </h2>
+          ),
+          h3: ({ children }) => (
+            <h3 className="text-lg font-bold mt-6 mb-3 font-orbitron tracking-tight text-zinc-200">
+              {children}
+            </h3>
+          ),
+          p: ({ children }) => (
+            <p className="mb-5 leading-[1.8] text-zinc-400 font-medium selection:bg-primary/30 last:mb-0">
+              {children}
+            </p>
+          ),
+          ul: ({ children }) => (
+            <ul className="list-none pl-2 mb-6 space-y-3">
+              {React.Children.map(children, (child: any) => {
+                if (!child) return null;
+                // Safely extract children from the li element
+                const content = React.isValidElement(child) ? (child.props as any)?.children : child;
+                // If it's just whitespace, skip it
+                if (typeof content === 'string' && !content.trim()) return null;
+                
+                return (
+                  <li className="flex items-start gap-3 group">
+                    <span className="mt-2.5 w-1.5 h-1.5 rounded-full bg-primary/40 group-hover:bg-primary transition-colors shrink-0" />
+                    <span className="text-zinc-400 font-medium group-hover:text-zinc-200 transition-colors leading-relaxed">
+                      {content}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          ),
+          ol: ({ children }) => (
+            <ol className="list-none pl-2 mb-6 space-y-4">
+              {React.Children.map(children, (child: any, i) => {
+                if (!child) return null;
+                // Safely extract children from the li element
+                const content = React.isValidElement(child) ? (child.props as any)?.children : child;
+                // If it's just whitespace, skip it
+                if (typeof content === 'string' && !content.trim()) return null;
+
+                return (
+                  <li className="flex items-start gap-4 group">
+                    <span className="mt-1 flex items-center justify-center w-5 h-5 rounded-md bg-white/5 border border-white/10 text-[10px] font-bold text-zinc-500 group-hover:text-primary group-hover:border-primary/30 transition-all shrink-0">
+                      {i + 1}
+                    </span>
+                    <span className="text-zinc-400 font-medium group-hover:text-zinc-200 transition-colors leading-relaxed">
+                      {content}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          ),
+          blockquote: ({ children }) => (
+            <blockquote className="relative border-l border-primary/30 bg-white/[0.02] px-8 py-6 my-8 rounded-r-2xl italic text-zinc-300 font-medium overflow-hidden group">
+              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Quote className="absolute top-4 right-6 w-8 h-8 text-white/5" />
+              <div className="relative z-10">{children}</div>
             </blockquote>
           ),
-          hr: () => <hr className="my-8 border-white/10" />,
+          hr: () => <hr className="my-10 border-white/5" />,
         }}
       >
         {content}

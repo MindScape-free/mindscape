@@ -183,10 +183,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
 
             {[
               { label: 'Users', value: stats?.totalUsers || 0, icon: Users, color: 'violet', glow: 'shadow-violet-500/5' },
-              { key: 'totalMaps', label: 'Total Maps', value: stats?.totalMaps || 0, icon: MapIcon, color: 'blue' },
-              { key: 'totalSyncs', label: 'Total Created', value: totalMindmapsEver, icon: RefreshCw, color: 'indigo' },
-              { key: 'totalChats', label: 'AI Chats', value: stats?.totalChats || 0, icon: MessageSquare, color: 'violet' },
-              { key: 'activeUsers24h', label: 'Active Today', value: metrics?.activeUsers24h || 0, icon: Zap, color: 'emerald' },
+              { label: 'Active Maps', value: stats?.totalMaps || 0, icon: MapIcon, color: 'blue' },
+              { label: 'Active Nodes', value: stats?.totalNodesActive || 0, icon: Layers, color: 'indigo' },
+              { label: 'Global Nodes', value: stats?.totalNodes || 0, icon: Signal, color: 'violet' },
+              { label: 'AI Chats', value: stats?.totalChats || 0, icon: MessageSquare, color: 'emerald' },
             ].map((stat: any, i) => (
               <motion.div 
                 key={stat.label}
@@ -213,12 +213,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
+              { label: 'Total Created', value: totalMindmapsEver || 0, icon: RefreshCw, color: 'indigo' },
+              { label: 'Avg Complexity', value: Number(safeMapAnalytics.avgNodesPerMap).toFixed(1), icon: Layers, color: 'rose' },
+              { label: 'Total Images', value: stats?.totalImages || 0, icon: ImageIcon, color: 'amber' },
+              { label: 'Active Today', value: metrics?.activeUsers24h || 0, icon: Zap, color: 'emerald' },
               { label: 'Engagement', value: `${Math.round(metrics?.engagementRate ?? 0)}%`, icon: ActivityIcon, color: 'violet' },
               { label: 'New Users', value: metrics?.newUsersToday || 0, icon: UserPlus, color: 'blue', sub: metrics?.newUsersYesterday || 0, trend: (metrics?.newUsersToday || 0) >= (metrics?.newUsersYesterday || 0) },
-              { label: 'New Maps', value: metrics?.newMapsToday || 0, icon: MapIcon, color: 'indigo', sub: metrics?.newMapsYesterday || 0, trend: (metrics?.newMapsToday || 0) >= (metrics?.newMapsYesterday || 0) },
-              { label: 'Maps per User', value: metrics?.avgMapsPerUser?.toFixed(1) ?? 0, icon: Signal, color: 'violet' },
-              { label: 'Chats per User', value: metrics?.avgChatsPerUser?.toFixed(1) ?? 0, icon: BarChart3, color: 'amber' },
-              { label: 'Avg Complexity', value: Number(safeMapAnalytics.avgNodesPerMap).toFixed(1), icon: Layers, color: 'rose' },
             ].map((stat) => (
               <motion.div 
                 key={stat.label}

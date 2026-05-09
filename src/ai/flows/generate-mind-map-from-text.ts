@@ -48,9 +48,9 @@ export async function generateMindMapFromText(
   const isMultiSource = sourceCount > 0;
 
   const densityMap: Record<string, string> = {
-    low:    isMultiSource ? `subTopics: ≥${Math.max(4, Math.min(sourceCount, 12))} | categories: 2 | subCategories: 3` : `subTopics: 4 | categories: 2 | subCategories: 3`,
-    medium: isMultiSource ? `subTopics: ≥${Math.max(4, Math.min(sourceCount, 12))} | categories: 3 | subCategories: 4` : `subTopics: 5 | categories: 3 | subCategories: 3–4`,
-    deep:   isMultiSource ? `subTopics: ≥${Math.max(4, Math.min(sourceCount, 12))} | categories: 4 | subCategories: 5` : `subTopics: 6 | categories: 4 | subCategories: 5`,
+    low:    isMultiSource ? `subTopics: ≥${Math.max(4, Math.min(sourceCount, 12))} | categories per subTopic: 2 | subCategories per category: 3` : `subTopics: 4 | categories per subTopic: 2 | subCategories per category: 3`,
+    medium: isMultiSource ? `subTopics: ≥${Math.max(4, Math.min(sourceCount, 12))} | categories per subTopic: 3 | subCategories per category: 4` : `subTopics: 5 | categories per subTopic: 3 | subCategories per category: 3–4`,
+    deep:   isMultiSource ? `subTopics: ≥${Math.max(4, Math.min(sourceCount, 12))} | categories per subTopic: 4 | subCategories per category: 5` : `subTopics: 6 | categories per subTopic: 4 | subCategories per category: 5`,
   };
   const density = densityMap[depth] || densityMap.low;
 
@@ -101,7 +101,7 @@ STRUCTURAL RULES:
 - For structured docs (IDs, Invoices, Resumes): extract ACTUAL values (e.g., "Invoice #: 12345").
 - Each subCategory MUST contain a specific fact, definition, or takeaway.
 
-SCHEMA (return ONLY this JSON):
+SCHEMA (return ONLY this JSON - show multiple items to indicate density):
 {
   "mode": "${isMultiSource ? 'multi' : 'single'}",
   "topic": "Main Topic",
@@ -109,18 +109,22 @@ SCHEMA (return ONLY this JSON):
   "icon": "lucide-kebab-case",
   "subTopics": [
     {
-      "name": "Section or Concept Name",
+      "name": "Branch 1",
       "icon": "lucide-kebab-case",
       "categories": [
         {
-          "name": "Category Name",
+          "name": "Category 1.1",
           "icon": "lucide-kebab-case",
           "subCategories": [
             {
-              "name": "Leaf Node Name",
-              "description": "Exactly 1 sentence, ≤20 words, concrete.",
-              "icon": "lucide-kebab-case",
-              "tags": ["tag1"]
+              "name": "Detail 1.1.1",
+              "description": "One specific sentence.",
+              "icon": "lucide-kebab-case"
+            },
+            {
+              "name": "Detail 1.1.2",
+              "description": "Another unique insight.",
+              "icon": "lucide-kebab-case"
             }
           ]
         }

@@ -21,6 +21,7 @@ export async function updateUserStatistics(
       nodeCount?: number;
       aiPersona?: string;
     };
+    chatsCount?: number;
   }
 ): Promise<Achievement[]> {
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -49,13 +50,18 @@ export async function updateUserStatistics(
       longestStreak = Math.max(currentStreak, longestStreak);
     }
 
+    const isSubMap = updates.mapMetadata?.isSubMap === true;
+    const mapsToIncrement = (updates.mapsCreated || 0) > 0 ? (isSubMap ? 0 : updates.mapsCreated || 0) : 0;
+    const nestedToIncrement = (updates.nestedExpansions || 0) + ((updates.mapsCreated || 0) > 0 && isSubMap ? 1 : 0);
+
     const newStats = {
       ...stats,
-      totalMapsCreated: (stats.totalMapsCreated || 0) + (updates.mapsCreated || 0),
-      totalNestedExpansions: (stats.totalNestedExpansions || 0) + (updates.nestedExpansions || 0),
+      totalMapsCreated: (stats.totalMapsCreated || 0) + mapsToIncrement,
+      totalNestedExpansions: (stats.totalNestedExpansions || 0) + nestedToIncrement,
       totalImagesGenerated: (stats.totalImagesGenerated || 0) + (updates.imagesGenerated || 0),
       totalStudyTimeMinutes: (stats.totalStudyTimeMinutes || 0) + (updates.studyTimeMinutes || 0),
       totalNodes: (stats.totalNodes || 0) + (updates.nodesCreated || 0),
+      totalChats: (stats.totalChats || 0) + (updates.chatsCount || 0),
       lastActiveDate: today,
       currentStreak,
       longestStreak,
@@ -66,11 +72,12 @@ export async function updateUserStatistics(
       ...activity,
       [today]: {
         ...todayActivity,
-        mapsCreated: (todayActivity.mapsCreated || 0) + (updates.mapsCreated || 0),
-        nestedExpansions: (todayActivity.nestedExpansions || 0) + (updates.nestedExpansions || 0),
+        mapsCreated: (todayActivity.mapsCreated || 0) + mapsToIncrement,
+        nestedExpansions: (todayActivity.nestedExpansions || 0) + nestedToIncrement,
         imagesGenerated: (todayActivity.imagesGenerated || 0) + (updates.imagesGenerated || 0),
         studyTimeMinutes: (todayActivity.studyTimeMinutes || 0) + (updates.studyTimeMinutes || 0),
         nodesCreated: (todayActivity.nodesCreated || 0) + (updates.nodesCreated || 0),
+        chatsCount: (todayActivity.chatsCount || 0) + (updates.chatsCount || 0),
       },
     };
 
@@ -137,6 +144,10 @@ export async function trackStudyTime(supabase: SupabaseClient, userId: string, m
 export async function trackNodesAdded(supabase: SupabaseClient, userId: string, count: number): Promise<Achievement[]> {
   if (count <= 0) return [];
   return updateUserStatistics(supabase, userId, { nodesCreated: count });
+}
+
+export async function trackChat(supabase: SupabaseClient, userId: string): Promise<Achievement[]> {
+  return updateUserStatistics(supabase, userId, { chatsCount: 1 });
 }
 
 export async function initializeUserProfile(

@@ -30,6 +30,7 @@ interface StreamInput {
   sessionId?: string;
   model?: string;
   apiKey?: string;
+  token?: string;
   agentMode?: boolean;
 }
 
@@ -60,9 +61,17 @@ export function useStreamingChat(options: StreamingChatOptions = {}): StreamingC
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    if (input.token) {
+      headers['Authorization'] = `Bearer ${input.token}`;
+    } else if (input.apiKey) {
+      // Fallback for cases where apiKey is used for auth (less common now)
+      headers['Authorization'] = `Bearer ${input.apiKey}`;
+    }
+
     fetch('/api/chat/stream', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(input),
       signal: controller.signal,
     })
@@ -96,46 +105,42 @@ export function useStreamingChat(options: StreamingChatOptions = {}): StreamingC
           throw new Error(chunk.replace('[ERROR]', '').trim());
         }
 
-        if (input.agentMode) {
-          // Parse prefixed events: T: (Text), R: (Reasoning), C: (Call), O: (Output)
-          // Note: chunks might contain multiple events or partial events if we're not careful.
-          // For simplicity in this implementation, we assume well-delimited events for now.
-          // In a production app, we'd use a more robust parser (like ndjson).
-          const events = chunk.split(/(?=[TRCO]:)/);
-          
-          for (const event of events) {
-            if (event.startsWith('T:')) {
-              const delta = event.slice(2);
-              accumulatedText += delta;
-              fullTextRef.current = accumulatedText;
-              setText(accumulatedText);
-              options.onChunk?.(delta);
-            } else if (event.startsWith('R:')) {
-              const rText = event.slice(2);
-              setReasoning(rText);
-            } else if (event.startsWith('C:')) {
-              try {
-                const { name, args } = JSON.parse(event.slice(2));
-                setToolCalls(prev => [...prev, { name, args, status: 'calling' }]);
-              } catch (e) { console.error('Failed to parse tool call', e); }
-            } else if (event.startsWith('O:')) {
-              try {
-                const { callId, result } = JSON.parse(event.slice(2));
-                setToolCalls(prev => {
-                  const last = prev[prev.length - 1];
-                  if (last && last.status === 'calling') {
-                    return [...prev.slice(0, -1), { ...last, result, status: 'completed' }];
-                  }
-                  return prev;
-                });
-              } catch (e) { console.error('Failed to parse tool result', e); }
-            }
+        // Universal prefixed event parsing
+        const events = chunk.split(/(?=[TRCAHSCO]:)/);
+        
+        for (const event of events) {
+          if (event.startsWith('T:')) {
+            const delta = event.slice(2);
+            accumulatedText += delta;
+            fullTextRef.current = accumulatedText;
+            setText(accumulatedText);
+            options.onChunk?.(delta);
+          } else if (event.startsWith('R:')) {
+            const rText = event.slice(2);
+            setReasoning(prev => prev + rText);
+          } else if (event.startsWith('C:')) {
+            try {
+              const { name, args } = JSON.parse(event.slice(2));
+              setToolCalls(prev => [...prev, { name, args, status: 'calling' }]);
+            } catch (e) { console.error('Failed to parse tool call', e); }
+          } else if (event.startsWith('O:')) {
+            try {
+              const { callId, result } = JSON.parse(event.slice(2));
+              setToolCalls(prev => {
+                const last = prev[prev.length - 1];
+                if (last && last.status === 'calling') {
+                  return [...prev.slice(0, -1), { ...last, result, status: 'completed' }];
+                }
+                return prev;
+              });
+            } catch (e) { console.error('Failed to parse tool result', e); }
+          } else if (!event.includes(':')) {
+            // Fallback for raw text without prefix (legacy or other providers)
+            accumulatedText += event;
+            fullTextRef.current = accumulatedText;
+            setText(accumulatedText);
+            options.onChunk?.(event);
           }
-        } else {
-          accumulatedText += chunk;
-          fullTextRef.current = accumulatedText;
-          setText(accumulatedText);
-          options.onChunk?.(chunk);
         }
       }
 

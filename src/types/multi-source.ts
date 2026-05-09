@@ -1,4 +1,4 @@
-export type SourceType = 'youtube' | 'website' | 'pdf' | 'image' | 'text';
+export type SourceType = 'youtube' | 'website' | 'pdf' | 'image' | 'text' | 'doc';
 
 export interface SourceItem {
   id: string;

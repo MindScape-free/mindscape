@@ -6,6 +6,7 @@ import {
   Youtube, 
   FileText, 
   FileIcon as PdfIcon, 
+  FileText as DocIcon,
   Image as ImageIcon, 
   X, 
   Loader2,
@@ -30,6 +31,7 @@ export function SourcePillList({ sources, onRemove, onClearAll, contextUsage }: 
       case 'youtube': return <Youtube className="w-3 h-3 text-red-500" />;
       case 'website': return <Globe className="w-3 h-3 text-blue-400" />;
       case 'pdf': return <PdfIcon className="w-3 h-3 text-orange-400" />;
+      case 'doc': return <DocIcon className="w-3 h-3 text-blue-500" />;
       case 'image': return <ImageIcon className="w-3 h-3 text-pink-400" />;
       default: return <FileText className="w-3 h-3 text-green-400" />;
     }

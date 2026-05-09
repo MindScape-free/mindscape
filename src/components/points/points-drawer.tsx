@@ -34,7 +34,7 @@ interface PointsDialogProps {
   onClose: () => void;
 }
 
-type Tab = 'progress' | 'earn' | 'history' | 'ranks';
+type Tab = 'progress' | 'earn' | 'ranks';
 
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
   const d = new Date();
@@ -245,7 +245,6 @@ export function PointsDialog({ isOpen, onClose }: PointsDialogProps) {
 
   const TABS: { id: Tab; label: string }[] = [
     { id: 'progress', label: 'My Progress' },
-    { id: 'history', label: 'History' },
     { id: 'earn', label: 'How to Earn' },
     { id: 'ranks', label: 'Ranks' },
   ];
@@ -415,88 +414,7 @@ export function PointsDialog({ isOpen, onClose }: PointsDialogProps) {
               </motion.div>
             )}
 
-            {/* ── History Tab ── */}
-            {tab === 'history' && (
-              <motion.div
-                key="history"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="space-y-4"
-              >
-                {txLoading && txHistory.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 gap-3">
-                    <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
-                      <Loader2 className="h-5 w-5 text-zinc-600 animate-spin" />
-                    </div>
-                    <p className="text-xs text-zinc-600">Loading your activity...</p>
-                  </div>
-                ) : txHistory.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 gap-3">
-                    <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
-                      <Zap className="h-5 w-5 text-zinc-600" />
-                    </div>
-                    <p className="text-xs text-zinc-500">No activity yet</p>
-                    <p className="text-[10px] text-zinc-600">Start creating mind maps to earn XP!</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={selectedMonth}
-                        onChange={(e) => setSelectedMonth(e.target.value)}
-                        className="flex-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-zinc-300 focus:outline-none focus:border-primary/50"
-                      >
-                        <option value="all">All Time</option>
-                        {MONTH_OPTIONS.map((d) => {
-                          const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                          const label = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-                          return <option key={val} value={val}>{label}</option>;
-                        })}
-                      </select>
-                      {selectedMonth !== 'all' && filteredHistory.length > 0 && (
-                        <div className="px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-xs font-bold text-primary shrink-0">
-                          +{totalFilteredPoints.toLocaleString()} XP
-                        </div>
-                      )}
-                    </div>
-                    {filteredHistory.map((group) => (
-                      <div key={group.date} className="space-y-1">
-                        <div className="flex items-center justify-between px-1">
-                          <p className="font-orbitron text-[9px] uppercase tracking-widest text-zinc-600">{group.label}</p>
-                          <p className="text-[10px] font-bold text-zinc-400">+{group.totalPoints} XP</p>
-                        </div>
-                        <div className="rounded-xl border border-white/5 bg-white/[0.02] overflow-hidden divide-y divide-white/[0.03]">
-                          {group.transactions.map((tx) => (
-                            <TransactionItem key={tx.id} tx={tx} />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
 
-                    {filteredHistory.length === 0 && selectedMonth !== 'all' && (
-                      <div className="flex flex-col items-center justify-center py-8 gap-2">
-                        <p className="text-xs text-zinc-500">No activity in this period</p>
-                      </div>
-                    )}
-
-                    {selectedMonth === 'all' && hasMore && (
-                      <button
-                        onClick={loadMore}
-                        className="w-full py-2.5 rounded-xl border border-white/5 bg-white/[0.02] text-[11px] text-zinc-500 hover:text-zinc-300 hover:border-white/10 transition-all flex items-center justify-center gap-2"
-                      >
-                        <Loader2 className="h-3 w-3" />
-                        Load more
-                      </button>
-                    )}
-
-                    {selectedMonth === 'all' && !hasMore && txHistory.length > 0 && (
-                      <p className="text-center text-[10px] text-zinc-700 py-2">You've reached the beginning of your journey</p>
-                    )}
-                  </>
-                )}
-              </motion.div>
-            )}
 
             {/* ── Earn Tab ── */}
             {tab === 'earn' && (

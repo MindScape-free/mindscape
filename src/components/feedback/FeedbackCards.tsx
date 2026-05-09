@@ -31,6 +31,9 @@ import {
   Check,
   Fingerprint,
   Flag,
+  Search,
+  Filter,
+  Layers,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -53,7 +56,7 @@ interface FeedbackCardsProps {
 
 export const FeedbackCards: React.FC<FeedbackCardsProps> = ({ data, onRefresh, adminUserId, isLoading }) => {
   const { toast } = useToast();
-  const { supabase } = useAuth();
+  const { supabase, isAdmin } = useAuth();
   
   const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -61,6 +64,22 @@ export const FeedbackCards: React.FC<FeedbackCardsProps> = ({ data, onRefresh, a
   const [adminNotes, setAdminNotes] = useState('');
   const [copiedUserId, setCopiedUserId] = useState(false);
   const [expandedLogs, setExpandedLogs] = useState<Record<string, boolean>>({});
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+
+  const filteredData = data.filter(f => {
+    const matchesSearch = !searchTerm || 
+      f.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      f.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      f.userName?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || f.status === statusFilter;
+    const matchesType = typeFilter === 'all' || f.type === typeFilter;
+    
+    return matchesSearch && matchesStatus && matchesType;
+  });
 
   const addActivityLog = async (feedbackId: string, log: Omit<AdminActivityLogEntry, 'id' | 'timestamp'>) => {
     if (!supabase) return;
@@ -330,26 +349,66 @@ export const FeedbackCards: React.FC<FeedbackCardsProps> = ({ data, onRefresh, a
     );
   }
 
-  if (data.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 px-6 rounded-2xl bg-zinc-900/20 border border-white/5">
-        <div className="relative mb-6">
-          <div className="w-20 h-20 rounded-full bg-zinc-800/50 flex items-center justify-center">
-            <MessageSquare className="h-10 w-10 text-zinc-700" />
-          </div>
-        </div>
-        <p className="text-lg font-bold text-zinc-400 mb-2">No Feedback Yet</p>
-        <p className="text-sm text-zinc-600 text-center max-w-md">
-          User feedback will appear here once submitted. Check back regularly to stay on top of community insights.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {data.map((item) => (
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+          <input 
+            type="text" 
+            placeholder="Search feedback..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-zinc-900/40 border border-white/5 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-primary/50 transition-all shadow-xl"
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900/40 border border-white/5 shadow-xl">
+            <Filter className="h-3.5 w-3.5 text-zinc-500" />
+            <select 
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-transparent text-xs font-bold uppercase tracking-wider text-zinc-300 focus:outline-none cursor-pointer"
+            >
+              <option value="all">Status: All</option>
+              <option value="OPEN">Open</option>
+              <option value="IN_REVIEW">Review</option>
+              <option value="RESOLVED">Resolved</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900/40 border border-white/5 shadow-xl">
+            <Layers className="h-3.5 w-3.5 text-zinc-500" />
+            <select 
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="bg-transparent text-xs font-bold uppercase tracking-wider text-zinc-300 focus:outline-none cursor-pointer"
+            >
+              <option value="all">Type: All</option>
+              <option value="BUG">Bug</option>
+              <option value="SUGGESTION">Suggestion</option>
+              <option value="IMPROVEMENT">Improvement</option>
+              <option value="FEATURE">Feature</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {filteredData.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 px-6 rounded-2xl bg-zinc-900/20 border border-white/5">
+          <div className="relative mb-6">
+            <div className="w-20 h-20 rounded-full bg-zinc-800/50 flex items-center justify-center">
+              <MessageSquare className="h-10 w-10 text-zinc-700" />
+            </div>
+          </div>
+          <p className="text-lg font-bold text-zinc-400 mb-2">No matching feedback</p>
+          <p className="text-sm text-zinc-600 text-center max-w-md">
+            Try adjusting your filters or search terms.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filteredData.map((item) => (
           <div 
             key={item.id}
             className={`group relative rounded-2xl p-5 bg-gradient-to-br ${getStatusColor(item.status)} border backdrop-blur-sm hover:scale-[1.02] transition-all duration-300 cursor-pointer`}
@@ -404,8 +463,9 @@ export const FeedbackCards: React.FC<FeedbackCardsProps> = ({ data, onRefresh, a
               <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-violet-400 transition-colors" />
             </div>
           </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
         <DialogContent className="max-w-4xl bg-zinc-950 border-zinc-900 text-white max-h-[90vh] overflow-y-auto">

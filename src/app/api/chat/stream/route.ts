@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateSearchContext } from '@/app/actions/generateSearchContext';
+import { executeGoogleSearch } from '@/ai/search/google-search';
+import { normalizeSearchResults, filterAuthoritativeSources } from '@/ai/search/search-normalizer';
+import { SearchRequestSchema } from '@/ai/search/search-schema';
 import { z } from 'zod';
-import { OpenRouter } from '@openrouter/sdk';
 import { createAgent } from '@/ai/agent';
-import type { Tool } from '@openrouter/sdk/lib/tool-types.js';
+import { defaultTools } from '@/ai/tools';
+import { orchestrateStream } from '@/ai/providers/orchestrator';
 import { EventEmitter } from 'eventemitter3';
 
 const ChatStreamInputSchema = z.object({
@@ -27,27 +29,65 @@ const ChatStreamInputSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  console.log('🚀 [ChatStream] POST request received');
+  const startTime = Date.now();
+  
   try {
     const body = await req.json();
+    console.log('📦 [ChatStream] Request body parsed');
     const input = ChatStreamInputSchema.parse(body);
+    console.log('✅ [ChatStream] Input validated');
     const { apiKey: effectiveApiKey, topic, persona, history, question, attachments, pdfContext, model: requestedModel, agentMode } = input;
 
-    const apiKey = effectiveApiKey || process.env.POLLINATIONS_API_KEY;
+    // Track chat activity if user is authenticated
+    try {
+      const authHeader = req.headers.get('Authorization');
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        const { getSupabaseAdmin } = await import('@/lib/supabase-server');
+        const supabase = getSupabaseAdmin();
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (user) {
+          const { trackChat } = await import('@/lib/activity-tracker');
+          await trackChat(supabase, user.id);
+          console.log(`💬 [ChatStream] Tracked chat for user: ${user.id}`);
+        }
+      }
+    } catch (err) {
+      console.warn('[ChatStream] Failed to track chat activity:', err);
+    }
 
-    if (!apiKey) {
+    // Ensure we have at least some API key to work with (user provided or system default)
+    if (!effectiveApiKey && !process.env.POLLINATIONS_API_KEY && !process.env.AI_FALLBACK_API_KEY) {
       return NextResponse.json({ error: 'API key required' }, { status: 401 });
     }
+
+    const searchApiKey = effectiveApiKey || process.env.POLLINATIONS_API_KEY;
 
     const currentDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     let searchBlock = `📅 Current Date: ${currentDate}`;
 
     try {
-      const searchResult = await generateSearchContext({ query: question, depth: 'basic', apiKey, provider: 'pollinations' });
-      if (searchResult.data && searchResult.data.sources.length > 0) {
-        searchBlock += `\n\n🌐 Real-Time Web Info:\n${searchResult.data.summary}\nUse this to ground your response. Prefer search facts over training data.`;
+      console.log('🔍 [ChatStream] Executing search context...');
+      const validatedSearchParams = SearchRequestSchema.parse({
+        query: question,
+        depth: 'basic',
+        maxResults: 5,
+      });
+
+      const rawResults = await executeGoogleSearch({
+        ...validatedSearchParams,
+        apiKey: searchApiKey as string,
+      });
+
+      const searchContext = normalizeSearchResults(rawResults, validatedSearchParams.query);
+      if (searchContext.sources.length > 0) {
+        const filteredSources = filterAuthoritativeSources(searchContext.sources);
+        searchBlock += `\n\n🌐 Real-Time Web Info:\n${searchContext.summary}\nUse this to ground your response. Prefer search facts over training data.`;
+        console.log(`✅ [ChatStream] Search context found: ${filteredSources.length} sources`);
       }
-    } catch {
-      // continue with date only
+    } catch (err) {
+      console.warn('[ChatStream] Search context failed (skipping):', err);
     }
 
     const historyText = history?.map(h => `${h.role}: ${h.content}`).join('\n') || '';
@@ -114,8 +154,7 @@ ${historyText}
 
 ## RESPONSE REQUIREMENTS
 - Use Markdown formatting (bullets, bold, tables for comparisons).
-- Use \`\`\`mermaid blocks for diagrams when explaining processes, algorithms, or complex systems.
-- Use standard LaTeX for mathematical formulas (wrap in \( ... \) for inline or \[ ... \] for display).
+- Use standard LaTeX for mathematical formulas (wrap in $...$ for inline or $$...$$ for display).
 - **Use [[Topic Name]] syntax for key entities, concepts, or terms that the user might want to explore further in a mind map.**
 - Provide YouTube links or direct image URLs when a visual reference would significantly enhance the explanation.
 - Start with a brief intro.
@@ -142,12 +181,40 @@ Provide your response as plain text (no JSON wrapper). Stream the response word 
       async start(controller) {
         try {
           if (agentMode) {
-            const { createAgent } = await import('@/ai/agent');
-            const { defaultTools } = await import('@/ai/tools');
-            
+            console.log('🤖 [ChatStream] Starting Agent mode...');
+            const agentApiKey = effectiveApiKey || process.env.AI_FALLBACK_API_KEY;
+            if (!agentApiKey) {
+              throw new Error("API key is required for Agent mode");
+            }
+
+            // Map UI-selected free models to OpenRouter free models
+            const getOpenRouterModel = (modelId?: string) => {
+              if (!modelId) return process.env.AI_FALLBACK_MODEL || 'google/gemini-2.5-flash-free';
+              if (modelId.includes('/')) return modelId; // Already an OpenRouter ID
+              
+              switch (modelId.toLowerCase()) {
+                case 'mistral':
+                case 'mistral-large':
+                  return 'mistralai/mistral-7b-instruct:free';
+                case 'deepseek':
+                case 'deepseek-coder':
+                case 'deepseek-reasoner':
+                  return 'deepseek/deepseek-r1:free';
+                case 'gemini-fast':
+                case 'gemini':
+                  return 'google/gemini-2.5-flash-free';
+                case 'llama':
+                case 'llama3':
+                  return 'meta-llama/llama-3-8b-instruct:free';
+                default:
+                  // For 'openai' or others, fallback to the default free model
+                  return process.env.AI_FALLBACK_MODEL || 'google/gemini-2.5-flash-free';
+              }
+            };
+
             const agent = createAgent({
-              apiKey,
-              model: requestedModel || 'openrouter/auto',
+              apiKey: agentApiKey,
+              model: getOpenRouterModel(requestedModel),
               instructions: systemPrompt,
               tools: defaultTools,
             });
@@ -181,7 +248,7 @@ Provide your response as plain text (no JSON wrapper). Stream the response word 
             return;
           }
 
-          const { orchestrateStream } = await import('@/ai/providers/orchestrator');
+          console.log('🌊 [ChatStream] Starting Orchestrator mode...');
 
           await orchestrateStream(
             {
@@ -190,13 +257,16 @@ Provide your response as plain text (no JSON wrapper). Stream the response word 
               images: images && images.length > 0 ? images : undefined,
               capability: 'creative',
               model: requestedModel || undefined,
-              apiKey,
+              apiKey: effectiveApiKey,
               stream: true,
             },
             (chunk) => {
+              if (chunk.reasoning) {
+                controller.enqueue(encoder.encode(`R:${chunk.reasoning}`));
+              }
               if (chunk.text) {
-                // For non-agent mode, we just send raw text to maintain backward compatibility
-                controller.enqueue(encoder.encode(chunk.text));
+                // For Phase 3 consistency, we now use T: prefix for all chat text
+                controller.enqueue(encoder.encode(`T:${chunk.text}`));
               }
               if (chunk.done) {
                 controller.close();
@@ -216,7 +286,8 @@ Provide your response as plain text (no JSON wrapper). Stream the response word 
       }
     });
 
-    return new Response(stream, {
+    console.log(`✨ [ChatStream] Stream response ready (init took ${Date.now() - startTime}ms)`);
+    return new NextResponse(stream, {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-cache',

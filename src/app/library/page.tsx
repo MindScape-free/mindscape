@@ -46,23 +46,30 @@ import { useMindMapPersistence } from '@/hooks/use-mind-map-persistence';
 // ── Shared thumbnail prompt engine (mirrors use-mind-map-persistence.ts) ──
 function buildThumbnailPrompt(topic: string): string {
   const t = topic.toLowerCase();
+  
+  // Person/Biography
   if (/\b(einstein|newton|tesla|darwin|freud|curie|hawking|turing|jobs|gates|musk|gandhi|lincoln|napoleon|aristotle|plato|socrates|shakespeare|beethoven|picasso|van gogh|obama|zuckerberg|lovelace|feynman|galileo|torvalds)\b/i.test(t) ||
-      /\b(scientist|mathematician|philosopher|artist|founder|engineer|architect|designer|leader|inventor)\b/i.test(t)) {
-    return `Dramatic cinematic portrait photograph of ${topic}, professional studio lighting with deep shadows, shallow depth of field, photorealistic, 8k resolution, film grain, rich tonal contrast, dark moody background, sharp facial detail`;
+      /\b(scientist|mathematician|philosopher|artist|founder|engineer|architect|designer|leader|inventor|expert|author|figure)\b/i.test(t)) {
+    return `Cinematic professional portrait of ${topic}, dramatic studio lighting, 8k resolution, photorealistic, sharp focus, dark elegant background, purple rim lighting, high detail`;
   }
-  if (/\b(ai|machine learning|deep learning|neural|algorithm|programming|software|code|data|cloud|blockchain|crypto|quantum|computing|database|api|framework|javascript|python|react|typescript|linux|cybersecurity|devops)\b/i.test(t)) {
-    return `Futuristic digital visualization of ${topic}, glowing circuit patterns and data streams, deep space dark background, electric blue and violet neon accents, holographic interface elements, cinematic depth of field, ultra-detailed 3D render, 8k quality, no text`;
+  
+  // Technology/Digital
+  if (/\b(ai|machine learning|deep learning|neural|algorithm|programming|software|code|data|cloud|blockchain|crypto|quantum|computing|database|api|framework|javascript|python|react|typescript|linux|cybersecurity|devops|digital|internet)\b/i.test(t)) {
+    return `Futuristic digital visualization of ${topic}, glowing circuit paths, holographic data streams, deep space indigo background, vibrant neon purple and blue accents, ultra-detailed 3D render, 8k quality, no text`;
   }
-  if (/\b(physics|chemistry|biology|astronomy|neuroscience|genetics|evolution|thermodynamics|relativity|cosmology|ecology|geology|mathematics|calculus|biochemistry|molecular|astrophysics)\b/i.test(t)) {
-    return `Scientific visualization of ${topic}, photorealistic macro or cosmic scale imagery, dramatic studio lighting, rich color gradients from deep blue to gold, ultra-sharp detail, cinematic composition, professional science photography, 8k resolution, no text`;
+  
+  // Science/Nature
+  if (/\b(physics|chemistry|biology|astronomy|neuroscience|genetics|evolution|thermodynamics|relativity|cosmology|ecology|geology|mathematics|calculus|biochemistry|molecular|astrophysics|space|ocean|forest|animal)\b/i.test(t)) {
+    return `Cinematic scientific visualization of ${topic}, stunning professional photography style, macro or cosmic perspective, rich color gradients, atmospheric lighting, 8k resolution, sharp focus, award-winning composition`;
   }
-  if (/\b(philosophy|consciousness|ethics|metaphysics|epistemology|existentialism|psychology|sociology|economics|politics|history|culture|religion|spirituality|mindfulness|creativity|innovation|strategy|leadership|productivity)\b/i.test(t)) {
-    return `Abstract conceptual art representing ${topic}, flowing geometric shapes and light particles, deep dark background with rich purple and indigo gradients, ethereal atmospheric glow, cinematic composition, digital art masterpiece, 8k quality, no text, no people`;
+  
+  // Business/Strategy/Productivity
+  if (/\b(business|strategy|marketing|finance|economy|startup|growth|productivity|leadership|management|success|money|market|trade|investment)\b/i.test(t)) {
+    return `Elegant minimalist conceptual art for ${topic}, abstract geometric shapes, gold and purple corporate color palette, clean negative space, premium high-end aesthetic, cinematic lighting, 8k quality`;
   }
-  if (/\b(ocean|forest|mountain|space|universe|galaxy|planet|climate|weather|ecosystem|wildlife|animal|plant|flower|tree|water|fire|earth|wind|nature|environment)\b/i.test(t)) {
-    return `Breathtaking cinematic nature photography of ${topic}, golden hour or dramatic storm lighting, ultra-sharp foreground detail with atmospheric depth, rich saturated colors, professional landscape photography, 8k resolution, award-winning composition`;
-  }
-  return `Cinematic conceptual illustration of ${topic}, dramatic studio lighting, dark premium background, rich purple and gold accent colors, ultra-detailed professional digital art, sharp focus, 8k quality, no text, no watermarks`;
+
+  // Default Fallback
+  return `Cinematic conceptual illustration of ${topic}, professional digital art, dramatic lighting, dark premium background with purple and gold accents, 8k quality, sharp focus, no text, no watermarks`;
 }
 
 
@@ -1037,10 +1044,15 @@ export default function DashboardPage() {
     } catch (err: any) {
       console.error("Regeneration failed:", err);
       setImageErrorMapIds(prev => new Set(prev).add(mapId));
+      
+      const isRateLimit = err.message.includes('429') || err.message.toLowerCase().includes('rate limit');
+      
       toast({
         variant: "destructive",
-        title: "Regeneration Failed",
-        description: err.message || "Failed to regenerate thumbnail."
+        title: isRateLimit ? "Provider Busy" : "Regeneration Failed",
+        description: isRateLimit 
+          ? "The AI image provider is currently rate-limiting requests. Please wait about 60 seconds and try again."
+          : (err.message || "Failed to regenerate thumbnail.")
       });
     } finally {
       setRegeneratingMapIds(prev => {
@@ -1095,54 +1107,62 @@ export default function DashboardPage() {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="container mx-auto px-4 sm:px-8 pt-24 pb-8">
-        <div
-          className="text-center mb-12"
-        >
-          <h1 className="text-4xl font-bold tracking-tight mb-2">Your Saved Mind Maps</h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Easily access, organize and continue your knowledge maps.
-          </p>
+      <div className="min-h-screen text-white">
+        {/* Hero Section */}
+        <div className="relative overflow-hidden pt-24 pb-16">
+          <div className="container mx-auto px-4 relative z-10 text-center">
+            <Badge variant="outline" className="mb-4 border-primary/30 bg-primary/10 text-primary gap-1.5 py-1 px-3">
+              <Database className="h-3 w-3" />
+              Personal Library
+            </Badge>
+            <h1 className="text-4xl font-bold tracking-tight mb-2">Your Saved Mind Maps</h1>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Easily access, organize and continue your knowledge maps.
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-2xl justify-center">
-            <div className="relative w-full max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          {/* Search & Filters */}
+          <div className="flex flex-col md:flex-row gap-4 mb-10 items-center justify-between">
+            <div className="relative w-full md:max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
               <input
                 type="text"
-                placeholder="Search maps..."
+                placeholder="Search your mindmaps..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full flex pl-10 h-11 rounded-full bg-black/40 text-zinc-100 outline-none focus:ring-0 placeholder:text-zinc-600 border border-white/5 focus:border-primary/50 focus:bg-black/60 transition-all font-medium"
               />
             </div>
+
+            <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
+              <Select value={sortOption} onValueChange={(value) => setSortOption(value as SortOption)}>
+                <SelectTrigger className="w-[180px] h-11 rounded-full glassmorphism border-white/5 bg-black/40 hover:bg-black/60 focus:ring-0 focus:ring-offset-0 transition-all">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent className="glassmorphism border-white/10 rounded-xl">
+                  {[
+                    { value: 'recent', label: 'Most Recent' },
+                    { value: 'alphabetical', label: 'A-Z' },
+                    { value: 'oldest', label: 'Oldest' }
+                  ].map((option) => (
+                    <SelectItem
+                      key={option.value}
+                      value={option.value}
+                      hideIndicator
+                      className="w-full cursor-pointer py-2.5 px-3 mb-1 last:mb-0 rounded-xl border border-transparent focus:bg-white/5 data-[state=checked]:bg-primary/10 data-[state=checked]:border-primary/50 data-[state=checked]:shadow-[0_0_15px_rgba(139,92,246,0.15)] text-[11px] font-bold uppercase tracking-wider transition-all"
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <span className={cn("inline-flex w-1.5 h-1.5 rounded-full transition-all", sortOption === option.value ? "bg-primary shadow-[0_0_8px_rgba(139,92,246,0.6)]" : "bg-zinc-600")} />
+                        {option.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <Select value={sortOption} onValueChange={(value) => setSortOption(value as SortOption)}>
-            <SelectTrigger className="w-full sm:w-[180px] h-11 rounded-full glassmorphism border-white/5 bg-black/40 hover:bg-black/60 focus:ring-0 focus:ring-offset-0 transition-all">
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent className="glassmorphism border-white/10">
-              {[
-                { value: 'recent', label: 'Most Recent' },
-                { value: 'alphabetical', label: 'A-Z' },
-                { value: 'oldest', label: 'Oldest' }
-              ].map((option) => (
-                <SelectItem
-                  key={option.value}
-                  value={option.value}
-                  hideIndicator
-                  className="w-full cursor-pointer py-2.5 px-3 mb-1 last:mb-0 rounded-xl border border-transparent focus:bg-white/5 data-[state=checked]:bg-primary/10 data-[state=checked]:border-primary/50 data-[state=checked]:shadow-[0_0_15px_rgba(139,92,246,0.15)] text-[11px] font-bold uppercase tracking-wider transition-all"
-                >
-                  <div className="flex items-center gap-2 w-full">
-                    <span className={cn("inline-flex w-1.5 h-1.5 rounded-full transition-all", sortOption === option.value ? "bg-primary shadow-[0_0_8px_rgba(139,92,246,0.6)]" : "bg-zinc-600")} />
-                    {option.label}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
 
 
         {isMindMapsLoading ? (
@@ -1412,6 +1432,7 @@ export default function DashboardPage() {
             </AnimatePresence>
           </div>
         )}
+        </div>
       </div>
 
       <AlertDialog open={!!mapToDelete} onOpenChange={(open) => !open && setMapToDelete(null)}>

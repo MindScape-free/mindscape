@@ -225,13 +225,28 @@ export function PinnedMessageChatDialog({ pin, onClose, currentMap, onMindMapGen
             onSubmit={(e) => { e.preventDefault(); handleSend(); }}
             className="flex items-center gap-2"
           >
-            <Input
+            <textarea
               autoFocus
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value);
+                e.target.style.height = '48px';
+                e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (!isLoading && input.trim() !== '') {
+                    handleSend();
+                    e.currentTarget.style.height = '48px';
+                  }
+                }
+              }}
               placeholder="Ask a follow-up question..."
               disabled={isLoading}
-              className="bg-white/5 border-white/10 focus:border-primary/50 rounded-2xl focus-visible:ring-0 focus-visible:ring-offset-0"
+              rows={1}
+              className="flex w-full resize-none bg-white/5 border border-white/10 focus:border-primary/50 min-h-[48px] max-h-[120px] rounded-2xl px-3 py-3 text-sm transition-all focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 overflow-y-auto block disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ lineHeight: '1.5' }}
             />
             <Button
               type="submit"

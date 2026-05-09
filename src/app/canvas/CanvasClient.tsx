@@ -48,14 +48,20 @@ import {
   generateMindMapAction,
   generateMindMapFromImageAction,
   generateMindMapFromPdfAction,
+  generateMindMapFromPdfAction as _unused_pdf_action,
   generateMindMapFromTextAction,
   generateYouTubeMindMapAction,
   generateMindMapFromWebsiteAction,
   generateComparisonMapAction,
-  mapToMindMapData,
+  translateMindMapAction,
+  explainWithExampleAction,
+  summarizeTopicAction,
+  summarizeChatAction,
+  synthesizeNodesAction,
+  logAdminActivityAction
 } from '@/app/actions';
 // shareMindMapAction removed - using client-side sharing
-import { formatText, extractYoutubeId } from '@/lib/utils';
+import { formatText, extractYoutubeId, cn } from '@/lib/utils';
 import { toPlainObject } from '@/lib/serialize';
 import { mindscapeMap } from '@/lib/mindscape-data';
 import { useMindMapStack } from '@/hooks/use-mind-map-stack';
@@ -66,6 +72,9 @@ import { useMindMapPinnedMessages } from '@/hooks/use-mind-map-pinned-messages';
 import { useAIHealth } from '@/hooks/use-ai-health';
 import { useActivity } from '@/contexts/activity-context';
 import { resolveDepthWithConfidence, getDepthLabel, getDepthColor, analyzeTopicComplexity } from '@/lib/depth-analysis';
+import { useAITracking } from '@/hooks/use-ai-tracking';
+import { useSessionTracking } from '@/hooks/use-session-tracking';
+import { useMapTracking } from '@/hooks/use-map-tracking';
 
 const EMPTY_ARRAY: never[] = [];
 
@@ -98,10 +107,13 @@ function MindMapPageContent() {
     allSubMaps: NestedExpansionItem[];
   }>({ rootMap: null, allSubMaps: [] });
 
+
   const aiHealth = useAIHealth();
   const { setStatus: setGlobalStatus, setAiHealth: setGlobalHealth, setActiveTaskName } = useActivity();
   const handleUpdateRef = useRef<(data: Partial<MindMapData>) => void>(() => { });
   const quizDeepenRef = useRef<((w: { tag: string; score: number }[], t: string) => void) | null>(null);
+  const zoomToNodeRef = useRef<((nodeName: string) => void) | null>(null);
+  const [resonanceNodes, setResonanceNodes] = useState<string[]>([]);
 
   const persistenceOptions = useMemo(() => ({
     onRemoteUpdate: (data: MindMapData) => handleUpdateRef.current(data),
@@ -125,6 +137,7 @@ function MindMapPageContent() {
         provider: config.provider,
         apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
         model: config.textModel || config.pollinationsModel,
+        userId: user?.id,
       };
       const result = await generateMindMapAction({
         topic,
@@ -176,6 +189,23 @@ function MindMapPageContent() {
       }
     }
   });
+
+  const { trackGenerationStart, trackGenerationComplete, trackGenerationFailed } = useAITracking();
+  const { trackPageView } = useSessionTracking(user?.uid);
+  const mapTracker = useMapTracking({
+    mapId: mindMap?.id || params.mapId || 'pending',
+    userId: user?.uid,
+    title: mindMap?.topic || params.topic,
+    isPublic: !!params.publicMapId,
+  });
+
+  useEffect(() => {
+    trackPageView('Canvas', { 
+      topic: params.topic, 
+      mapId: params.mapId,
+      mode: params.topic1 && params.topic2 ? 'compare' : 'single'
+    });
+  }, [trackPageView, params.topic, params.mapId, params.topic1, params.topic2]);
 
   // Sync ref with actual function
   useEffect(() => {
@@ -300,10 +330,35 @@ function MindMapPageContent() {
       let result: { data: MindMapData | null; error: string | null } = { data: null, error: null };
       let currentMode = 'standard';
 
-      // Keep track of source file locally during fetch to inject into first save
       let pendingSourceFileContent: string | null = null;
       let pendingSourceFileType: string | null = null;
       let pendingOriginalPdfContent: string | null = null;
+
+      const trackCompletion = (mapId: string, nodeCount: number, sourceType: string, mode: string) => {
+        trackGenerationComplete(params.sessionId || mapId || 'pending', {
+          sourceType: sourceType as any,
+          mode: mode as any,
+          depth: params.depth as any,
+          persona: params.persona || aiPersona,
+          userId: user?.uid
+        }, {
+          nodeCount,
+          mapId: mapId
+        });
+      };
+
+      const trackFailure = (errorType: string, message: string, sourceType: string, mode: string) => {
+        trackGenerationFailed(params.sessionId || 'pending', {
+          sourceType: sourceType as any,
+          mode: mode as any,
+          depth: params.depth as any,
+          persona: params.persona || aiPersona,
+          userId: user?.uid
+        }, {
+          type: errorType,
+          message: message
+        });
+      };
 
       try {
         if (params.isSelfReference) {
@@ -326,7 +381,8 @@ function MindMapPageContent() {
               provider: config.provider,
               apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
               model: config.textModel || config.pollinationsModel,
-              strict: true
+              strict: true,
+              userId: user?.id,
             };
             result = await generateMindMapAction({
               topic: topicToRegen!,
@@ -342,6 +398,7 @@ function MindMapPageContent() {
             }
           } else if (effectiveMapId) {
             currentMode = 'saved';
+            mapTracker.trackMapView(params.publicMapId ? 'shared' : 'direct');
 
             // Shared map
             if (params.sharedMapId || params.mapId?.startsWith('share_')) {
@@ -401,7 +458,8 @@ function MindMapPageContent() {
               model: config.pollinationsModel,
               userId: user?.uid,
             });
-          } else if (params.sessionId) {
+          }
+ else if (params.sessionId) {
             const sessionType = safeGetItem<string>(`session-type-${params.sessionId}`);
             const sessionContent = safeGetItem<{file?: string; text?: string; originalFile?: string}>(`session-content-${params.sessionId}`);
             if (sessionContent) {
@@ -543,7 +601,17 @@ function MindMapPageContent() {
 
         setMode(currentMode);
 
-        if (result.error) throw new Error(result.error);
+        if (result.error) {
+          trackFailure('GenerationError', result.error, pendingSourceFileType || 'text', currentMode);
+          throw new Error(result.error);
+        }
+        if (!result.data) {
+          trackFailure('NoData', 'No data returned', pendingSourceFileType || 'text', currentMode);
+          throw new Error("No data returned from AI.");
+        }
+
+        // track completion for all modes that result in a new map
+        trackCompletion(result.data.id || params.mapId || 'pending', result.data.nodes?.length || 0, pendingSourceFileType || 'text', currentMode);
 
         if (result.data) {
           // Refresh balance after any successful AI generation
@@ -850,16 +918,30 @@ function MindMapPageContent() {
         parentAbsoluteDepth = matchingSub?.depth || 0;
       }
 
+      // Notify user that background generation has started
+      if (mode === 'background') {
+        toast({ title: "🧠 Creating Sub-Map", description: `Generating "${subTopic}" in the background — it will appear in your Nested Maps shortly.` });
+      }
+
       await expandNode(subTopic, nodeId || `sub-${Date.now()}`, { mode, parentDepth: parentAbsoluteDepth, branchDepth });
       refreshBalance();
       awardXP('SUB_MAP_CREATED', { topic: subTopic }).catch(() => {});
+
       if (mode === 'foreground') {
         toast({ title: "Sub-Map Generated", description: `Created detailed map for "${subTopic}".` });
+      } else {
+        // Re-fetch hierarchy after background generation so the new map
+        // appears in the Nested Maps list immediately without waiting for
+        // the mindMap object reference to change.
+        const currentMap = mindMapRef.current;
+        if (currentMap) {
+          fetchMapHierarchy(currentMap);
+        }
       }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Generation Failed", description: error.message });
     }
-  }, [user, expandNode, mindMaps.length, setMindMaps, setActiveMindMapIndex, toast, mindMap?.id, mapHierarchy]);
+  }, [user, expandNode, mindMaps.length, setMindMaps, setActiveMindMapIndex, toast, mindMap?.id, mapHierarchy, fetchMapHierarchy]);
 
   const handleDeleteNestedMap = useCallback(async (id: string) => {
     if (!mindMap) return;
@@ -972,6 +1054,64 @@ function MindMapPageContent() {
     } finally { setIsSharing(false); }
   }, [mindMap, isSharing, user, toast]);
 
+  const handleSynthesize = useCallback(async (nodeLabels: string[]) => {
+    if (nodeLabels.length !== 2 || !mindMap) return;
+    
+    setGlobalStatus(`Synthesizing ${nodeLabels[0]} and ${nodeLabels[1]}...`);
+    setActiveTaskName('Knowledge Alchemy');
+    
+    try {
+      const { data, error } = await synthesizeNodesAction({
+        nodeA: nodeLabels[0],
+        nodeB: nodeLabels[1],
+        topic: mindMap.topic,
+        persona: aiPersona as any
+      }, {
+        apiKey: config.pollinationsApiKey,
+        provider: config.provider,
+        userId: user?.uid
+      });
+
+      if (error || !data) throw new Error(error || 'Synthesis failed');
+
+      // Add the synthesis result to the current map as a 'Nexus' node
+      const nexusId = `nexus-${Date.now()}`;
+      const newNode = {
+        id: nexusId,
+        name: data.nexusTitle,
+        description: data.explanation,
+        subTopics: data.subConcepts.map((s: any, i: number) => ({
+          id: `${nexusId}-sub-${i}`,
+          name: s.title,
+          description: s.description
+        }))
+      };
+
+      const updatedMap = { ...mindMap };
+      if (!updatedMap.subTopics) updatedMap.subTopics = [];
+      updatedMap.subTopics.push(newNode);
+
+      onMapUpdate(updatedMap);
+      
+      toast({
+        title: 'Alchemy Successful ⚗️',
+        description: `Born from ${nodeLabels[0]} and ${nodeLabels[1]}: "${data.nexusTitle}"`,
+      });
+      
+      awardXP('MAP_CREATED').catch(() => {});
+      
+    } catch (e: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Alchemy Failed',
+        description: e.message,
+      });
+    } finally {
+      setGlobalStatus('idle');
+      setActiveTaskName(null);
+    }
+  }, [mindMap, aiPersona, config, user?.uid, setGlobalStatus, setActiveTaskName, toast, awardXP, onMapUpdate]);
+
   if (isLoading) return <NeuralLoader sourceType={sourceFileType || undefined} />;
 
   if (error) {
@@ -1016,7 +1156,10 @@ function MindMapPageContent() {
   return (
     <>
       <div className="flex flex-col items-center px-4 sm:px-8 pb-8">
-        <div className="w-full max-w-6xl mx-auto">
+        <div className={cn(
+          "w-full mx-auto",
+          mindMap.mode === 'compare' ? "max-w-[1600px]" : "max-w-6xl"
+        )}>
           <MindMap
             key={activeMindMapIndex}
             data={mindMap}
@@ -1055,6 +1198,9 @@ function MindMapPageContent() {
             onOpenPinnedMessages={handleOpenPinnedMessages}
             pinnedMessagesCount={pinnedMessagesCount}
             onQuizDeepenRef={quizDeepenRef}
+            zoomToNodeRef={zoomToNodeRef}
+            resonanceNodes={resonanceNodes}
+            onSynthesize={handleSynthesize}
           />
 
           {/* Search References Panel */}
@@ -1230,7 +1376,7 @@ function MindMapPageContent() {
         onMindMapGenerated={async (data) => {
           handleReplaceCurrentMap(data);
           setHasUnsavedChanges(true);
-          await handleSaveMap(data, data.id, true);
+          return await handleSaveMap(data, data.id, true);
         }}
         onOpenPinnedMessages={handleOpenPinnedMessages}
         onAddMindMapPin={(question, response) => {
@@ -1247,7 +1393,25 @@ function MindMapPageContent() {
         onQuizDeepen={(weakSections, quizTopic) => {
           quizDeepenRef.current?.(weakSections, quizTopic);
         }}
-        onTopicClick={(topic) => handleGenerateAndOpenSubMap(topic, undefined, undefined, 'foreground')}
+        onTopicClick={(topic) => {
+          // 1. Try to zoom if it exists in current map
+          if (zoomToNodeRef.current) {
+            zoomToNodeRef.current(topic);
+          }
+          // 2. Also generate/open submap if it doesn't exist or as a fallback
+          handleGenerateAndOpenSubMap(topic, undefined, undefined, 'background');
+        }}
+        onLatestResponse={(answer) => {
+          const regex = /\[\[(.*?)\]\]/g;
+          const matches = [];
+          let match;
+          while ((match = regex.exec(answer)) !== null) {
+            matches.push(match[1]);
+          }
+          setResonanceNodes(matches);
+          // Clear resonance after 5 seconds to prevent visual clutter
+          setTimeout(() => setResonanceNodes([]), 5000);
+        }}
       />
 
     </>

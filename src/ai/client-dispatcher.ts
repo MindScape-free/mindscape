@@ -31,7 +31,9 @@ interface GenerateContentOptions {
   options?: {
     model?: string;
     capability?: ModelCapability;
+    taskType?: string;
   };
+  taskType?: string;
 }
 
 /**
@@ -80,6 +82,7 @@ export async function generateContent(options: GenerateContentOptions): Promise<
     },
     {
       providerOverride: options.provider || undefined,
+      taskType: options.taskType || options.options?.taskType || undefined,
     }
   );
 

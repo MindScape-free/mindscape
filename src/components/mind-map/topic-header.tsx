@@ -12,7 +12,7 @@ import {
     List,
     Search
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, truncateText } from '@/lib/utils';
 import { MindMapData } from '@/types/mind-map';
 import Image from 'next/image';
 
@@ -29,6 +29,7 @@ interface TopicHeaderProps {
     isMinimal?: boolean;
     rootMap?: { id: string; topic: string; icon?: string } | null;
     allSubMaps?: any[];
+    centered?: boolean;
 }
 
 /**
@@ -46,7 +47,8 @@ export const TopicHeader = ({
     depth,
     isMinimal = false,
     rootMap,
-    allSubMaps
+    allSubMaps,
+    centered = false
 }: TopicHeaderProps) => {
     // Compute true hierarchical path based on rootMap and allSubMaps
     const hierarchicalPath = React.useMemo(() => {
@@ -130,12 +132,12 @@ export const TopicHeader = ({
                 {/* Content Layer */}
                 <div className={cn(
                     "relative z-10 flex flex-col justify-center max-w-full transition-all duration-500",
-                    isMinimal ? "p-4 items-center text-center" : "p-8 md:px-14 md:py-12 h-full min-h-[220px]"
+                    (isMinimal || centered) ? "p-4 items-center text-center" : "p-8 md:px-14 md:py-12 h-full min-h-[220px]"
                 )}>
 
                     {/* Badge Integration */}
                     {showBadge && (
-                        <div className="mb-6 flex flex-wrap gap-2">
+                        <div className={cn("mb-6 flex flex-wrap gap-2", (isMinimal || centered) && "justify-center")}>
                             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/20 border border-primary/30 text-primary text-[10px] font-black tracking-[0.2em] uppercase backdrop-blur-md shadow-[0_0_15px_rgba(var(--primary),0.1)]">
                                 <Sparkles className="h-3.5 w-3.5" />
                                 {badgeText || 'Mind Map'}
@@ -163,7 +165,7 @@ export const TopicHeader = ({
 
                     {/* Breadcrumbs / Navigation Stack */}
                     {hierarchicalPath.length > 1 && (
-                        <div className="flex flex-wrap items-center gap-2 mb-6">
+                        <div className={cn("flex flex-wrap items-center gap-2 mb-6", (isMinimal || centered) && "justify-center")}>
                             {hierarchicalPath.map((pathItem, idx) => {
                                 const isCurrentMap = idx === hierarchicalPath.length - 1;
                                 const levelLabel = `L${pathItem.depth}`;
@@ -180,7 +182,7 @@ export const TopicHeader = ({
                                             )}
                                         >
                                             <span className="opacity-50">{levelLabel}</span>
-                                            <span>{pathItem.topic}</span>
+                                            <span>{truncateText(pathItem.topic, 25)}</span>
                                         </button>
                                         {!isCurrentMap && (
                                             <ChevronRight className="w-3 h-3 text-zinc-700" />
@@ -195,23 +197,23 @@ export const TopicHeader = ({
                         "font-black text-white tracking-tighter transition-transform duration-500",
                         isMinimal
                             ? "text-5xl md:text-8xl leading-[0.8] mb-2 uppercase font-orbitron bg-clip-text text-transparent bg-gradient-to-b from-white via-white/90 to-white/40"
-                            : "text-4xl md:text-6xl leading-[0.9] group-hover:-translate-x-1"
+                            : cn("text-4xl md:text-6xl leading-[0.9]", !centered && "group-hover:-translate-x-1")
                     )}>
-                        {mindMap.shortTitle || mindMap.topic}
+                        {truncateText(mindMap.shortTitle || mindMap.topic, 80)}
                     </h1>
 
                     {/* Mission Objective Subtitle */}
-                    <div className="flex items-center gap-2 mt-3 animate-in fade-in slide-in-from-left-4 duration-700 delay-200">
+                    <div className={cn("flex items-center gap-2 mt-3 animate-in fade-in duration-700 delay-200", (isMinimal || centered) ? "justify-center" : "slide-in-from-left-4")}>
                         <div className="p-1 rounded-full bg-white/5 border border-white/10">
                             <Search className="w-3 h-3 text-zinc-500" />
                         </div>
                         <span className="text-sm font-bold text-zinc-500 uppercase tracking-widest font-orbitron">
-                            {mindMap.topic}
+                            {truncateText(mindMap.topic, 45)}
                         </span>
                     </div>
 
                     {description && (
-                        <p className="text-lg md:text-xl text-zinc-400 font-medium leading-relaxed max-w-2xl mt-6 animate-in fade-in slide-in-from-left-4 duration-700 delay-300">
+                        <p className={cn("text-lg md:text-xl text-zinc-400 font-medium leading-relaxed max-w-2xl mt-6 animate-in fade-in duration-700 delay-300", (isMinimal || centered) ? "text-center mx-auto" : "slide-in-from-left-4")}>
                             {description}
                         </p>
                     )}

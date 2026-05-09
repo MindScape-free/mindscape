@@ -330,44 +330,54 @@ export function performSchemaValidation(
   if (!result.success) {
     const partial = parsed as any;
 
-    // Detect root-level categories (common AI failure mode)
-    if (Array.isArray(partial.categories) && partial.categories.length > 0 &&
-        (!partial.subTopics || partial.subTopics.length === 0)) {
-      console.warn('🔄 Salvage: Detected root-level categories. Mapping to a default sub-topic.');
-      partial.subTopics = [{
-        name: 'Core Concepts',
-        icon: 'layers',
-        thought: 'Automatically recovered categories from root level.',
-        categories: partial.categories
-      }];
-      delete partial.categories;
-    }
+    const isMindMapSchema = (schema?.description || '').toLowerCase().includes('mind map') ||
+      JSON.stringify(schema || {}).toLowerCase().includes('subtopics');
 
-    // Ensure top-level structure
-    if (!partial.subTopics || !Array.isArray(partial.subTopics)) {
-      partial.subTopics = [];
-    }
+    if (isMindMapSchema) {
+      // Detect root-level categories (common AI failure mode)
+      if (Array.isArray(partial.categories) && partial.categories.length > 0 &&
+          (!partial.subTopics || partial.subTopics.length === 0)) {
+        console.warn('🔄 Salvage: Detected root-level categories. Mapping to a default sub-topic.');
+        partial.subTopics = [{
+          name: 'Core Concepts',
+          icon: 'layers',
+          thought: 'Automatically recovered categories from root level.',
+          categories: partial.categories
+        }];
+        delete partial.categories;
+      }
 
-    // Recursive sanitization
-    partial.subTopics.forEach((st: any) => {
-      if (!st.name) st.name = 'Sub-Topic';
-      if (!st.icon) st.icon = 'layers';
-      if (!st.categories || !Array.isArray(st.categories)) st.categories = [];
-      st.categories.forEach((cat: any) => {
-        if (!cat.name) cat.name = 'Category';
-        if (!cat.icon) cat.icon = 'folder';
-        if (!cat.subCategories || !Array.isArray(cat.subCategories)) cat.subCategories = [];
-        cat.subCategories.forEach((sc: any) => {
-          if (!sc.name) sc.name = 'Detail';
-          if (!sc.icon) sc.icon = 'circle';
-          if (!sc.description) sc.description = 'Additional information about this item.';
+      // Ensure top-level structure
+      if (!partial.subTopics || !Array.isArray(partial.subTopics)) {
+        partial.subTopics = [];
+      }
+
+      // Recursive sanitization
+      partial.subTopics.forEach((st: any) => {
+        if (!st.name) st.name = 'Sub-Topic';
+        if (!st.icon) st.icon = 'layers';
+        if (!st.categories || !Array.isArray(st.categories)) st.categories = [];
+        st.categories.forEach((cat: any) => {
+          if (!cat.name) cat.name = 'Category';
+          if (!cat.icon) cat.icon = 'folder';
+          if (!cat.subCategories || !Array.isArray(cat.subCategories)) cat.subCategories = [];
+          cat.subCategories.forEach((sc: any) => {
+            if (!sc.name) sc.name = 'Detail';
+            if (!sc.icon) sc.icon = 'circle';
+            if (!sc.description) sc.description = 'Additional information about this item.';
+          });
         });
       });
-    });
 
-    if (partial.subTopics.length >= 1 || !strict) {
-      console.warn('⚠️ Salvaging partial mind map after schema mismatch. Zod Error:', result.error.message);
-      return partial;
+      if (partial.subTopics.length >= 1 || !strict) {
+        console.warn('⚠️ Salvaging partial mind map after schema mismatch. Zod Error:', result.error.message);
+        return partial;
+      }
+    } else {
+      if (!strict) {
+        console.warn('⚠️ Salvaging partial object after schema mismatch. Zod Error:', result.error.message);
+        return partial;
+      }
     }
 
     if (strict) {
@@ -388,9 +398,14 @@ export function performSchemaValidation(
     return parsed;
   }
 
-  if (!Array.isArray(validatedData.subTopics) || validatedData.subTopics.length === 0) {
-    console.warn('⚠️ Zod returned empty subTopics, falling back to parsed data');
-    return parsed.subTopics && parsed.subTopics.length > 0 ? parsed : validatedData;
+  const isMindMapSchema = (schema?.description || '').toLowerCase().includes('mind map') ||
+    JSON.stringify(schema || {}).toLowerCase().includes('subtopics');
+
+  if (isMindMapSchema) {
+    if (!Array.isArray(validatedData.subTopics) || validatedData.subTopics.length === 0) {
+      console.warn('⚠️ Zod returned empty subTopics, falling back to parsed data');
+      return parsed.subTopics && parsed.subTopics.length > 0 ? parsed : validatedData;
+    }
   }
 
   return validatedData;

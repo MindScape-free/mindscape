@@ -29,6 +29,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
@@ -774,6 +775,9 @@ export function ExplanationDialog({
                         <DialogTitle className="text-2xl font-medium tracking-tight text-white leading-tight">
                             {title}
                         </DialogTitle>
+                        <DialogDescription className="sr-only">
+                            Detailed architectural explanation and contextual analysis for {title}.
+                        </DialogDescription>
                         {enrichment?.snapshot && (
                             <D_ConceptSnapshot snapshot={enrichment.snapshot} />
                         )}

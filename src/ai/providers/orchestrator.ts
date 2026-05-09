@@ -220,10 +220,9 @@ export async function orchestrate(
 
   console.log(`🎯 Orchestrator: Task=${options.taskType || 'unknown'}, Providers=[${providers.map(p => `${p.name}(${p.health().status})`).join(', ')}]`);
 
-  // Try each provider with per-provider retry
   const errors: Array<{ provider: string; error: string }> = [];
 
-  for (const provider of providers) {
+  const executeProvider = async (provider: IAIProvider) => {
     try {
       const result = await retryWithProvider(
         async (attempt) => {
@@ -284,11 +283,47 @@ export async function orchestrate(
         timestamp: Date.now(),
       });
 
+      throw err;
+    }
+  };
+
+  // 1. Parallel Fallback Strategy (Race)
+  // If we have multiple providers and multi-provider is enabled, use the race strategy.
+  if (providers.length > 1 && config.multiProviderEnabled && !options.providerOverride) {
+    const latencyBudget = options.latencyBudget || 2500; // ms
+    
+    try {
+      // Launch primary
+      const primaryPromise = executeProvider(providers[0]);
+      
+      // Wait for primary or timeout budget
+      const timeoutPromise = new Promise(resolve => setTimeout(() => resolve('TIMEOUT'), latencyBudget));
+      const firstOutcome = await Promise.race([primaryPromise, timeoutPromise]);
+      
+      if (firstOutcome === 'TIMEOUT') {
+        console.log(`⏱️ Primary ${providers[0].name} slow (>${latencyBudget}ms), launching parallel fallback ${providers[1].name}`);
+        // Launch fallback and race it against the still-running primary
+        const fallbackPromise = executeProvider(providers[1]);
+        return await Promise.race([primaryPromise, fallbackPromise]);
+      }
+      
+      return firstOutcome as AIResponse;
+    } catch (err: any) {
+      console.warn(`⚠️ Parallel race failed, falling back to sequential: ${err.message}`);
+      // Fall through to sequential if the race fails catastrophically
+    }
+  }
+
+  // 2. Sequential Fallback (Default)
+  for (const provider of providers) {
+    try {
+      return await executeProvider(provider);
+    } catch (err: any) {
+      const errMsg = err.message || String(err);
       // Auth errors for primary → don't failover (user's key is bad)
       if (errMsg.includes('Authentication failed') && provider === providers[0]) {
         throw err;
       }
-
       // Continue to next provider
     }
   }

@@ -25,6 +25,7 @@ export async function generateMetadata(
       .single();
 
     if (map) {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://mindscape-free.vercel.app';
       const ogUrl = new URL(`${baseUrl}/api/og`);
       ogUrl.searchParams.set('topic', map.topic);
 

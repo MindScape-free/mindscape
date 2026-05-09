@@ -138,18 +138,50 @@ export async function GET(request: Request) {
       ...data,
       stats: {
         totalUsers: data?.total_users ?? 0,
-        totalMaps: data?.total_public_maps ?? data?.total_maps ?? 0,
+        totalMaps: data?.total_mindmaps ?? 0,
         totalMindmaps: data?.total_mindmaps ?? 0,
         totalMindmapsEver: data?.total_mindmaps_ever ?? 0,
         totalChats: data?.total_chats ?? 0,
+        totalNodes: data?.total_nodes ?? 0,
+        totalNodesActive: data?.total_nodes_active ?? 0,
+        totalImages: data?.total_images ?? 0,
         activeUsers: data?.active_users_24h ?? data?.active_users ?? 0,
         healthScore: data?.health_score ?? 0,
         lastUpdated: data?.last_updated ?? null,
         timestamp: data?.timestamp ?? null,
       },
-      // Frontend expects camelCase keys in safeMapAnalytics
+      // Field mappings for frontend
+      newUsersToday: data?.new_users_today ?? 0,
+      newUsersYesterday: data?.new_users_yesterday ?? 0,
+      newMapsToday: data?.new_maps_today ?? 0,
+      newMapsYesterday: data?.new_maps_yesterday ?? 0,
+      activeUsers24h: data?.active_users_24h ?? data?.active_users ?? 0,
+      engagementRate: data?.engagement_rate ?? 0,
+      avgMapsPerUser: data?.avg_maps_per_user ?? 0,
+      avgChatsPerUser: data?.avg_chats_per_user ?? 0,
+      avgNodesPerMap: data?.avg_nodes_per_map ?? 0,
+      totalMindmapsEver: data?.total_mindmaps_ever ?? 0,
+      latestUsers: (data?.latest_users || []).map((u: any) => ({
+        ...u,
+        photoURL: u.photoURL || u.photo_url,
+        displayName: u.displayName || u.display_name,
+        createdAt: u.createdAt || u.created_at,
+        lastActive: u.lastActive || u.last_active || u.statistics?.lastActiveDate
+      })),
+      latestMaps: (data?.latest_maps || []).map((m: any) => ({
+        ...m,
+        topic: m.topic || m.title || null,
+        createdAt: m.createdAt || m.created_at,
+      })),
+      topUsers: (data?.top_users || []).map((u: any) => ({
+        ...u,
+        photoURL: u.photoURL || u.photo_url,
+        displayName: u.displayName || u.display_name,
+        createdAt: u.createdAt || u.created_at,
+        lastActive: u.lastActive || u.last_active || u.statistics?.lastActiveDate
+      })),
       mapAnalytics: safeMapAnalytics(data?.map_analytics || data),
-      heatmapDays: heatmapDays, // For the heatmap component
+      heatmapDays: heatmapDays,
       bundle: {
         users: bundleUsers,
         logs: bundleLogs,

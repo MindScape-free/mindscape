@@ -35,11 +35,15 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { languages } from '@/lib/languages';
 import { format } from 'date-fns';
-import { updateUserStatistics } from '@/lib/activity-tracker';
+import { 
+    syncUserStatisticsAction, 
+    checkPollenBalanceAction,
+    trackStudyTime,
+    updateUserStatistics
+} from '@/app/actions';
 import { ModelSelector } from '@/components/model-selector';
 import { Eye, EyeOff, Menu } from 'lucide-react';
 import { getUserImageSettings, saveUserApiKey } from '@/lib/supabase-db';
-import { checkPollenBalanceAction } from '@/app/actions';
 import { useAIConfig } from '@/contexts/ai-config-context';
 
 // Types
@@ -244,16 +248,30 @@ function ProfileContent() {
                     }
                 });
 
-                // Fetch user's mind maps
+                // Fetch user's mind maps with all necessary metadata for analytics
                 const { data: mapsData } = await supabase
                     .from('mindmaps')
-                    .select('id, topic, created_at, updated_at')
+                    .select('id, topic, created_at, updated_at, node_count, is_sub_map, public_views, source_type, source_file_type, mode, depth, ai_persona, video_id, source_url')
                     .eq('user_id', user.id)
                     .order('updated_at', { ascending: false });
 
                 if (mapsData) {
-                    setActiveMapsCount(mapsData.length);
-                    setUserMaps(mapsData.map((m: any) => ({ id: m.id, ...m })));
+                    const maps = mapsData.map((m: any) => ({ 
+                        id: m.id, 
+                        ...m, 
+                        // Map snake_case from DB to camelCase used in component logic
+                        nodeCount: m.node_count || 0,
+                        isSubMap: m.is_sub_map || false,
+                        publicViews: m.public_views || 0,
+                        sourceType: m.source_type,
+                        sourceFileType: m.source_file_type,
+                        aiPersona: m.ai_persona
+                    }));
+                    
+                    // Active Maps = Root maps only
+                    const rootMaps = maps.filter(m => !m.isSubMap);
+                    setActiveMapsCount(rootMaps.length);
+                    setUserMaps(maps);
                 }
 
                 // Fetch chat count
@@ -493,20 +511,53 @@ function ProfileContent() {
     };
 
     const handleSyncStatus = async () => {
-        if (!user) return;
+        if (!user || isSyncing) return;
         setIsSyncing(true);
         try {
-            await updateUserStatistics(supabase, user.id, {});
+            const result = await syncUserStatisticsAction(user.id);
+            if (result.success) {
+                // Refresh profile data locally
+                const { data: userData } = await supabase.from('users').select('*').eq('id', user.id).single();
+                if (userData) {
+                    setProfile(userData);
+                }
+                
+                // Also trigger a re-fetch of maps to be sure
+                const { data: mapsData } = await supabase
+                    .from('mindmaps')
+                    .select('id, topic, created_at, updated_at, node_count, is_sub_map, public_views, source_type, source_file_type, mode, depth, ai_persona, video_id, source_url')
+                    .eq('user_id', user.id)
+                    .order('updated_at', { ascending: false });
+
+                if (mapsData) {
+                    const maps = mapsData.map((m: any) => ({ 
+                        id: m.id, 
+                        ...m, 
+                        nodeCount: m.node_count || 0,
+                        isSubMap: m.is_sub_map || false,
+                        publicViews: m.public_views || 0,
+                        sourceType: m.source_type,
+                        sourceFileType: m.source_file_type,
+                        aiPersona: m.ai_persona
+                    }));
+                    const rootMaps = maps.filter(m => !m.isSubMap);
+                    setActiveMapsCount(rootMaps.length);
+                    setUserMaps(maps);
+                }
+
+                toast({
+                    title: "Neural Core Synced",
+                    description: "Your statistics have been successfully recalculated.",
+                });
+            } else {
+                throw new Error(result.error || "Failed to sync");
+            }
+        } catch (error: any) {
+            console.error('Sync failed:', error);
             toast({
-                title: 'Statistics Synced!',
-                description: 'Your historical activity data has been aggregated into your profile.',
-            });
-        } catch (error) {
-            console.error('Sync error:', error);
-            toast({
-                variant: 'destructive',
-                title: 'Sync Failed',
-                description: 'Could not process historical data sync.',
+                title: "Sync Failed",
+                description: error.message || "An error occurred while syncing your statistics.",
+                variant: "destructive"
             });
         } finally {
             setIsSyncing(false);

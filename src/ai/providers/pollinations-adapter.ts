@@ -215,9 +215,10 @@ export class PollinationsAdapter implements IAIProvider {
         try {
           const parsed = JSON.parse(data);
           const delta = parsed.choices?.[0]?.delta?.content || '';
-          if (delta) {
+          const reasoningDelta = parsed.choices?.[0]?.delta?.reasoning_content || '';
+          if (delta || reasoningDelta) {
             fullText += delta;
-            onChunk({ text: delta, done: false, model });
+            onChunk({ text: delta, reasoning: reasoningDelta, done: false, model });
           }
         } catch { /* skip unparseable chunks */ }
       }
@@ -232,9 +233,10 @@ export class PollinationsAdapter implements IAIProvider {
         if (data !== '[DONE]') {
           const parsed = JSON.parse(data);
           const delta = parsed.choices?.[0]?.delta?.content || '';
-          if (delta) {
+          const reasoningDelta = parsed.choices?.[0]?.delta?.reasoning_content || '';
+          if (delta || reasoningDelta) {
             fullText += delta;
-            onChunk({ text: delta, done: false, model });
+            onChunk({ text: delta, reasoning: reasoningDelta, done: false, model });
           }
         }
       } catch { /* skip */ }

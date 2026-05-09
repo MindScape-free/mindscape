@@ -76,8 +76,10 @@ export async function GET(req: Request) {
   const t = textCache || FALLBACK_TEXT_MODELS;
   const i = imageCache || FALLBACK_IMAGE_MODELS;
 
-  if (type === 'text') return NextResponse.json({ models: t });
-  if (type === 'image') return NextResponse.json({ models: i });
+  const headers = { 'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=120' };
+
+  if (type === 'text') return NextResponse.json({ models: t }, { headers });
+  if (type === 'image') return NextResponse.json({ models: i }, { headers });
   
-  return NextResponse.json({ textModels: t, imageModels: i });
+  return NextResponse.json({ textModels: t, imageModels: i }, { headers });
 }

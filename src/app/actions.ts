@@ -49,6 +49,8 @@ import {
   ExplainWithExampleOutput,
 } from '@/ai/flows/explain-with-example';
 import { summarizeChat } from '@/ai/flows/summarize-chat';
+import { synthesizeNodes } from '@/ai/flows/synthesize-nodes';
+import { generateRelatedQuestions } from '@/ai/flows/generate-related-questions';
 import type {
   SummarizeChatInput,
   SummarizeChatOutput,
@@ -64,7 +66,6 @@ import { generateQuizFlow, GenerateQuizInput } from '@/ai/flows/generate-quiz';
 
 import { Quiz } from '@/ai/schemas/quiz-schema';
 import {
-  generateRelatedQuestions,
   RelatedQuestionsInput,
 } from '@/ai/flows/generate-related-questions';
 import { RelatedQuestionsOutput } from '@/ai/schemas/related-questions-schema';
@@ -97,8 +98,9 @@ export async function mapToMindMapData(raw: any, depth: 'low' | 'medium' | 'deep
         ...raw,
         mode: 'compare',
         depth,
-        createdAt: raw.createdAt || Date.now(),
-        updatedAt: raw.updatedAt || Date.now(),
+        createdAt: raw.createdAt || raw.created_at || Date.now(),
+        updatedAt: raw.updatedAt || raw.updated_at || Date.now(),
+        shortTitle: raw.short_title || raw.shortTitle || raw.content?.shortTitle,
         compareData: {
           ...raw.compareData,
           unityNexus: (raw.compareData.unityNexus || []).map((n: any) => ({
@@ -132,8 +134,9 @@ export async function mapToMindMapData(raw: any, depth: 'low' | 'medium' | 'deep
     ...raw,
     mode: 'single',
     depth,
-    createdAt: raw.createdAt || Date.now(),
-    updatedAt: raw.updatedAt || Date.now(),
+    createdAt: raw.createdAt || raw.created_at || Date.now(),
+    updatedAt: raw.updatedAt || raw.updated_at || Date.now(),
+    shortTitle: raw.short_title || raw.shortTitle || raw.content?.shortTitle,
     nestedExpansions: (raw.nestedExpansions || []).map((ne: any) => ({
       ...ne,
       subCategories: (ne.subCategories || []).map((sub: any) => ({
@@ -485,16 +488,6 @@ export async function resolveDepthWithConfidence(topic: string): Promise<DepthSu
   };
 }
 
-/**
- * @deprecated Use resolveDepthFast() instead.
- * Kept for backward compatibility but no longer makes LLM calls.
- */
-export async function resolveDepth(
-  topic: string,
-  _apiKey?: string
-): Promise<'low' | 'medium' | 'deep'> {
-  return resolveDepthFast(topic);
-}
 
 export async function generateMindMapAction(
   input: GenerateMindMapInput & { useSearch?: boolean },
@@ -573,6 +566,8 @@ export async function generateMindMapAction(
  * Server action to check the pollen balance for the user's API key.
  * Uses the same key resolution chain as other AI actions.
  */
+const balanceCache = new Map<string, { balance: number | null; error: string | null; timestamp: number }>();
+
 export async function checkPollenBalanceAction(
   options: { apiKey?: string; userId?: string } = {}
 ): Promise<{ balance: number | null; error: string | null }> {
@@ -581,6 +576,13 @@ export async function checkPollenBalanceAction(
 
     if (!effectiveApiKey) {
       return { balance: null, error: 'No API key provided. Please check your settings.' };
+    }
+
+    const cacheKey = effectiveApiKey;
+    const now = Date.now();
+    const cached = balanceCache.get(cacheKey);
+    if (cached && now - cached.timestamp < 15000) {
+      return { balance: cached.balance, error: cached.error };
     }
 
     let checkPollinationsBalance;
@@ -597,9 +599,13 @@ export async function checkPollenBalanceAction(
 
     const balance = await checkPollinationsBalance(effectiveApiKey);
     if (balance === null) {
-        return { balance: null, error: 'Authorization failed or account balance is empty.' };
+        const result = { balance: null, error: 'Authorization failed or account balance is empty.' };
+        balanceCache.set(cacheKey, { ...result, timestamp: now });
+        return result;
     }
-    return { balance, error: null };
+    const result = { balance, error: null };
+    balanceCache.set(cacheKey, { ...result, timestamp: now });
+    return result;
   } catch (error: any) {
     console.error('❌ Error in checkPollenBalanceAction:', error);
     return { balance: null, error: `Failed to verify API key: ${error.message || 'Unknown error'}` };
@@ -653,7 +659,7 @@ export async function generateMindMapFromPdfAction(
   try {
     const effectiveApiKey = await resolveApiKey(options);
     const depth = (input.depth === 'auto' || !input.depth)
-      ? await resolveDepth(input.text.substring(0, 200), effectiveApiKey)
+      ? await resolveDepthFast(input.text.substring(0, 200))
       : input.depth as 'low' | 'medium' | 'deep';
     const result = await generateMindMapFromPdf({ ...input, depth, ...options, apiKey: effectiveApiKey });
     if (!result) return { data: null, error: 'AI failed to process PDF.' };
@@ -689,7 +695,7 @@ export async function generateMindMapFromTextAction(
   try {
     const effectiveApiKey = await resolveApiKey(options);
     const depth = (input.depth === 'auto' || !input.depth)
-      ? await resolveDepth(input.text.substring(0, 300), effectiveApiKey)
+      ? await resolveDepthFast(input.text.substring(0, 300))
       : input.depth as 'low' | 'medium' | 'deep';
     const result = await generateMindMapFromText({ ...input, depth, ...options, apiKey: effectiveApiKey });
     if (!result) return { data: null, error: 'AI failed to process text.' };
@@ -790,7 +796,7 @@ export async function generateMindMapFromWebsiteAction(
 
     const effectiveApiKey = await resolveApiKey(options);
     const depth = (input.depth === ('auto' as any) || !input.depth)
-      ? await resolveDepth(extractionResult.title || input.url, effectiveApiKey)
+      ? await resolveDepthFast(extractionResult.title || input.url)
       : input.depth as 'low' | 'medium' | 'deep';
 
     // 3. Generate the mind map using the AI flow
@@ -957,7 +963,14 @@ export async function chatAction(
       pdfContext,
       apiKey: effectiveApiKey
     });
-    return { response: result, error: null };
+    return { 
+      response: { 
+        answer: result.answer,
+        reasoning: result.reasoning,
+        thoughtChain: result.thoughtChain 
+      }, 
+      error: null 
+    };
   } catch (error) {
     console.error(error);
     const errorMessage =
@@ -1392,31 +1405,115 @@ Return ONLY a JSON array:
  * Also performs incremental stats updates for real-time dashboarding.
  */
 export async function logAdminActivityAction(entry: any) {
-  try {
-    const { logActivityAdmin, incrementAdminStatAdmin } = await import('@/lib/supabase-server');
-    await logActivityAdmin(entry);
+  // Fire and forget (background execution)
+  Promise.resolve().then(async () => {
+    try {
+      const { logActivityAdmin, incrementAdminStatAdmin } = await import('@/lib/supabase-server');
+      await logActivityAdmin(entry);
 
-    const type = entry.type;
-    if (type === 'MAP_CREATED') {
-      await incrementAdminStatAdmin('total_mindmaps_ever');
-      await incrementAdminStatAdmin('new_maps_today');
-      if (!entry.metadata?.isSubMap && !entry.metadata?.parentMapId) {
-        await incrementAdminStatAdmin('total_mindmaps');
+      const type = entry.type;
+      if (type === 'MAP_CREATED') {
+        await incrementAdminStatAdmin('total_mindmaps_ever');
+        await incrementAdminStatAdmin('new_maps_today');
+        if (!entry.metadata?.isSubMap && !entry.metadata?.parentMapId) {
+          await incrementAdminStatAdmin('total_mindmaps');
+        }
+      } else if (type === 'USER_CREATED') {
+        await incrementAdminStatAdmin('total_users');
+        await incrementAdminStatAdmin('new_users_today');
+      } else if (type === 'LOGIN') {
+        await incrementAdminStatAdmin('active_users');
+      } else if (type === 'MAP_DELETED') {
+        await incrementAdminStatAdmin('total_mindmaps', -1);
+      } else if (type === 'CHAT_CREATED') {
+        await incrementAdminStatAdmin('total_chats');
       }
-    } else if (type === 'USER_CREATED') {
-      await incrementAdminStatAdmin('total_users');
-      await incrementAdminStatAdmin('new_users_today');
-    } else if (type === 'LOGIN') {
-      await incrementAdminStatAdmin('active_users');
-    } else if (type === 'MAP_DELETED') {
-      await incrementAdminStatAdmin('total_mindmaps', -1);
-    } else if (type === 'CHAT_CREATED') {
-      await incrementAdminStatAdmin('total_chats');
+    } catch (error: any) {
+      console.error('❌ Failed to log admin activity:', error.message);
+    }
+  }).catch(() => {});
+}
+
+/**
+ * Server action to synthesize two mind map nodes.
+ */
+export async function synthesizeNodesAction(
+  input: { nodeA: string; nodeB: string; topic: string; persona?: string },
+  options: AIActionOptions = {}
+): Promise<{ data: any | null; error: string | null }> {
+  try {
+    const effectiveApiKey = await resolveApiKey(options);
+    const result = await synthesizeNodes({ ...input, ...options, apiKey: effectiveApiKey });
+    
+    // Award XP - Synthesis is a high-level cognitive act, worth more XP
+    if (options.userId) {
+      awardPoints(options.userId, 'MAP_CREATED', { topic: `Synthesis: ${input.nodeA} + ${input.nodeB}` }).catch(() => {});
     }
 
-    return { success: true };
+    return { data: result, error: null };
+  } catch (error) {
+    console.error('Error in synthesizeNodesAction:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+    return { data: null, error: `Failed to synthesize nodes: ${errorMessage}` };
+  }
+}
+
+/**
+ * Server action to synchronize and recalculate a user's statistics.
+ * This ensures the profile dashboard reflects actual database content.
+ */
+export async function syncUserStatisticsAction(userId: string) {
+  try {
+    const { getSupabaseAdmin } = await import('@/lib/supabase-server');
+    const supabase = getSupabaseAdmin();
+
+    // 1. Fetch all maps for this user
+    const { data: maps, error: mapsError } = await supabase
+      .from('mindmaps')
+      .select('id, node_count, is_sub_map, created_at')
+      .eq('user_id', userId);
+
+    if (mapsError) throw mapsError;
+
+    // 2. Fetch all chats for this user
+    const { count: chatsCount, error: chatsError } = await supabase
+      .from('chat_sessions')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    if (chatsError) throw chatsError;
+
+    // 3. Calculate aggregates
+    const rootMaps = maps.filter(m => !m.is_sub_map);
+    const subMaps = maps.filter(m => m.is_sub_map);
+    const totalNodes = maps.reduce((acc, m) => acc + (m.node_count || 0), 0);
+    
+    // 4. Update the user record
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('statistics')
+      .eq('id', userId)
+      .single();
+
+    if (userError) throw userError;
+
+    const currentStats = user.statistics || {};
+    const newStats = {
+      ...currentStats,
+      totalMapsCreated: rootMaps.length,
+      totalNestedExpansions: subMaps.length,
+      totalNodes: totalNodes,
+      totalChats: chatsCount || 0,
+    };
+
+    await supabase
+      .from('users')
+      .update({ statistics: newStats })
+      .eq('id', userId);
+
+    return { success: true, stats: newStats };
   } catch (error: any) {
-    console.error('Error in logAdminActivityAction:', error);
+    console.error('❌ syncUserStatisticsAction failed:', error.message);
     return { success: false, error: error.message };
   }
 }

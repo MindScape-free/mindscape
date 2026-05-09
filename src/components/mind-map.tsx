@@ -243,6 +243,9 @@ interface MindMapProps {
   onOpenPinnedMessages?: () => void;
   pinnedMessagesCount?: number;
   onQuizDeepenRef?: React.MutableRefObject<((w: { tag: string; score: number }[], t: string) => void) | null>;
+  zoomToNodeRef?: React.MutableRefObject<((nodeName: string) => void) | null>;
+  resonanceNodes?: string[];
+  onSynthesize?: (nodeLabels: string[]) => void;
 }
 
 /**
@@ -300,7 +303,22 @@ export const MindMap = ({
   onOpenPinnedMessages,
   pinnedMessagesCount = 0,
   onQuizDeepenRef,
+  zoomToNodeRef,
+  resonanceNodes = [],
+  onSynthesize,
 }: MindMapProps) => {
+  const [focusedNodeName, setFocusedNodeName] = useState<string | null>(null);
+
+  // Wire zoomToNode to the ref
+  useEffect(() => {
+    if (zoomToNodeRef) {
+      zoomToNodeRef.current = (nodeName: string) => {
+        setFocusedNodeName(nodeName);
+        // Reset after a delay so it can be re-triggered for the same node
+        setTimeout(() => setFocusedNodeName(null), 100);
+      };
+    }
+  }, [zoomToNodeRef]);
   const [viewMode, setViewMode] = useState<'accordion' | 'map' | 'roadmap'>('accordion');
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
 
@@ -1552,7 +1570,10 @@ export const MindMap = ({
         pinnedMessagesCount={pinnedMessagesCount}
       />
 
-      <div className="container max-w-6xl mx-auto px-4 space-y-12 pt-12">
+      <div className={cn(
+        "w-full mx-auto px-4 space-y-12 pt-12",
+        data.mode === 'compare' ? "max-w-[1600px]" : "max-w-6xl"
+      )}>
         {data.mode === 'compare' ? (
           <CompareView
             data={data}
@@ -1636,6 +1657,9 @@ export const MindMap = ({
                 onStartQuiz={onStartQuiz}
                 onPracticeClick={handleGeneratePracticeQuestions}
                 onGenerateImage={(topic) => handleGenerateImageClick({ name: topic, description: '' })}
+                focusedNodeName={focusedNodeName}
+                resonanceNodes={resonanceNodes}
+                onSynthesize={onSynthesize}
               />
             </div>,
             mountNode

@@ -89,7 +89,7 @@ function processMapsForAnalytics(maps: any[]) {
     analytics.persona_counts[persona] = (analytics.persona_counts[persona] || 0) + 1;
 
     // Sub-maps
-    if (data.is_sub_map || data.parent_id) analytics.sub_map_stats.total++;
+    if (data.is_sub_map || data.parent_map_id) analytics.sub_map_stats.total++;
     if (data.has_sub_maps) analytics.sub_map_stats.parents++;
     if (data.is_featured) analytics.featured_count++;
   });
@@ -158,19 +158,21 @@ export async function POST(request: Request) {
     const allMaps = mapsRes.data;
     const logs = logsRes.data;
 
-    const totalUsers = users.length;
-    const totalPublicMaps = allMaps.filter(m => m.is_public).length;
-
+    let totalUsers = users.length;
     let activeUsers24h = 0;
     let newUsers24h = 0;
     let newUsersPrevious24h = 0;
     let totalMindmapsEver = 0;
     let totalChats = 0;
+    let totalImages = 0;
+    let totalPublicMaps = allMaps.filter(m => m.is_public).length;
 
     // --- Process Users ---
     users.forEach(data => {
       const createdAt = new Date(data.created_at || 0);
-      const lastActiveAt = data.last_active ? new Date(data.last_active) : null;
+      // Fallback to statistics.lastActiveDate if last_active is missing
+      const lastActiveAtStr = data.last_active || data.statistics?.lastActiveDate;
+      const lastActiveAt = lastActiveAtStr ? new Date(lastActiveAtStr) : null;
 
       if (createdAt.getTime() > 0) {
         const dateKey = format(createdAt, 'yyyy-MM-dd');
@@ -188,6 +190,7 @@ export async function POST(request: Request) {
 
       totalMindmapsEver += data.statistics?.totalMapsCreated || 0;
       totalChats += data.statistics?.totalChats || 0;
+      totalImages += data.statistics?.totalImagesGenerated || 0;
     });
 
     // --- Process Logs ---
@@ -202,13 +205,20 @@ export async function POST(request: Request) {
     let newMaps24h = 0;
     let newMapsPrevious24h = 0;
     let totalNodes = 0;
+    let totalNodesActive = 0;
 
     allMaps.forEach(data => {
-      const isSubMap = data.is_sub_map === true || !!data.parent_id;
-      if (!isSubMap) totalMindmaps++;
-      else totalSubMaps++;
+      const isSubMap = data.is_sub_map === true || !!data.parent_map_id;
+      const nodes = data.node_count || 0;
+      
+      if (!isSubMap) {
+        totalMindmaps++;
+        totalNodesActive += nodes;
+      } else {
+        totalSubMaps++;
+      }
 
-      totalNodes += data.node_count || 0;
+      totalNodes += nodes;
       const mapDate = new Date(data.created_at || 0);
 
       if (mapDate.getTime() > 0) {
@@ -229,7 +239,7 @@ export async function POST(request: Request) {
       }
     });
 
-    const rootMaps = allMaps.filter(m => !m.is_sub_map && !m.parent_id);
+    const rootMaps = allMaps.filter(m => !m.is_sub_map && !m.parent_map_id);
     const mapAnalytics = processMapsForAnalytics(rootMaps);
 
     const engagementRate = totalUsers > 0 ? (activeUsers24h / totalUsers) * 100 : 0;
@@ -240,11 +250,11 @@ export async function POST(request: Request) {
 
     const serializeUser = (u: any) => ({
       id: u.id,
-      display_name: u.display_name || null,
+      displayName: u.display_name || u.displayName || null,
       email: u.email || null,
-      photo_url: u.photo_url || null,
-      created_at: u.created_at,
-      last_active: u.last_active,
+      photoURL: u.photo_url || u.photoURL || null,
+      createdAt: u.created_at || u.createdAt,
+      lastActive: u.last_active || u.statistics?.lastActiveDate || u.lastActive,
       statistics: u.statistics || null,
     });
 
@@ -257,6 +267,7 @@ export async function POST(request: Request) {
       .sort((a, b) => (b.statistics?.totalMapsCreated || 0) - (a.statistics?.totalMapsCreated || 0))
       .slice(0, 20)
       .map(serializeUser);
+
 
     const latestMaps = allMaps
       .filter(m => m.is_public)
@@ -278,6 +289,9 @@ export async function POST(request: Request) {
       total_mindmaps_ever: totalMindmapsEver,
       total_chats: totalChats,
       total_public_maps: totalPublicMaps,
+      total_nodes: totalNodes,
+      total_nodes_active: totalNodesActive,
+      total_images: totalImages,
       active_users: activeUsers24h,
       health_score: healthScore,
       engagement_rate: engagementRate,

@@ -105,12 +105,17 @@ export function Navbar() {
               <User className="mr-2 h-4 w-4" />
               <span>Profile</span>
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push('/feedback')}>
+              <MessageSquare className="mr-2 h-4 w-4" />
+              <span>Feedback</span>
+            </DropdownMenuItem>
             {isAdmin && (
               <DropdownMenuItem onClick={() => router.push('/admin')}>
                 <Icons.shield className="mr-2 h-4 w-4 text-primary" />
                 <span>Admin Dashboard</span>
               </DropdownMenuItem>
             )}
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               <span>Log out</span>

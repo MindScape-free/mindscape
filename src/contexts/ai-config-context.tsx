@@ -89,16 +89,25 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
         setStoredConfig(DEFAULT_CONFIG);
     }, [setStoredConfig]);
 
-    const refreshBalance = useCallback(async (apiKeyOverride?: string) => {
+    const lastRefreshRef = React.useRef<number>(0);
+    const refreshBalance = useCallback(async (apiKeyOverride?: string, force = false) => {
         // Skip on server - this can only work client-side with auth
         if (typeof window === 'undefined') return;
         
         const apiKey = apiKeyOverride ?? configRef.current.pollinationsApiKey;
-        if (!user || !apiKey || isRefreshingRef.current) {
+        if (!user || !apiKey || (isRefreshingRef.current && !force)) {
             if (!apiKey) setPollenBalance(null);
             return;
         }
 
+        // Throttle to once per 60s unless forced
+        const now = Date.now();
+        if (!force && now - lastRefreshRef.current < 60000) {
+            console.log('⏳ Skipping balance refresh (throttled)');
+            return;
+        }
+
+        lastRefreshRef.current = now;
         isRefreshingRef.current = true;
         setIsBalanceLoading(true);
         try {

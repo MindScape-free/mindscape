@@ -17,7 +17,14 @@ const ChatWithAssistantInputSchema = z.object({
 });
 export type ChatWithAssistantInput = z.infer<typeof ChatWithAssistantInputSchema>;
 
-const ChatWithAssistantOutputSchema = z.object({ answer: z.string() });
+const ChatWithAssistantOutputSchema = z.object({ 
+  answer: z.string(),
+  reasoning: z.string().optional(),
+  thoughtChain: z.array(z.object({
+    type: z.enum(['hypothesis', 'analysis', 'synthesis', 'tool']),
+    content: z.string()
+  })).optional()
+});
 export type ChatWithAssistantOutput = z.infer<typeof ChatWithAssistantOutputSchema>;
 
 import { generateContent, AIProvider } from '@/ai/client-dispatcher';
@@ -34,7 +41,13 @@ PRIORITY ORDER:
 4. Brevity
 5. Style/persona
 
-CONFLICT RESOLVER: If instructions conflict → schema > brevity > ignore style`;
+CONFLICT RESOLVER: If instructions conflict → schema > brevity > ignore style
+ 
+ ## COGNITIVE DEEPENING (Phase 3)
+ - **Reasoning**: You MUST provide your internal thought process in the \`reasoning\` field. This should be a philosophical/narrative summary of your approach.
+ - **Thought Chain**: Populate \`thoughtChain\` with technical steps (e.g. "Analyzing search results", "Synthesizing with PDF context").
+ - **Collective Memory**: You are part of the user's "Collective Memory" ecosystem. Reference related concepts from your training data as if they were part of their broader knowledge workspace.
+ - **Active Recall**: Occasionally (once every 5-6 messages), instead of a full answer, challenge the user to explain a connection between two nodes on their map. Format this as an "Active Recall Challenge" in your answer using a specific block.`;
 
 export async function chatWithAssistant(
   input: ChatWithAssistantInput & { apiKey?: string; provider?: AIProvider }
@@ -111,8 +124,7 @@ USER QUESTION: "${question}"
 RESPONSE RULES:
 - Use Markdown formatting (bullets, bold, tables for comparisons).
 - **ENTITY LINKING**: Use [[Topic Name]] to link to important concepts. This allows the user to explore that topic visually.
-- **VISUALS**: Use \`\`\`mermaid\`\`\` blocks for flowcharts, mindmaps, or sequence diagrams. **IMPORTANT**: Always wrap node labels in double quotes (e.g., A["Result + Data"]) to prevent syntax errors with special characters.
-- **MATH**: Use LaTeX syntax with $ for inline (e.g. $E=mc^2$) and $$ for blocks.
+- **VISUALS**: Use LaTeX syntax with $ for inline (e.g. $E=mc^2$) and $$ for blocks.
 - **ACTIVE LEARNING**: If explaining a complex topic, you may occasionally include a short quiz at the end using this format:
 \`\`\`quiz
 {
@@ -134,13 +146,27 @@ RESPONSE RULES:
   ]
 }
 \`\`\`
-- NO HALLUCINATION: If unsure → say "Not in current context" rather than guessing.
+ - **ACTIVE RECALL**: To trigger a recall challenge, use this markdown block:
+\`\`\`recall
+{
+  "topicA": "First concept",
+  "topicB": "Second concept",
+  "question": "How do these two specifically interact in this context?"
+}
+\`\`\`
+ - NO HALLUCINATION: If unsure → say "Not in current context" rather than guessing.
 - DO NOT include any external URLs (e.g., https://...) in your response. Only use [[Topic]] for internal links.
 ${!isUserGuideMode ? `- Adjust style for persona: ${persona}` : ''}
 
 Return ONLY this JSON:
 {
-  "answer": "Your formatted markdown response here"
+  "answer": "Your formatted markdown response here",
+  "reasoning": "Philosophical summary of your thought process",
+  "thoughtChain": [
+    {"type": "hypothesis", "content": "..."},
+    {"type": "analysis", "content": "..."},
+    {"type": "synthesis", "content": "..."}
+  ]
 }`;
 
   const userPrompt = `Provide your response.`;

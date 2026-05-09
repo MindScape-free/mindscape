@@ -3,7 +3,7 @@
 
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { MindMapData, SubCategory } from '@/types/mind-map';
-import { cn, toPascalCase } from '@/lib/utils';
+import { cn, toPascalCase, truncateText } from '@/lib/utils';
 import * as LucideIcons from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, ZoomIn, ZoomOut, Move, Plus, Minus, Search, Target, Zap, Info, ArrowRight, MessageSquare, Lightbulb, GraduationCap, PenTool, Image as ImageIcon } from 'lucide-react';
@@ -54,6 +54,9 @@ interface MindMapRadialViewProps {
     onStartQuiz?: (topic: string) => void;
     onPracticeClick?: (topic: string) => void;
     onGenerateImage?: (topic: string, parentTopic?: string) => void;
+    focusedNodeName?: string | null;
+    resonanceNodes?: string[];
+    onSynthesize?: (nodeLabels: string[]) => void;
 }
 
 // --- Constants (Tuning Knobs) ---
@@ -120,7 +123,7 @@ const LayoutEngine = (data: MindMapData, collapsedNodes: Set<string>) => {
         id: 'root',
         x: ROOT_X,
         y: 0,
-        data: { label: data.topic, icon: data.icon },
+        data: { label: truncateText(data.topic, 40), icon: data.icon },
         type: 'root',
         width: ROOT_WIDTH,
         height: ROOT_HEIGHT
@@ -141,7 +144,7 @@ const LayoutEngine = (data: MindMapData, collapsedNodes: Set<string>) => {
                 id: stId,
                 x: ROOT_X + H_SPACING,
                 y: stY,
-                data: { label: st.name, icon: st.icon },
+                data: { label: truncateText(st.name, 30), icon: st.icon },
                 type: 'subtopic',
                 parentId: 'root',
                 width: NODE_WIDTH,
@@ -166,7 +169,7 @@ const LayoutEngine = (data: MindMapData, collapsedNodes: Set<string>) => {
                     id: catId,
                     x: ROOT_X + H_SPACING * 2,
                     y: catY,
-                    data: { label: cat.name, icon: cat.icon },
+                    data: { label: truncateText(cat.name, 25), icon: cat.icon },
                     type: 'category',
                     parentId: stId,
                     width: NODE_WIDTH,
@@ -190,7 +193,7 @@ const LayoutEngine = (data: MindMapData, collapsedNodes: Set<string>) => {
                         id: subCatId,
                         x: ROOT_X + H_SPACING * 3,
                         y: subCatY,
-                        data: { label: subCat.name, ...subCat },
+                        data: { label: truncateText(subCat.name, 25), ...subCat },
                         type: 'subcategory',
                         parentId: catId,
                         width: LEAF_WIDTH,
@@ -272,11 +275,14 @@ export const MindMapRadialView = React.memo(({
     onExplainWithExample,
     onStartQuiz,
     onPracticeClick,
-    onGenerateImage
+    onGenerateImage,
+    focusedNodeName,
+    resonanceNodes = [],
+    onSynthesize
 }: MindMapRadialViewProps) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [zoom, setZoom] = useState(1);
-    const [offset, setOffset] = useState({ x: 0, y: 0 });
+    const [offset, setOffset] = useState({ x: 50, y: 100 });
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
@@ -284,6 +290,11 @@ export const MindMapRadialView = React.memo(({
     const [searchQuery, setSearchQuery] = useState('');
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [selectedNode, setSelectedNode] = useState<NodePosition | null>(null);
+    const [lastTouchDistance, setLastTouchDistance] = useState<number | null>(null);
+    const [selectedDetailNode, setSelectedDetailNode] = useState<any>(null);
+    const [isSynthesisMode, setIsSynthesisMode] = useState(false);
+    const [synthesisSelection, setSynthesisSelection] = useState<string[]>([]);
+    const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     const { nodes, connections, width, height } = useMemo(() => LayoutEngine(data, collapsedNodes), [data, collapsedNodes]);
 
@@ -338,6 +349,24 @@ export const MindMapRadialView = React.memo(({
         }
     }, [height]); // Run once on mount/height change (ignore zoom to prevent drift)
 
+    // Center on focusedNodeName when it changes externally
+    useEffect(() => {
+        if (focusedNodeName) {
+            const target = nodes.find(n => n.data.label.toLowerCase() === focusedNodeName.toLowerCase());
+            if (target && containerRef.current) {
+                const clientW = containerRef.current.clientWidth;
+                const clientH = containerRef.current.clientHeight;
+                
+                // Smoothly transition to the node
+                setOffset({
+                    x: (clientW / 2) - target.x * zoom,
+                    y: (clientH / 2) - target.y * zoom
+                });
+                setFocusedNodeId(target.id);
+            }
+        }
+    }, [focusedNodeName, nodes, zoom]);
+
     const handleWheel = (e: React.WheelEvent) => {
         if (e.ctrlKey || e.metaKey) {
             e.preventDefault();
@@ -367,6 +396,44 @@ export const MindMapRadialView = React.memo(({
         setIsDragging(false);
     };
 
+    // --- Mobile Touch Gestures ---
+    const handleTouchStart = (e: React.TouchEvent) => {
+        if (e.touches.length === 1) {
+            setIsDragging(true);
+            const touch = e.touches[0];
+            setDragStart({ x: touch.clientX - offset.x, y: touch.clientY - offset.y });
+        } else if (e.touches.length === 2) {
+            const distance = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            setLastTouchDistance(distance);
+        }
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (e.touches.length === 1 && isDragging) {
+            const touch = e.touches[0];
+            setOffset({
+                x: touch.clientX - dragStart.x,
+                y: touch.clientY - dragStart.y
+            });
+        } else if (e.touches.length === 2 && lastTouchDistance !== null) {
+            const distance = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            const delta = distance / lastTouchDistance;
+            setZoom(z => Math.min(Math.max(z * delta, 0.4), 2));
+            setLastTouchDistance(distance);
+        }
+    };
+
+    const handleTouchEnd = () => {
+        setIsDragging(false);
+        setLastTouchDistance(null);
+    };
+
     const zoomIn = () => setZoom(z => Math.min(z + 0.1, 2));
     const zoomOut = () => setZoom(z => Math.max(z - 0.1, 0.4));
     const resetZoom = () => {
@@ -375,6 +442,31 @@ export const MindMapRadialView = React.memo(({
             const clientH = containerRef.current.clientHeight;
             const initialY = (clientH / 2) - (height / 2); // Reset to 1x zoom centering
             setOffset({ x: 50, y: initialY });
+        }
+    };
+
+    const handleNodeClick = (node: any) => {
+        if (isSynthesisMode) {
+            setSynthesisSelection(prev => {
+                if (prev.includes(node.data.label)) {
+                    return prev.filter(l => l !== node.data.label);
+                }
+                if (prev.length >= 2) {
+                    return [prev[1], node.data.label];
+                }
+                return [...prev, node.data.label];
+            });
+            return;
+        }
+        setSelectedDetailNode(node);
+        if (onNodeClick) onNodeClick(node);
+    };
+
+    const handleSynthesizeClick = () => {
+        if (synthesisSelection.length === 2 && onSynthesize) {
+            onSynthesize(synthesisSelection);
+            setIsSynthesisMode(false);
+            setSynthesisSelection([]);
         }
     };
 
@@ -387,6 +479,9 @@ export const MindMapRadialView = React.memo(({
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
             onClick={() => setFocusedNodeId(null)}
         >
             {/* Background Grid */}
@@ -418,10 +513,18 @@ export const MindMapRadialView = React.memo(({
                                 <feMergeNode in="SourceGraphic" />
                             </feMerge>
                         </filter>
+                        <filter id="resonance-glow">
+                            <feGaussianBlur stdDeviation="5" result="coloredBlur" />
+                            <feMerge>
+                                <feMergeNode in="coloredBlur" />
+                                <feMergeNode in="SourceGraphic" />
+                            </feMerge>
+                        </filter>
                     </defs>
                     <AnimatePresence>
                         {visibleConnections.map(conn => {
                             const isFocusedPath = focusedNodeId && (conn.sourceId === focusedNodeId || conn.targetId === focusedNodeId);
+                            const isResonantPath = resonanceNodes.some(r => r.toLowerCase() === nodes.find(n => n.id === conn.sourceId)?.data.label.toLowerCase() || r.toLowerCase() === nodes.find(n => n.id === conn.targetId)?.data.label.toLowerCase());
                             const isDimmed = focusedNodeId && !isFocusedPath;
 
                             return (
@@ -440,18 +543,40 @@ export const MindMapRadialView = React.memo(({
                                             animate={{
                                                 opacity: isDimmed ? 0.1 : 1,
                                                 pathLength: 1,
-                                                stroke: isFocusedPath ? '#a855f7' : "url(#link-gradient)"
+                                                stroke: isResonantPath ? '#ec4899' : (isFocusedPath ? '#a855f7' : "url(#link-gradient)")
                                             }}
                                             exit={{ opacity: 0 }}
                                             transition={{ duration: 0.5 }}
                                             d={conn.path}
                                             fill="none"
-                                            strokeWidth={isFocusedPath ? "3" : "2"}
+                                            strokeWidth={isResonantPath ? "4" : (isFocusedPath ? "3" : "2")}
                                             strokeLinecap="round"
                                             className={cn(
                                                 "drop-shadow-[0_0_2px_rgba(168,85,247,0.3)]",
-                                                isFocusedPath && "filter-[url(#glow)]"
+                                                (isFocusedPath || isResonantPath) && "filter-[url(#glow)]",
+                                                isResonantPath && "animate-pulse"
                                             )}
+                                        />
+                                    )}
+                                    {isResonantPath && !isLowDetail && (
+                                        <motion.path
+                                            d={conn.path}
+                                            fill="none"
+                                            stroke="#f472b6"
+                                            strokeWidth="2"
+                                            strokeLinecap="round"
+                                            initial={{ pathLength: 0, opacity: 0 }}
+                                            animate={{ 
+                                                pathLength: [0, 1], 
+                                                opacity: [0, 1, 0],
+                                                pathOffset: [0, 1] 
+                                            }}
+                                            transition={{ 
+                                                duration: 2, 
+                                                repeat: Infinity, 
+                                                ease: "linear" 
+                                            }}
+                                            className="filter-[url(#glow)]"
                                         />
                                     )}
                                 </React.Fragment>
@@ -475,11 +600,11 @@ export const MindMapRadialView = React.memo(({
                                 initial={{ opacity: 0, scale: 0.8 }}
                                 animate={{
                                     opacity: isDimmed ? 0.2 : 1,
-                                    scale: 1,
+                                    scale: resonanceNodes.some(r => r.toLowerCase() === node.data.label.toLowerCase()) || synthesisSelection.includes(node.data.label) ? [1, 1.05, 1] : 1,
                                     left: node.x,
                                     top: node.y,
-                                    borderColor: isFocused || (searchQuery && node.data.label.toLowerCase().includes(searchQuery.toLowerCase())) ? 'rgba(168, 85, 247, 0.8)' : undefined,
-                                    boxShadow: isFocused ? '0 0 20px rgba(168, 85, 247, 0.3)' : (searchQuery && node.data.label.toLowerCase().includes(searchQuery.toLowerCase())) ? '0 0 15px rgba(168, 85, 247, 0.2)' : undefined
+                                    borderColor: synthesisSelection.includes(node.data.label) ? '#fbbf24' : (resonanceNodes.some(r => r.toLowerCase() === node.data.label.toLowerCase()) ? '#ec4899' : (isFocused || (searchQuery && node.data.label.toLowerCase().includes(searchQuery.toLowerCase())) ? 'rgba(168, 85, 247, 0.8)' : undefined)),
+                                    boxShadow: synthesisSelection.includes(node.data.label) ? '0 0 30px rgba(251, 191, 36, 0.5)' : (resonanceNodes.some(r => r.toLowerCase() === node.data.label.toLowerCase()) ? '0 0 30px rgba(236, 72, 153, 0.4)' : (isFocused ? '0 0 20px rgba(168, 85, 247, 0.3)' : (searchQuery && node.data.label.toLowerCase().includes(searchQuery.toLowerCase())) ? '0 0 15px rgba(168, 85, 247, 0.2)' : undefined))
                                 }}
                                 exit={{ opacity: 0, scale: 0.8 }}
                                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
@@ -494,9 +619,18 @@ export const MindMapRadialView = React.memo(({
                                 style={{
                                     transform: 'translate(0, -50%)',
                                 }}
-                                onClick={(e) => {
+                                onClick={() => handleNodeClick(node)}
+                                onTouchStart={(e) => {
                                     e.stopPropagation();
-                                    setSelectedNode(node);
+                                    longPressTimerRef.current = setTimeout(() => {
+                                        setSelectedNode(node);
+                                        if ('vibrate' in navigator) navigator.vibrate(50);
+                                    }, 600);
+                                }}
+                                onTouchEnd={() => {
+                                    if (longPressTimerRef.current) {
+                                        clearTimeout(longPressTimerRef.current);
+                                    }
                                 }}
                             >
                                 {/* Expansion Button */}
@@ -640,6 +774,57 @@ export const MindMapRadialView = React.memo(({
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Synthesis / Alchemy Controls */}
+            <div className="absolute top-4 right-20 z-10 flex flex-col items-end gap-3 pointer-events-none">
+                <div className="pointer-events-auto flex flex-col gap-2">
+                    <Button
+                        size="sm"
+                        variant={isSynthesisMode ? "default" : "outline"}
+                        className={cn(
+                            "h-9 rounded-full px-4 border-white/10 backdrop-blur-md transition-all",
+                            isSynthesisMode ? "bg-amber-500 hover:bg-amber-600 text-black font-black" : "bg-zinc-950/50 text-zinc-400 hover:text-white"
+                        )}
+                        onClick={() => {
+                            setIsSynthesisMode(!isSynthesisMode);
+                            setSynthesisSelection([]);
+                        }}
+                    >
+                        <Zap className={cn("w-4 h-4 mr-2", isSynthesisMode && "animate-pulse")} />
+                        {isSynthesisMode ? "ACTIVE ALCHEMY" : "KNOWLEDGE ALCHEMY"}
+                    </Button>
+
+                    <AnimatePresence>
+                        {isSynthesisMode && (
+                            <motion.div
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 20 }}
+                                className="p-3 rounded-2xl bg-zinc-900/90 border border-white/10 backdrop-blur-xl flex flex-col gap-3 min-w-[200px]"
+                            >
+                                <div className="space-y-1">
+                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Selection</h4>
+                                    <div className="flex flex-wrap gap-1.5 min-h-[32px]">
+                                        {synthesisSelection.length === 0 && <span className="text-[10px] text-zinc-600 italic">Select 2 nodes to synthesize...</span>}
+                                        {synthesisSelection.map(label => (
+                                            <Badge key={label} variant="secondary" className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[9px] font-bold">
+                                                {label}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                </div>
+                                <Button
+                                    disabled={synthesisSelection.length !== 2}
+                                    onClick={handleSynthesizeClick}
+                                    className="w-full h-8 rounded-lg bg-amber-500 hover:bg-amber-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-black font-black text-[10px] uppercase tracking-wider"
+                                >
+                                    FUSE KNOWLEDGE
+                                </Button>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+            </div>
 
             {/* Minimap */}
             <MindflowMinimap

@@ -374,3 +374,14 @@ export function extractYoutubeId(url: string): string | null {
   const match = url.match(regExp);
   return (match && match[7].length === 11) ? match[7] : null;
 }
+
+/**
+ * Truncates a string to a specified length and adds an ellipsis if needed.
+ * @param {string} text - The text to truncate.
+ * @param {number} maxLength - The maximum length of the string.
+ * @returns {string} The truncated string.
+ */
+export function truncateText(text: string, maxLength: number): string {
+  if (!text || text.length <= maxLength) return text;
+  return text.slice(0, maxLength).trim() + '...';
+}

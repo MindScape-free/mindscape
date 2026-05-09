@@ -192,7 +192,7 @@ CRITICAL SAFETY & OUTPUT RULES:
 
         let response: Response;
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
         try {
             response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
@@ -207,7 +207,7 @@ CRITICAL SAFETY & OUTPUT RULES:
         } catch (fetchError: any) {
             clearTimeout(timeoutId);
             if (fetchError.name === 'AbortError') {
-                console.warn(`🕒 Pollinations API request timed out (120s). Attempt: ${attempt}`);
+                console.warn(`🕒 Pollinations API request timed out (10s). Attempt: ${attempt}`);
                 if (attempt < 2) {
                     return generateContentWithPollinations(systemPrompt, userPrompt, images, {
                         ...options,

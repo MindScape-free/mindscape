@@ -57,11 +57,8 @@ export function getSupabaseClientWithOptions(options?: { persistSession?: boolea
 }
 
 
-export function getSupabaseAdmin(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
-  return createClient(url, serviceKey, { auth: { persistSession: false } });
-}
+
+// Admin access removed from here - use @/lib/supabase-server instead
 
 // ── User Settings ──────────────────────────────────────────────────────────
 

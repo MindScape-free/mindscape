@@ -245,3 +245,28 @@ alter publication supabase_realtime add table public.mindmaps;
 alter publication supabase_realtime add table public.chat_sessions;
 alter publication supabase_realtime add table public.user_points;
 alter publication supabase_realtime add table public.admin_activity_log;
+
+-- ── Analytics Events ───────────────────────────────────────────────────────
+create table if not exists public.analytics_events (
+  id uuid primary key default gen_random_uuid(),
+  event_name text not null,
+  category text not null,
+  properties jsonb default '{}'::jsonb,
+  timestamp bigint,
+  session_id text,
+  user_id uuid references public.users(id) on delete set null,
+  duration numeric,
+  metadata jsonb default '{}'::jsonb,
+  received_at timestamptz default now(),
+  date text,
+  month text
+);
+alter table public.analytics_events enable row level security;
+create policy "analytics_events_insert" on public.analytics_events for insert with check (true);
+create policy "analytics_events_admin" on public.analytics_events for all using (true);
+create index if not exists analytics_events_event_name_idx on public.analytics_events(event_name);
+create index if not exists analytics_events_category_idx on public.analytics_events(category);
+create index if not exists analytics_events_user_id_idx on public.analytics_events(user_id);
+create index if not exists analytics_events_date_idx on public.analytics_events(date);
+
+

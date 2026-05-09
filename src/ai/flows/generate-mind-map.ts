@@ -144,7 +144,7 @@ ${hasContext ? 'EXPANDED: This is an enriched mind map with additional knowledge
 ANTI-GENERIC: Reject nodes named "Overview", "Basics", "Introduction", "Various", "General".
 Each subTopic must be a unique, non-overlapping dimension of the topic.
 
-SCHEMA (return ONLY this JSON):
+SCHEMA (return ONLY this JSON - show multiple items to indicate density):
 {
   "mode": "single",
   "topic": "${topic}",
@@ -153,19 +153,24 @@ SCHEMA (return ONLY this JSON):
   "thought": "1–2 sentence structural reasoning for this topic.",
   "subTopics": [
     {
-      "name": "Specific Dimension Name",
+      "name": "Dimension A",
       "icon": "lucide-kebab-case",
-      "thought": "1–2 sentence reasoning for this branch.",
-      "insight": "One sharp, non-obvious synthesis of this sub-topic (REQUIRED).",
+      "thought": "Reasoning for A.",
+      "insight": "Sharp insight for A.",
       "categories": [
         {
-          "name": "Category Name",
+          "name": "Category A1",
           "icon": "lucide-kebab-case",
-          "insight": "One concrete, specific insight about this category (REQUIRED).",
+          "insight": "Insight for A1.",
           "subCategories": [
             {
-              "name": "Specific Leaf Name",
-              "description": "Exactly 1 sentence, ≤20 words, concrete and specific.",
+              "name": "Concept A1.1",
+              "description": "Concrete sentence.",
+              "icon": "lucide-kebab-case"
+            },
+            {
+              "name": "Concept A1.2",
+              "description": "Another specific point.",
               "icon": "lucide-kebab-case"
             }
           ]
@@ -195,6 +200,7 @@ ${hasContext ? '- Capture context details AND expand with related knowledge.' : 
       systemPrompt: `You are a mind map generator. Output MUST be strictly valid JSON. DO NOT echo the template — generate REAL content about "${topic}".`,
       userPrompt: prompt,
       schema: AIGeneratedMindMapSchema,
+      taskType: 'generate-mind-map',
       options: { model: attempt === 0 ? model : undefined, capability },
     });
 

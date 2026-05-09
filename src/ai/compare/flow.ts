@@ -42,6 +42,7 @@ export async function generateComparisonMapV2(
                 systemPrompt: system,
                 userPrompt: user,
                 schema: CompareMindMapSchema,
+                taskType: 'generate-comparison-map',
                 options: { model },
             });
 

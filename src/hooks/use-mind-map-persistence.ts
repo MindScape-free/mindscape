@@ -21,6 +21,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
   const { toast } = useToast();
   const router = useRouter();
   const isSavingRef = useRef(false);
+  const generatingThumbnailsRef = useRef<Set<string>>(new Set());
   const [aiPersona, setAiPersona] = useState<string>('Teacher');
 
   const showAchievementToasts = useCallback((achievements: Achievement[]) => {
@@ -136,24 +137,71 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
         explanations: explanations || {},
         sourceFileContent: sourceFileContent || null,
         originalPdfFileContent: originalPdfFileContent || null,
+        shortTitle: shortTitle || mapToSave.shortTitle || null,
       };
 
       const finalId = await saveMindMap(supabase, user.id, targetId, metadataToSave, contentToSave);
 
-      // Background thumbnail generation
-      if (!mapToSave.thumbnailUrl) {
+      // Background thumbnail generation - Only if missing and not already generating for this map
+      if (!mapToSave.thumbnailUrl && !generatingThumbnailsRef.current.has(finalId)) {
+        generatingThumbnailsRef.current.add(finalId);
         (async () => {
           try {
+            console.log(`🖼️ Auto-generating topic-oriented thumbnail for map: ${finalId} (Topic: ${safeTopic})`);
+            
+            const { enhanceImagePromptAction } = await import('@/app/actions');
+            
+            // 1. Enhance the prompt based on the topic for a non-random, high-quality result
+            const enhancement = await enhanceImagePromptAction({
+              prompt: safeTopic,
+              style: 'cinematic',
+              mood: 'mystical',
+              composition: 'wide-shot'
+            }, { 
+              apiKey: options.userApiKey, 
+              userId: user.id 
+            });
+
+            const finalPrompt = enhancement.enhancedPrompt?.enhancedPrompt || 
+                               `Cinematic professional conceptual illustration of ${safeTopic}, dark premium background, purple and gold accents, 8k quality, sharp focus, no text, no watermarks`;
+
+            console.log(`✨ Using enhanced prompt: ${finalPrompt.substring(0, 100)}...`);
+
+            // 2. Generate the image
             const response = await fetch('/api/generate-image', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ prompt: `Cinematic conceptual illustration of ${safeTopic}, dark premium background, purple and gold accents, 8k quality, no text`, model: 'flux', width: 512, height: 288, userId: user.id, userApiKey: options.userApiKey }),
+              body: JSON.stringify({ 
+                prompt: finalPrompt, 
+                model: 'flux', 
+                width: 512, 
+                height: 288, 
+                userId: user.id, 
+                userApiKey: options.userApiKey 
+              }),
             });
+            
             if (response.ok) {
               const data = await response.json();
-              if (data.imageUrl) await updateMindMapField(supabase, finalId, { thumbnail_url: data.imageUrl });
+              if (data.imageUrl) {
+                // Save the generated image URL/DataURI to the database
+                await updateMindMapField(supabase, finalId, { thumbnail_url: data.imageUrl });
+                console.log(`✅ Thumbnail generated and saved for map: ${finalId}`);
+              } else {
+                console.warn(`⚠️ API responded OK but missing imageUrl field`);
+              }
+            } else {
+              const errText = await response.text();
+              console.warn(`⚠️ Thumbnail generation API error [${response.status}]:`, errText.substring(0, 200));
             }
-          } catch { /* non-critical */ }
+          } catch (err) {
+            console.error('❌ Background thumbnail generation fatal error:', err);
+          } finally {
+            // Keep in set for a bit to prevent immediate retry if it failed or was slow
+            setTimeout(() => {
+              generatingThumbnailsRef.current.delete(finalId);
+            }, 60000); // 1m lockout
+          }
         })();
       }
 

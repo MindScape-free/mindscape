@@ -2,14 +2,40 @@
 
 import React from 'react';
 import { FeedbackForm } from '@/components/feedback/FeedbackForm';
-import { FeedbackFeed } from '@/components/feedback/FeedbackFeed';
+import { FeedbackCards } from '@/components/feedback/FeedbackCards';
 import { useUser } from '@/lib/auth-context';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
+import { useState, useEffect } from 'react';
+import { Feedback } from '@/types/feedback';
 
 export default function FeedbackPage() {
-    const { user } = useUser();
+    const { user, supabase } = useUser();
+    const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    const fetchFeedback = async () => {
+        if (!supabase) return;
+        setIsLoading(true);
+        const { data } = await supabase
+            .from('feedback')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(50);
+        
+        const mappedData = (data || []).map(f => ({
+            ...f,
+            adminActivityLogs: (f as any).admin_activity_logs || [],
+            adminNotes: (f as any).admin_notes || ''
+        }));
+        setFeedbacks(mappedData as Feedback[]);
+        setIsLoading(false);
+    };
+
+    useEffect(() => {
+        fetchFeedback();
+    }, [supabase]);
 
     return (
         <div className="min-h-screen bg-[#0D0D0D] text-[#EAEAEA] font-sans selection:bg-primary/30 overflow-x-hidden">
@@ -54,7 +80,16 @@ export default function FeedbackPage() {
                         </section>
 
                         <section className="relative pt-20 border-t border-white/5">
-                            <FeedbackFeed />
+                            <div className="mb-10">
+                                <h3 className="text-2xl font-bold text-white mb-2">Community Insights</h3>
+                                <p className="text-zinc-500 text-sm">See what other explorers are saying and our progress on improvements.</p>
+                            </div>
+                            <FeedbackCards 
+                                data={feedbacks} 
+                                onRefresh={fetchFeedback} 
+                                adminUserId={user?.uid || ''} 
+                                isLoading={isLoading} 
+                            />
                         </section>
                     </div>
                 </div>

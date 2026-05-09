@@ -63,11 +63,12 @@ import { chatAction, summarizeChatAction, generateRelatedQuestionsAction, genera
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn, formatShortDistanceToNow, cleanCitations } from '@/lib/utils';
 import { MarkdownRenderer } from './chat/markdown-renderer';
+import { ThoughtTrace } from './chat/thought-trace';
 import { Separator } from './ui/separator';
 import { formatDistanceToNow } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
-import { useUser } from '@/lib/auth-context';
+import { useAuth } from '@/lib/auth-context';
 import { getSupabaseClient } from '@/lib/supabase-db';
 
 import { MindMapData } from '@/types/mind-map';
@@ -196,7 +197,7 @@ export function ChatPanel({
   onTopicClick,
 }: ChatPanelProps) {
   const { toast } = useToast();
-  const { user } = useUser();
+  const { user, session } = useAuth();
   const { config: providerOptionsConfig, updateConfig } = useAIConfig();
   const { awardXP } = useXP();
   const providerOptions = useMemo(() => ({
@@ -358,7 +359,7 @@ export function ChatPanel({
             if (lastMsg.role === 'ai' && !streamText.includes('error') && !streamText.includes('Sorry')) {
               setIsGeneratingRelated(true);
               generateRelatedQuestionsAction({
-                topic,
+                topic: session.title && session.title !== 'General Conversation' ? session.title : (topic || 'General Conversation'),
                 mindMapData: mindMapData ? toPlainObject(mindMapData) : undefined,
                 history: session.messages.slice(-10).map(m => ({
                   role: m.role === 'ai' ? 'assistant' : 'user',
@@ -498,14 +499,15 @@ export function ChatPanel({
     const content = (messageToSend || input).trim();
     if (!content || !activeSessionId) return;
 
+    const currentAttachments = [...attachments];
     const newMessage: ChatMessage = { 
       id: `msg-${Date.now()}-user`,
       role: 'user', 
       content,
       type: 'text',
+      attachments: currentAttachments.map(a => ({ name: a.name, type: a.type, content: a.content })),
       timestamp: Date.now()
     };
-    const currentAttachments = [...attachments];
     setAttachments([]); // Clear UI immediately
     setRelatedQuestions([]); // Clear previous questions when a new one is sent
 
@@ -572,6 +574,7 @@ export function ChatPanel({
       sessionId: sessionId || activeSessionId,
       attachments: combinedAttachments as any,
       apiKey: providerOptions.apiKey,
+      token: session?.access_token,
       model: providerOptionsConfig.pollinationsModel || 'openai',
       agentMode,
     });
@@ -1049,39 +1052,37 @@ export function ChatPanel({
 
 
   /**
-   * Finds or creates a session for the current topic.
+   * Finds or creates a session for the current topic or resumes the last one.
    */
   useEffect(() => {
     if (isOpen) {
-      if (activeSessionId) {
-        const current = sessions.find(s => s.id === activeSessionId);
-        const isSessionRelevant = current && (
-          (sessionId && current.mapId === sessionId) ||
-          (current.title === topic)
-        );
-        if (isSessionRelevant) {
-          if (!initialView) setView('chat');
-          return;
+      if (sessionId) {
+        // We are opening a specific Mind Map's chat
+        const existingMapSession = sessions.find(s => s.mapId === sessionId);
+        if (existingMapSession) {
+          setActiveSessionId(existingMapSession.id);
+        } else if (!isSessionLoading) {
+          startNewChat(topic);
+        }
+      } else {
+        // We are opening the global chat panel
+        if (activeSessionId && sessions.some(s => s.id === activeSessionId)) {
+          // Keep the current active session
+        } else if (sessions.length > 0) {
+          // Resume the most recent session
+          setActiveSessionId(sessions[0].id);
+        } else if (!isSessionLoading) {
+          // No sessions exist at all, start a new one
+          startNewChat('General Conversation');
         }
       }
-
-      const existingSession = sessions.find(s =>
-        (sessionId && s.mapId === sessionId) ||
-        s.title === topic
-      );
-
-      if (existingSession) {
-        setActiveSessionId(existingSession.id);
-      } else if (!isSessionLoading) {
-        startNewChat(topic);
-      }
-      // Only reset to chat if no specific view was requested
+      
       if (!initialView) setView('chat');
     } else {
       hasSentInitialMessage.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, topic, isSessionLoading, sessionId]);
+  }, [isOpen, topic, isSessionLoading, sessionId, sessions.length]);
 
   // Apply initialView — runs after session effect so it wins
   useEffect(() => {
@@ -1570,7 +1571,12 @@ export function ChatPanel({
                     </div>
 
                     <h2 className="text-xl md:text-2xl font-black text-white tracking-tight mb-2 line-clamp-2 px-6">
-                      {topic === 'General Conversation' ? "How can I help you?" : `Explore ${topic}`}
+                      {(() => {
+                        const effectiveTopic = (activeSession?.title && activeSession.title !== 'General Conversation')
+                          ? activeSession.title
+                          : (topic || 'General Conversation');
+                        return effectiveTopic === 'General Conversation' ? "How can I help you?" : `Explore ${effectiveTopic}`;
+                      })()}
                     </h2>
                     <p className="text-zinc-500 text-xs font-medium uppercase tracking-[0.2em] animate-pulse">
                       AI Knowledge Assistant Active
@@ -1580,11 +1586,17 @@ export function ChatPanel({
 
                 {/* Bento Grid Suggestions */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg relative z-10">
-                  {[
+                  {(() => {
+                    const effectiveTopic = (activeSession?.title && activeSession.title !== 'General Conversation')
+                      ? activeSession.title
+                      : (topic || 'General Conversation');
+                    const isGeneral = effectiveTopic === 'General Conversation';
+                    
+                    return [
                     {
                       title: "Deep Dive",
                       icon: Wand2,
-                      prompt: `Give me a comprehensive deep dive into ${topic === 'General Conversation' ? 'a random interesting topic' : topic}`,
+                      prompt: `Give me a comprehensive deep dive into ${isGeneral ? 'a random interesting topic' : effectiveTopic}`,
                       color: "bg-purple-500/10 hover:bg-purple-500/20",
                       border: "border-purple-500/20",
                       iconColor: "text-purple-400"
@@ -1600,7 +1612,7 @@ export function ChatPanel({
                     {
                       title: "Key Concepts",
                       icon: GraduationCap,
-                      prompt: `What are the most important concepts to master in ${topic === 'General Conversation' ? 'Learning' : topic}?`,
+                      prompt: `What are the most important concepts to master in ${isGeneral ? 'Learning' : effectiveTopic}?`,
                       color: "bg-blue-500/10 hover:bg-blue-500/20",
                       border: "border-blue-500/20",
                       iconColor: "text-blue-400"
@@ -1608,7 +1620,7 @@ export function ChatPanel({
                     {
                       title: "Fact Check",
                       icon: History,
-                      prompt: `Surprise me with some incredible facts about ${topic === 'General Conversation' ? 'the universe' : topic}`,
+                      prompt: `Surprise me with some incredible facts about ${isGeneral ? 'the universe' : effectiveTopic}`,
                       color: "bg-orange-500/10 hover:bg-orange-500/20",
                       border: "border-orange-500/20",
                       iconColor: "text-orange-400"
@@ -1679,7 +1691,7 @@ export function ChatPanel({
                         </motion.div>
                       )}
                     </div>
-                  ))}
+                  ))})()}
                 </div>
 
                 {/* Quick Resume Link - Subtly placed at bottom */}
@@ -1755,6 +1767,24 @@ export function ChatPanel({
                             </div>
                           )}
                           <div className="p-4">
+                            {message.role === 'user' && message.attachments && message.attachments.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mb-3">
+                                {message.attachments.map((file, fIdx) => (
+                                  <div key={fIdx} className="flex flex-col gap-2 max-w-[200px]">
+                                    {file.type === 'image' && file.content ? (
+                                      <div className="relative rounded-lg overflow-hidden border border-white/10 shadow-sm group/img">
+                                        <img src={file.content} alt={file.name} className="w-full h-auto object-cover max-h-[150px]" />
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-2 px-2 py-1.5 bg-white/10 rounded-lg border border-white/10">
+                                        {file.type === 'image' ? <ImageIcon className="h-3 w-3" /> : file.type === 'pdf' ? <FileDigit className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
+                                        <span className="text-[10px] font-medium truncate">{file.name}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                             {message.type === 'quiz' && message.quiz ? (
                               <QuizCard
                                 quiz={message.quiz}
@@ -1832,22 +1862,12 @@ export function ChatPanel({
                                   }
                                   return (
                                       <div className="markdown-container space-y-4">
-                                        {/* Reasoning Block */}
-                                        {isCurrentlyStreaming && reasoning && (
-                                          <motion.div 
-                                            initial={{ opacity: 0, height: 0 }}
-                                            animate={{ opacity: 1, height: 'auto' }}
-                                            className="bg-magenta-500/5 border border-magenta-500/10 rounded-xl p-3 mb-4"
-                                          >
-                                            <div className="flex items-center gap-2 mb-2">
-                                              <BrainCircuit className="w-3.5 h-3.5 text-magenta-400 animate-pulse" />
-                                              <span className="text-[10px] font-black text-magenta-400 uppercase tracking-widest">Thinking</span>
-                                            </div>
-                                            <p className="text-xs text-zinc-400 italic line-clamp-3 hover:line-clamp-none transition-all">
-                                              {reasoning}
-                                            </p>
-                                          </motion.div>
-                                        )}
+                                        {/* Reasoning & Thought Chain (Persistent or Streaming) */}
+                                        <ThoughtTrace 
+                                          reasoning={isCurrentlyStreaming ? reasoning : message.reasoning}
+                                          thoughtChain={message.thoughtChain}
+                                          initiallyExpanded={isCurrentlyStreaming}
+                                        />
 
                                         {/* Tool Calls Block */}
                                         {isCurrentlyStreaming && toolCalls.length > 0 && (
@@ -2081,7 +2101,7 @@ export function ChatPanel({
             </div>
           </div>
         </ScrollArea>
-        <div className="px-4 pb-4">
+        <div className="px-4 pb-4 flex-shrink-0">
           {/* Attachment Previews */}
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
@@ -2094,8 +2114,10 @@ export function ChatPanel({
                     exit={{ opacity: 0, scale: 0.8, x: -10 }}
                     className="group relative flex items-center gap-2 p-1.5 pr-3 bg-white/5 backdrop-blur-md border border-white/10 rounded-xl shadow-lg"
                   >
-                    <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center text-primary shadow-inner">
-                      {file.type === 'image' ? (
+                    <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center text-primary shadow-inner overflow-hidden">
+                      {file.type === 'image' && file.content ? (
+                        <img src={file.content} alt={file.name} className="w-full h-full object-cover" />
+                      ) : file.type === 'image' ? (
                         <ImageIcon className="w-3.5 h-3.5" />
                       ) : file.type === 'pdf' ? (
                         <FileDigit className="w-3.5 h-3.5" />
@@ -2152,16 +2174,31 @@ export function ChatPanel({
                     className="hidden"
                     accept=".pdf,.txt,image/*"
                   />
-                  <Input
+                  <textarea
                     autoFocus
                     value={input}
-                    onChange={(e) => setInput(e.target.value)}
+                    onChange={(e) => {
+                      setInput(e.target.value);
+                      e.target.style.height = '48px';
+                      e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!isLoading && (input.trim() !== '' || attachments.length > 0)) {
+                          handleSend();
+                          e.currentTarget.style.height = '48px';
+                        }
+                      }
+                    }}
                     placeholder={isListening ? "Listening..." : "Ask a question..."}
                     disabled={isLoading}
+                    rows={1}
                     className={cn(
-                      "bg-transparent border-white/10 focus:border-primary/50 pr-40 min-h-[48px] rounded-2xl transition-all placeholder:text-zinc-600 focus-visible:ring-0 focus-visible:ring-offset-0",
+                      "flex w-full resize-none bg-transparent border border-white/10 focus:border-primary/50 min-h-[48px] max-h-[120px] rounded-2xl pl-4 pr-[140px] py-3 text-sm transition-all placeholder:text-zinc-600 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 overflow-y-auto block disabled:cursor-not-allowed disabled:opacity-50",
                       isListening && "border-primary"
                     )}
+                    style={{ lineHeight: '1.5' }}
                   />
                   <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
                     {/* Source File Toggle inside Input Bar */}
@@ -2223,26 +2260,6 @@ export function ChatPanel({
                       </Tooltip>
                     </TooltipProvider>
 
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className={cn(
-                              "h-8 w-8 rounded-full transition-all shadow-none",
-                              agentMode ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-white/10"
-                            )}
-                            onClick={() => setAgentMode(!agentMode)}
-                            disabled={isLoading}
-                          >
-                            <BrainCircuit className={cn("h-4 w-4", agentMode && "animate-pulse")} />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top">Toggle Agent Mode (Tool Use)</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
 
                     <Button
                       type="button"
@@ -2424,13 +2441,28 @@ export function ChatPanel({
           <form onSubmit={(e) => { e.preventDefault(); handlePinChatSend(); }} className="flex items-end gap-2">
             <div className="relative flex-grow rounded-2xl bg-zinc-900/60 backdrop-blur-3xl shadow-2xl overflow-hidden">
               <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-              <Input
+              <textarea
                 autoFocus
                 value={pinChatInput}
-                onChange={(e) => setPinChatInput(e.target.value)}
+                onChange={(e) => {
+                  setPinChatInput(e.target.value);
+                  e.target.style.height = '48px';
+                  e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!isPinChatLoading && pinChatInput.trim() !== '') {
+                      handlePinChatSend();
+                      e.currentTarget.style.height = '48px';
+                    }
+                  }
+                }}
                 placeholder="Ask a follow-up question..."
                 disabled={isPinChatLoading}
-                className="bg-transparent border-white/10 focus:border-primary/50 min-h-[48px] rounded-2xl focus-visible:ring-0 focus-visible:ring-offset-0"
+                rows={1}
+                className="flex w-full resize-none bg-transparent border border-white/10 focus:border-primary/50 min-h-[48px] max-h-[120px] rounded-2xl px-3 py-3 text-sm transition-all placeholder:text-zinc-600 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 overflow-y-auto block disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ lineHeight: '1.5' }}
               />
             </div>
             <Button
@@ -3001,6 +3033,28 @@ export function ChatPanel({
                   </Tooltip>
                 </TooltipProvider>
 
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          "h-9 w-9 rounded-xl transition-all",
+                          agentMode ? "text-primary bg-primary/10 border-primary/20" : "text-zinc-500 hover:text-zinc-200"
+                        )}
+                        onClick={() => setAgentMode(!agentMode)}
+                      >
+                        <BrainCircuit className={cn("h-5 w-5", agentMode && "animate-pulse")} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <p>{agentMode ? 'Disable Agent Mode' : 'Enable Agent Mode'}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
                 <Button type="button" variant="ghost" size="icon" onClick={() => setView('history')}>
                   <History className="h-5 w-5" />
                   <span className="sr-only">Chat History</span>
@@ -3031,9 +3085,10 @@ export function ChatPanel({
         onOpenChange={setCreateMindmapOpen}
         content={createMindmapContent}
         userMessage={createMindmapUserMessage}
-        onMindmapCreated={(mapData) => {
+        options={providerOptions}
+        onMindmapCreated={async (mapData) => {
           if (onMindMapGenerated) {
-            onMindMapGenerated(mapData);
+            return await onMindMapGenerated(mapData);
           }
         }}
       />
