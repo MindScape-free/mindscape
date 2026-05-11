@@ -21,12 +21,13 @@ export async function generateComparisonMapV2(
         depth?: 'low' | 'medium' | 'deep';
         searchContextA?: SearchContext | null;
         searchContextB?: SearchContext | null;
+        images?: { inlineData: { mimeType: string; data: string } }[];
         provider?: AIProvider;
         apiKey?: string;
         model?: string;
     }
 ): Promise<GenerateComparisonMapOutputV2> {
-    const { topic1, topic2, depth = 'low', searchContextA, searchContextB, provider, apiKey, model } = input;
+    const { topic1, topic2, depth = 'low', searchContextA, searchContextB, images, provider, apiKey, model } = input;
 
     const system = systemPrompt;
     const user = userPromptTemplate(topic1, topic2, depth, searchContextA, searchContextB);
@@ -41,6 +42,7 @@ export async function generateComparisonMapV2(
                 apiKey,
                 systemPrompt: system,
                 userPrompt: user,
+                images,
                 schema: CompareMindMapSchema,
                 taskType: 'generate-comparison-map',
                 options: { model },

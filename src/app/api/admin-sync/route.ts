@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin, isUserAdminServer } from '@/lib/supabase-server';
 import { format, subHours, subDays } from 'date-fns';
+import { mapUserRow } from '@/lib/map-mappers';
 
 async function verifyAdmin(request: Request): Promise<{ authorized: boolean; uid?: string; error?: string }> {
   try {
@@ -54,43 +55,57 @@ function processMapsForAnalytics(maps: any[]) {
   const analytics = buildEmptyAnalytics();
   let totalNodes = 0;
 
+  // Track parent IDs that actually have children in this set
+  const parentIds = new Set<string>();
+  maps.forEach(m => {
+    if (m.parent_map_id) parentIds.add(m.parent_map_id);
+  });
+  analytics.sub_map_stats.parents = parentIds.size;
+
   maps.forEach((data: any) => {
-    analytics.total_analyzed++;
-    totalNodes += data.node_count || 0;
+    const isSubMap = data.is_sub_map === true || !!data.parent_map_id;
 
-    // Mode
-    const isMulti =
-      data.mode === 'multi' ||
-      data.source_file_type === 'multi' ||
-      (data.source_file_content && data.source_file_content.includes('--- SOURCE:'));
-    if (isMulti) analytics.mode_counts.multi++;
-    else if (data.mode === 'compare') analytics.mode_counts.compare++;
-    else analytics.mode_counts.single++;
+    if (!isSubMap) {
+      analytics.total_analyzed++;
+      totalNodes += data.node_count || 0;
 
-    // Depth
-    const depth = (data.depth || 'unspecified') as keyof typeof analytics.depth_counts;
-    if (depth in analytics.depth_counts) analytics.depth_counts[depth]++;
-    else analytics.depth_counts.unspecified++;
+      // Mode
+      const isMulti =
+        data.mode === 'multi' ||
+        data.source_file_type === 'multi' ||
+        (data.source_file_content && data.source_file_content.includes('--- SOURCE:'));
+      if (isMulti) analytics.mode_counts.multi++;
+      else if (data.mode === 'compare') analytics.mode_counts.compare++;
+      else analytics.mode_counts.single++;
 
-    // Source
-    const source = data.source_file_type || data.source_type || (data.source_url ? 'website' : 'text');
-    analytics.source_counts[source] = (analytics.source_counts[source] || 0) + 1;
+      // Depth
+      const rawDepth = data.depth || 'unspecified';
+      let depth: 'low' | 'medium' | 'deep' | 'unspecified' = 'unspecified';
+      if (rawDepth === 'low' || rawDepth === 'quick') depth = 'low';
+      else if (rawDepth === 'medium' || rawDepth === 'balanced') depth = 'medium';
+      else if (rawDepth === 'deep' || rawDepth === 'detailed') depth = 'deep';
+      analytics.depth_counts[depth]++;
 
-    // Public/Private
-    if (data.is_public) analytics.public_private.public++;
-    else analytics.public_private.private++;
+      // Source
+      const source = data.source_file_type || data.source_type || (data.source_url ? 'website' : 'text');
+      analytics.source_counts[source] = (analytics.source_counts[source] || 0) + 1;
 
-    // Persona
-    const raw = (data.ai_persona || '').toLowerCase().trim();
-    let persona = 'Teacher';
-    if (raw === 'concise') persona = 'Concise';
-    else if (raw === 'creative') persona = 'Creative';
-    else if (raw.includes('sage')) persona = 'Sage';
-    analytics.persona_counts[persona] = (analytics.persona_counts[persona] || 0) + 1;
+      // Public/Private
+      if (data.is_public) analytics.public_private.public++;
+      else analytics.public_private.private++;
 
-    // Sub-maps
-    if (data.is_sub_map || data.parent_map_id) analytics.sub_map_stats.total++;
-    if (data.has_sub_maps) analytics.sub_map_stats.parents++;
+      // Persona
+      const raw = (data.ai_persona || '').toLowerCase().trim();
+      let persona = 'Teacher';
+      if (raw === 'concise') persona = 'Concise';
+      else if (raw === 'creative') persona = 'Creative';
+      else if (raw.includes('sage')) persona = 'Sage';
+      analytics.persona_counts[persona] = (analytics.persona_counts[persona] || 0) + 1;
+    } else {
+      // Sub-map logic
+      analytics.sub_map_stats.total++;
+    }
+
     if (data.is_featured) analytics.featured_count++;
   });
 
@@ -144,10 +159,12 @@ export async function POST(request: Request) {
   try {
     console.log('📊 [AdminSync] Fetching all collections from Supabase...');
 
-    const [usersRes, mapsRes, logsRes] = await Promise.all([
+    const [usersRes, mapsRes, logsRes, metricsRes, aiCallsRes] = await Promise.all([
       supabase.from('users').select('*'),
       supabase.from('mindmaps').select('*'),
-      supabase.from('admin_activity_log').select('*').gte('timestamp', subDays(now, 31).toISOString())
+      supabase.from('admin_activity_log').select('*').gte('timestamp', subDays(now, 31).toISOString()),
+      supabase.from('platform_metrics_view').select('*').single(),
+      supabase.from('ai_calls').select('*').order('created_at', { ascending: false }).limit(200)
     ]);
 
     if (usersRes.error) throw usersRes.error;
@@ -157,20 +174,22 @@ export async function POST(request: Request) {
     const users = usersRes.data;
     const allMaps = mapsRes.data;
     const logs = logsRes.data;
+    const metrics = metricsRes.data?.data || {};
+    const aiCalls = aiCallsRes.data || [];
+    const platformMetrics = metrics.platform || {};
 
     let totalUsers = users.length;
     let activeUsers24h = 0;
     let newUsers24h = 0;
     let newUsersPrevious24h = 0;
-    let totalMindmapsEver = 0;
-    let totalChats = 0;
-    let totalImages = 0;
+    let totalMindmapsEver = platformMetrics.total_maps_ever || 0;
+    let totalChats = platformMetrics.total_chats || 0;
+    let totalImages = metrics.total_images || 0;
     let totalPublicMaps = allMaps.filter(m => m.is_public).length;
 
     // --- Process Users ---
     users.forEach(data => {
       const createdAt = new Date(data.created_at || 0);
-      // Fallback to statistics.lastActiveDate if last_active is missing
       const lastActiveAtStr = data.last_active || data.statistics?.lastActiveDate;
       const lastActiveAt = lastActiveAtStr ? new Date(lastActiveAtStr) : null;
 
@@ -188,8 +207,6 @@ export async function POST(request: Request) {
         if (heatmapMap.has(activeKey)) heatmapMap.get(activeKey)!.activeUsers++;
       }
 
-      totalMindmapsEver += data.statistics?.totalMapsCreated || 0;
-      totalChats += data.statistics?.totalChats || 0;
       totalImages += data.statistics?.totalImagesGenerated || 0;
     });
 
@@ -204,7 +221,7 @@ export async function POST(request: Request) {
     let totalSubMaps = 0;
     let newMaps24h = 0;
     let newMapsPrevious24h = 0;
-    let totalNodes = 0;
+    let totalNodes = platformMetrics.global_nodes || 0;
     let totalNodesActive = 0;
 
     allMaps.forEach(data => {
@@ -218,9 +235,7 @@ export async function POST(request: Request) {
         totalSubMaps++;
       }
 
-      totalNodes += nodes;
       const mapDate = new Date(data.created_at || 0);
-
       if (mapDate.getTime() > 0) {
         const dateKey = format(mapDate, 'yyyy-MM-dd');
         if (heatmapMap.has(dateKey)) {
@@ -239,8 +254,7 @@ export async function POST(request: Request) {
       }
     });
 
-    const rootMaps = allMaps.filter(m => !m.is_sub_map && !m.parent_map_id);
-    const mapAnalytics = processMapsForAnalytics(rootMaps);
+    const mapAnalytics = processMapsForAnalytics(allMaps);
 
     const engagementRate = totalUsers > 0 ? (activeUsers24h / totalUsers) * 100 : 0;
     const healthScore = Math.round(
@@ -248,15 +262,7 @@ export async function POST(request: Request) {
       Math.min(50, ((totalMindmapsEver / (totalUsers || 1)) / 1.5) * 50)
     );
 
-    const serializeUser = (u: any) => ({
-      id: u.id,
-      displayName: u.display_name || u.displayName || null,
-      email: u.email || null,
-      photoURL: u.photo_url || u.photoURL || null,
-      createdAt: u.created_at || u.createdAt,
-      lastActive: u.last_active || u.statistics?.lastActiveDate || u.lastActive,
-      statistics: u.statistics || null,
-    });
+    const serializeUser = (u: any) => mapUserRow(u);
 
     const latestUsers = [...users]
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -267,7 +273,6 @@ export async function POST(request: Request) {
       .sort((a, b) => (b.statistics?.totalMapsCreated || 0) - (a.statistics?.totalMapsCreated || 0))
       .slice(0, 20)
       .map(serializeUser);
-
 
     const latestMaps = allMaps
       .filter(m => m.is_public)
@@ -309,9 +314,14 @@ export async function POST(request: Request) {
       top_users: topUsers,
       timestamp,
       last_updated: nowMs,
+      ai_calls: aiCalls,
     };
 
-    const { error: upsertError } = await supabase.from('admin_stats').upsert(docPayload);
+    const { error: upsertError } = await supabase.from('admin_stats').upsert({
+      id: 'global',
+      data: docPayload,
+      last_updated: timestamp
+    });
     if (upsertError) throw upsertError;
 
     lastSyncTime = nowMs;

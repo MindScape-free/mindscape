@@ -37,22 +37,28 @@ TASK: Extract all meaningful information from the provided image in three separa
 1. RAW TEXT EXTRACTION
    - Extract all visible text exactly as it appears.
    - Preserve formatting, labels, and values.
+   - For TABLES: Capture row-by-row data. Use labels like "Row 1", "Column: [Name]" to maintain structure.
+   - BILINGUAL: Capture both Hindi and English text if present.
    - Do NOT paraphrase or interpret — copy verbatim.
 
 2. VISUAL DESCRIPTION
    - Describe all key visual elements: charts, diagrams, photographs, layouts.
    - Identify structure: tables, forms, graphs, diagrams.
    - Note spatial relationships between elements.
+   - PERSPECTIVE: Identify if the image is tilted or distorted and mentally flatten it for extraction.
 
 3. SUMMARY
    - Provide a cohesive textual summary combining text and visual elements.
    - Identify names, dates, numbers, and technical terms.
-   - If form or ID → extract field-value pairs explicitly.
+   - If form, ID, or MARKSHEET → extract field-value pairs explicitly.
+   - If table → summarize the findings and trends in the table.
 
 RULES:
 - Focus on information density and accuracy.
 - Do NOT mention base64 or extraction artifacts.
-- Do NOT guess uncertain text — skip if OCR confidence is low.`;
+- PERSPECTIVE/TILT: Read row-by-row even if the image is slanted.
+- If OCR confidence is low for a specific cell/field → skip it but keep the surrounding structure.
+- Extract data verbatim — no guessing.`;
 
   const userPrompt = `Analyze this image and provide comprehensive textual extraction of all content.`;
 

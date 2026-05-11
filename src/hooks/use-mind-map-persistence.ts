@@ -105,11 +105,14 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
         nodeCount = 1;
         subTopics.forEach((st: any) => {
           nodeCount++;
-          st.categories?.forEach((cat: any) => { nodeCount++; nodeCount += cat.subCategories?.length || 0; });
+          st.categories?.forEach((cat: any) => {
+            nodeCount++;
+            nodeCount += cat.subCategories?.length || 0;
+          });
         });
       }
 
-      const metadataToSave = {
+      const metadataToSave: any = {
         topic: safeTopic,
         summary,
         user_id: user.id,
@@ -118,7 +121,6 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
         ai_persona: mapAiPersona || aiPersona || 'Teacher',
         source_file_type: mapSourceFileType || mapToSave.sourceFileType || null,
         source_url: mapToSave.sourceUrl || null,
-        thumbnail_url: mapThumbnailUrl || mapToSave.thumbnailUrl || '',
         thumbnail_prompt: mapToSave.thumbnailPrompt || '',
         node_count: nodeCount || mapNodeCount || 0,
         is_public: mapIsPublic || mapToSave.isPublic || false,
@@ -128,6 +130,11 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
         search_sources: mapToSave.searchSources || null,
         search_timestamp: mapToSave.searchTimestamp || null,
       };
+
+      // Only include thumbnail_url if it's actually provided to avoid overwriting background generation
+      if (mapThumbnailUrl || mapToSave.thumbnailUrl) {
+        metadataToSave.thumbnail_url = mapThumbnailUrl || mapToSave.thumbnailUrl;
+      }
 
       const contentToSave = {
         subTopics: subTopics || [],
@@ -142,8 +149,9 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
 
       const finalId = await saveMindMap(supabase, user.id, targetId, metadataToSave, contentToSave);
 
-      // Background thumbnail generation - Only if missing and not already generating for this map
-      if (!mapToSave.thumbnailUrl && !generatingThumbnailsRef.current.has(finalId)) {
+      // Background thumbnail generation - Only if missing, not already generating, and not a temporary synthesis state
+      const isSynthesizing = mapToSave.subTopics?.some((st: any) => st.name === "Synthesizing...");
+      if (!mapToSave.thumbnailUrl && !generatingThumbnailsRef.current.has(finalId) && !isSynthesizing) {
         generatingThumbnailsRef.current.add(finalId);
         (async () => {
           try {
@@ -151,7 +159,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
             
             const { enhanceImagePromptAction } = await import('@/app/actions');
             
-            // 1. Enhance the prompt based on the topic for a non-random, high-quality result
+            // 1. Enhance the prompt based on the topic
             const enhancement = await enhanceImagePromptAction({
               prompt: safeTopic,
               style: 'cinematic',
@@ -164,8 +172,6 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
 
             const finalPrompt = enhancement.enhancedPrompt?.enhancedPrompt || 
                                `Cinematic professional conceptual illustration of ${safeTopic}, dark premium background, purple and gold accents, 8k quality, sharp focus, no text, no watermarks`;
-
-            console.log(`✨ Using enhanced prompt: ${finalPrompt.substring(0, 100)}...`);
 
             // 2. Generate the image
             const response = await fetch('/api/generate-image', {
@@ -184,9 +190,14 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
             if (response.ok) {
               const data = await response.json();
               if (data.imageUrl) {
-                // Save the generated image URL/DataURI to the database
+                // Save to DB
                 await updateMindMapField(supabase, finalId, { thumbnail_url: data.imageUrl });
                 console.log(`✅ Thumbnail generated and saved for map: ${finalId}`);
+                
+                // Update locally if callback provided
+                if (options.onRemoteUpdate) {
+                  options.onRemoteUpdate({ ...mapToSave, thumbnailUrl: data.imageUrl } as any);
+                }
               } else {
                 console.warn(`⚠️ API responded OK but missing imageUrl field`);
               }
@@ -214,8 +225,16 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
 
         const mapAchievements = await trackMapCreated(supabase, user.id, { mode: mapToSave.mode, sourceFileType: mapToSave.sourceFileType, nodeCount, aiPersona: mapToSave.aiPersona || aiPersona });
         showAchievementToasts(mapAchievements);
-        if (nodes?.length > 0) showAchievementToasts(await trackNodesAdded(supabase, user.id, nodes.length));
-        if (metadataToSave.is_sub_map) showAchievementToasts(await trackNestedExpansion(supabase, user.id));
+        
+        if (nodes?.length > 0) {
+          const nodeAchievements = await trackNodesAdded(supabase, user.id, nodes.length);
+          showAchievementToasts(nodeAchievements);
+        }
+        
+        if (metadataToSave.is_sub_map) {
+          const expansionAchievements = await trackNestedExpansion(supabase, user.id);
+          showAchievementToasts(expansionAchievements);
+        }
       }
 
       if (!isSilent) toast({ title: targetId ? 'Map Updated!' : 'Map Auto-Saved!', description: `Mind map "${safeTopic}" has been ${targetId ? 'updated' : 'saved'}.` });

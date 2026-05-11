@@ -55,17 +55,17 @@ export function useMindMapStack(options: {
     const push = useCallback(async (topic: string, nodeId: string, navOptions: { mode: 'foreground' | 'background', parentDepth?: number, branchDepth?: 'low' | 'medium' | 'deep' } = { mode: 'background' }) => {
         if (status !== 'idle') return;
 
-        // CRITICAL: Ensure parent map is saved before creating sub-map
-        if (currentMap && !currentMap.id) {
+        let actualParentId = currentMap?.id;
+        if (currentMap && !actualParentId) {
             console.warn('Parent map not saved yet, saving first...');
             try {
-                const parentId = await options.persistenceAdapter.persist(currentMap, undefined, true);
-                if (parentId) {
+                actualParentId = await options.persistenceAdapter.persist(currentMap, undefined, true);
+                if (actualParentId) {
                     // Update the current map with the new ID
                     setStack(prev => {
                         const newStack = [...prev];
                         if (newStack[activeIndex]) {
-                            newStack[activeIndex] = { ...newStack[activeIndex], id: parentId };
+                            newStack[activeIndex] = { ...newStack[activeIndex], id: actualParentId };
                         }
                         return newStack;
                     });
@@ -114,7 +114,7 @@ export function useMindMapStack(options: {
                 const newMap = {
                     ...mapWithDefaults,
                     isSubMap: true,
-                    parentMapId: currentMap?.id || undefined,
+                    parentMapId: actualParentId || undefined,
                 };
 
                 // Persist the new map
@@ -128,20 +128,17 @@ export function useMindMapStack(options: {
 
                 const newExpansion: NestedExpansionItem = {
                     id: newId || `temp-${Date.now()}`,
-                    topic: mapWithId.topic,
-                    parentName: currentMap?.topic || 'Main',
+                    topic: topic,
+                    parentName: parentTopic || 'Unknown',
                     icon: mapWithId.icon || 'Network',
                     status: 'completed',
-                    fullData: { ...mapWithId, treeDepth: (navOptions.parentDepth !== undefined ? navOptions.parentDepth : parentTreeDepth) + 1 } as any,
-                    createdAt: Date.now(),
-                    depth: (navOptions.parentDepth !== undefined ? navOptions.parentDepth : parentTreeDepth) + 1,
-                    subCategories: [] 
+                    createdAt: new Date().toISOString(),
+                    depth: parentTreeDepth + 1,
+                    fullData: { ...mapWithId, treeDepth: parentTreeDepth + 1 } as any
                 };
 
                 setStack(prev => {
                     const newStack = [...prev];
-
-                    // 1. Update Parent to include nested expansion
                     if (newStack[activeIndex]) {
                         const parent = newStack[activeIndex];
                         const currentExpansions = parent.nestedExpansions || [];
@@ -152,8 +149,6 @@ export function useMindMapStack(options: {
                             };
                         }
                     }
-
-                    // 2. Add New Map to stack
                     newStack.push(mapWithId);
                     return newStack;
                 });
@@ -161,17 +156,25 @@ export function useMindMapStack(options: {
                 if (navOptions.mode === 'foreground') {
                     setActiveIndex(prev => prev + 1);
                 }
+
+                return { newId, parentId: actualParentId };
             }
         } catch (err: any) {
-            setError(err.message || 'Failed to expand node');
+            setError(err.message || 'Generation failed');
             throw err;
         } finally {
             setStatus('idle');
+            setGenerationScope(null);
             setGeneratingNodeId(null);
             setGeneratingTopic(null);
-            setGenerationScope(null);
         }
-    }, [status, currentMap, options.expansionAdapter, options.persistenceAdapter, activeIndex]);
+    }, [activeIndex, currentMap, options.expansionAdapter, options.persistenceAdapter, status]);
+
+    const pop = useCallback(() => {
+        if (activeIndex > 0) {
+            setActiveIndex(activeIndex - 1);
+        }
+    }, [activeIndex]);
 
     const sync = useCallback(async (isSilent = false) => {
         if (!currentMap) return;

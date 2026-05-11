@@ -38,6 +38,7 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { parsePdfContent } from '@/lib/pdf-processor';
 import { safeSetItem, safeGetItem, safeRemoveItem, STORAGE_LIMITS } from '@/lib/storage';
+import { resizeImage } from '@/lib/image-processor';
 import {
   Select,
   SelectContent,
@@ -72,13 +73,13 @@ import { FeatureBlock } from '@/components/home/feature-block';
 import { ProcessStep } from '@/components/home/process-step';
 
 // #6 — Source-type depth presets
-const SOURCE_DEPTH_PRESETS: Record<string, 'low' | 'medium' | 'deep'> = {
-  pdf:     'deep',
-  youtube: 'medium',
-  image:   'low',
-  website: 'medium',
-  text:    'medium',
-  multi:   'deep',
+const SOURCE_DEPTH_PRESETS: Record<string, 'quick' | 'balanced' | 'detailed'> = {
+  pdf:     'detailed',
+  youtube: 'balanced',
+  image:   'quick',
+  website: 'balanced',
+  text:    'balanced',
+  multi:   'detailed',
 };
 
 const ChatPanel = dynamic(() => import('@/components/chat-panel').then(mod => mod.ChatPanel), {
@@ -87,16 +88,16 @@ const ChatPanel = dynamic(() => import('@/components/chat-panel').then(mod => mo
 });
 
 const PERSONAS = [
-  { id: 'teacher', label: 'Explain like a teacher', icon: UserRound, color: 'text-blue-400', description: 'Explains concepts with detailed examples and educational step-by-step guidance.' },
+  { id: 'teacher', label: 'Teacher', icon: UserRound, color: 'text-blue-400', description: 'Explains concepts with detailed examples and educational step-by-step guidance.' },
   { id: 'concise', label: 'Concise', icon: Zap, color: 'text-amber-400', description: 'Provides direct, short, and to-the-point answers without fluff.' },
   { id: 'creative', label: 'Creative', icon: Palette, color: 'text-pink-400', description: 'Uses imaginative and out-of-the-box thinking for brainstorming.' },
   { id: 'sage', label: 'Cognitive Sage', icon: Brain, color: 'text-purple-400', description: 'Deep, philosophical, and analytical thinker for complex problems.' }
 ];
 
 const DEPTHS = [
-  { id: 'low', label: 'Quick', icon: FastForward, color: 'text-green-400', description: 'Brief and fast overview.' },
-  { id: 'medium', label: 'Balanced', icon: Scale, color: 'text-blue-400', description: 'Optimal mix of detail and brevity.' },
-  { id: 'deep', label: 'Detailed', icon: BookOpen, color: 'text-purple-400', description: 'Comprehensive, in-depth exploration.' },
+  { id: 'quick', label: 'Quick', icon: FastForward, color: 'text-green-400', description: 'Brief and fast overview.' },
+  { id: 'balanced', label: 'Balanced', icon: Scale, color: 'text-blue-400', description: 'Optimal mix of detail and brevity.' },
+  { id: 'detailed', label: 'Detailed', icon: BookOpen, color: 'text-purple-400', description: 'Comprehensive, in-depth exploration.' },
   { id: 'auto', label: 'Auto', icon: Sparkles, color: 'text-pink-400', description: 'AI decides the best depth based on topic complexity.' }
 ];
 
@@ -224,9 +225,14 @@ function Hero({
         toast({ variant: 'destructive', title: 'Topics Required', description: 'Please enter topics or attach files.' });
         return;
       }
-      const finalTopic1 = uploadedFile ? (topic ? `${topic}\n\n[File]: ${uploadedFile.content}` : uploadedFile.content) : topic;
-      const finalTopic2 = uploadedFile2 ? (topic2 ? `${topic2}\n\n[File]: ${uploadedFile2.content}` : uploadedFile2.content) : topic2;
-      onCompare(finalTopic1, finalTopic2);
+      
+      const cleanName = (t: string, f?: any) => {
+        if (t.trim()) return t.trim();
+        if (f?.name) return f.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, ' ');
+        return 'Topic';
+      };
+
+      onCompare(cleanName(topic, uploadedFile), cleanName(topic2, uploadedFile2), uploadedFile, uploadedFile2);
     } else {
       if (!topic && !uploadedFile) return;
       onGenerate(topic, uploadedFile);
@@ -250,16 +256,24 @@ function Hero({
       let content = '';
       let type: 'text' | 'pdf' | 'image' = 'text';
       if (file.type.startsWith('image/')) {
-        if (file.size > 2 * 1024 * 1024) {
-          toast({ title: "Image Too Large", description: "Max 2MB", variant: "destructive" });
+        if (file.size > 20 * 1024 * 1024) {
+          toast({ title: "Image Too Large", description: "Max 20MB", variant: "destructive" });
           return;
         }
         type = 'image';
-        content = await new Promise((resolve) => {
+        const rawBase64 = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
           reader.readAsDataURL(file);
         });
+
+        // Resize before storage to stay under sessionStorage limits
+        try {
+          content = await resizeImage(rawBase64, 2048, 0.8);
+        } catch (resizeErr) {
+          console.warn('Image resize failed, using original:', resizeErr);
+          content = rawBase64;
+        }
       } else if (file.type === 'application/pdf') {
         type = 'pdf';
         const arrayBuffer = await file.arrayBuffer();
@@ -553,17 +567,33 @@ export default function Home() {
     router.push(`/canvas?topic=${encodeURIComponent(topic)}&lang=${lang}&depth=${resolvedDepth}&persona=${persona}`);
   };
 
-  const handleCompare = (t1: string, t2: string) => {
+  const handleCompare = (t1: string, t2: string, f1?: any, f2?: any) => {
     setIsGenerating(true);
     const genId = `comp-${Date.now()}`;
+    
     trackGenerationStart(genId, {
-      sourceType: 'text',
+      sourceType: (f1 || f2) ? 'image' : 'text', // simplified for tracking
       mode: 'compare',
-      depth: 'medium',
+      depth: 'balanced',
       persona,
       userId: user?.uid
     });
-    router.push(`/canvas?topic1=${encodeURIComponent(t1)}&topic2=${encodeURIComponent(t2)}&lang=${lang}&depth=medium&persona=${persona}`);
+
+    if (f1 || f2) {
+      // Use session storage for comparison with files
+      safeSetItem(`session-type-${genId}`, 'compare');
+      safeSetItem(`session-content-${genId}`, { 
+        topic1: t1, 
+        topic2: t2, 
+        file1: f1?.content, 
+        file2: f2?.content,
+        file1Type: f1?.type,
+        file2Type: f2?.type
+      });
+      router.push(`/canvas?sessionId=${genId}&lang=${lang}&depth=balanced&persona=${persona}`);
+    } else {
+      router.push(`/canvas?topic1=${encodeURIComponent(t1)}&topic2=${encodeURIComponent(t2)}&lang=${lang}&depth=balanced&persona=${persona}`);
+    }
   };
 
   const handleMultiGenerate = (merged: string, t: string) => {
@@ -572,13 +602,13 @@ export default function Home() {
     trackGenerationStart(sessionId, {
       sourceType: 'multi',
       mode: 'multi',
-      depth: 'deep',
+      depth: 'detailed',
       persona,
       userId: user?.uid
     });
     safeSetItem(`session-type-${sessionId}`, 'multi');
     safeSetItem(`session-content-${sessionId}`, { file: merged, text: t });
-    router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=deep&persona=${persona}`);
+    router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=detailed&persona=${persona}`);
   };
 
   return (

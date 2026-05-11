@@ -66,11 +66,14 @@ LANGUAGE: ${input.targetLang ? input.targetLang : 'en'}
 DENSITY: ${density}
 
 ENTITY EXTRACTION RULES (CRITICAL):
-- If image is an ID, invoice, receipt, or form → PRIMARY GOAL is exact data extraction.
+- If image is an ID, invoice, receipt, form, or MARKSHEET → PRIMARY GOAL is exact data extraction.
+- TABLES: Transform each row into a Category. Each column value should be a SubCategory with its value as the description.
+- BILINGUAL CONTENT: Extract both Hindi and English text if present.
 - Combine field + value always: "Name: Megha" not just "Name".
 - Never output a field label without its value if visible.
+- PERSPECTIVE/TILT: Mentally flatten tilted documents; read row-by-row even if the image is slanted.
 - DO NOT use placeholders like "[REDACTED]", "[PRIVACY]", "XXXX" — always use actual text.
-- If OCR confidence is low for a field → skip that field entirely (do not guess).
+- If OCR confidence is low for a specific cell → skip that cell, but keep the row structure if possible.
 
 SCHEMA (return ONLY this JSON):
 {
@@ -80,16 +83,16 @@ SCHEMA (return ONLY this JSON):
   "icon": "lucide-kebab-case",
   "subTopics": [
     {
-      "name": "Specific Section or Entity",
+      "name": "Specific Section (e.g., 'Student Details' or 'Marks Table')",
       "icon": "lucide-kebab-case",
       "categories": [
         {
-          "name": "Category Name",
+          "name": "Category Name (e.g., 'Subject: Hindi')",
           "icon": "lucide-kebab-case",
           "subCategories": [
             {
-              "name": "Specific Detail Name",
-              "description": "Exactly 1 sentence, ≤20 words, concrete value from image.",
+              "name": "Detail Name (e.g., 'Theory Marks')",
+              "description": "Exactly 1 sentence, ≤20 words, concrete value from image (e.g., '53').",
               "icon": "lucide-kebab-case",
               "tags": ["tag1"]
             }
@@ -102,6 +105,7 @@ SCHEMA (return ONLY this JSON):
 
 RULES:
 - NEVER truncate — close all { and [ before stopping
+- If the image is a table, ENSURE all rows are captured as Categories.
 - Return ONLY raw JSON`;
 
   const userPrompt = `Analyze this image and generate the mind map JSON.`;

@@ -17,6 +17,7 @@ export interface SubCategory {
     createdAt?: string | number | Date;
   };
   timestamp?: number | string;
+  insight?: string;
 }
 
 export interface Category {
@@ -144,6 +145,9 @@ export interface BaseMindMapData {
   sourceFileContent?: string;
   sourceFileType?: string;
   originalPdfFileContent?: string;
+  sourceFile2Content?: string;
+  sourceFile2Type?: string;
+  originalPdf2FileContent?: string;
   sourceUrl?: string;
   videoId?: string;
   sourceType?: string;
@@ -207,7 +211,7 @@ export interface ExplainableNode {
 export type ExplanationMode = 'Beginner' | 'Intermediate' | 'Expert';
 
 export interface DepthSuggestion {
-  depth: 'low' | 'medium' | 'deep';
+  depth: 'quick' | 'balanced' | 'detailed';
   confidence: number;
   reasons: string[];
   suggestedItems: {

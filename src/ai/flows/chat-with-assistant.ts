@@ -107,7 +107,15 @@ ${pdfContext.concepts.map(c => `- **${c.title}**: ${c.description}`).join('\n')}
 
 ${attachments && attachments.length > 0 ? `📎 Attached Files:
 ${attachments.filter(a => a.type !== 'image').map(a => `--- ${a.name} (${a.type}) ---\n${a.content}\n---`).join('\n\n')}
-Reference attached file content in your response.` : ''}`;
+
+${attachments.some(a => a.type === 'image') ? `🖼️ IMAGE HANDLING RULES (CRITICAL):
+- You have access to images. Use them as primary sources.
+- If image is a MARKSHEET, ID, or FORM → Extract data exactly.
+- TABLES: Read row-by-row. If tilted, mentally flatten the image.
+- BILINGUAL: Capture both Hindi and English if present.
+- If OCR is blurry → mention "Text in this area is difficult to read" rather than guessing numbers.` : ''}
+
+Reference attached file content and images in your response.` : ''}`;
   }
 
   const systemPrompt = `${SYSTEM_GUARANTEES}

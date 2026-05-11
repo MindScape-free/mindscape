@@ -92,11 +92,11 @@ export function analyzeTopicComplexity(topic: string): DepthAnalysis {
   return scores;
 }
 
-export function getSuggestedItemCount(depth: 'low' | 'medium' | 'deep', analysis: DepthAnalysis): { min: number; max: number; label: string } {
+export function getSuggestedItemCount(depth: 'quick' | 'balanced' | 'detailed', analysis: DepthAnalysis): { min: number; max: number; label: string } {
   const baseRanges = {
-    low: { min: 24, max: 40, label: 'Quick Overview' },
-    medium: { min: 60, max: 90, label: 'Balanced Exploration' },
-    deep: { min: 100, max: 150, label: 'Deep Knowledge Dive' },
+    quick: { min: 24, max: 40, label: 'Quick Overview' },
+    balanced: { min: 60, max: 90, label: 'Balanced Exploration' },
+    detailed: { min: 100, max: 150, label: 'Detailed Knowledge Dive' },
   };
 
   const base = baseRanges[depth];
@@ -206,13 +206,13 @@ export function resolveDepthWithConfidence(topic: string): DepthSuggestion {
 
   confidence = Math.min(95, Math.max(40, confidence));
 
-  let depth: 'low' | 'medium' | 'deep';
+  let depth: 'quick' | 'balanced' | 'detailed';
   if (depthScore >= 2) {
-    depth = 'deep';
+    depth = 'detailed';
   } else if (depthScore >= 0) {
-    depth = 'medium';
+    depth = 'balanced';
   } else {
-    depth = 'low';
+    depth = 'quick';
   }
 
   if (reasons.length === 0) {
@@ -228,20 +228,20 @@ export function resolveDepthWithConfidence(topic: string): DepthSuggestion {
   };
 }
 
-export function getDepthLabel(depth: 'low' | 'medium' | 'deep'): string {
+export function getDepthLabel(depth: 'quick' | 'balanced' | 'detailed'): string {
   const labels = {
-    low: 'Quick',
-    medium: 'Balanced',
-    deep: 'Detailed',
+    quick: 'Quick',
+    balanced: 'Balanced',
+    detailed: 'Detailed',
   };
   return labels[depth];
 }
 
-export function getDepthColor(depth: 'low' | 'medium' | 'deep'): string {
+export function getDepthColor(depth: 'quick' | 'balanced' | 'detailed'): string {
   const colors = {
-    low: 'text-green-400',
-    medium: 'text-blue-400',
-    deep: 'text-purple-400',
+    quick: 'text-green-400',
+    balanced: 'text-blue-400',
+    detailed: 'text-purple-400',
   };
   return colors[depth];
 }

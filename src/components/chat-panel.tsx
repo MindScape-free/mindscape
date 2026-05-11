@@ -62,6 +62,7 @@ if (typeof window !== 'undefined') {
 import { chatAction, summarizeChatAction, generateRelatedQuestionsAction, generateQuizAction } from '@/app/actions';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn, formatShortDistanceToNow, cleanCitations } from '@/lib/utils';
+import { resizeImage } from '@/lib/image-processor';
 import { MarkdownRenderer } from './chat/markdown-renderer';
 import { ThoughtTrace } from './chat/thought-trace';
 import { Separator } from './ui/separator';
@@ -594,12 +595,20 @@ export function ChatPanel({
     for (const file of Array.from(files)) {
       try {
         if (file.type.startsWith('image/')) {
-          const base64 = await new Promise<string>((resolve) => {
+          const rawBase64 = await new Promise<string>((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
             reader.readAsDataURL(file);
           });
-          newAttachments.push({ type: 'image', name: file.name, content: base64 });
+          
+          let content = rawBase64;
+          try {
+            content = await resizeImage(rawBase64, 2048, 0.8);
+          } catch (err) {
+            console.warn('Resize failed, using original:', err);
+          }
+          
+          newAttachments.push({ type: 'image', name: file.name, content });
         } else if (file.type === 'application/pdf') {
           const arrayBuffer = await file.arrayBuffer();
           const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;

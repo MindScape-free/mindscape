@@ -1039,8 +1039,6 @@ export async function explainWithExampleAction(
       const ctx = getPdfContext(input.mainTopic);
       pdfContext = ctx ? JSON.stringify(ctx) : undefined;
 
-      // We'll skip fallback to supabase here to avoid Firebase Admin issues locally
-      // unless we're in production or have credentials. 
       // The client should ideally pass the context now.
     }
 
@@ -1201,10 +1199,10 @@ export async function getAIHealthReportAction() {
  * @returns {Promise<{ data: GenerateComparisonMapOutputV2 | null; error: string | null }>}
  */
 export async function generateComparisonMapAction(
-  input: GenerateComparisonMapInput & { useSearch?: boolean },
+  input: GenerateComparisonMapInput & { useSearch?: boolean; images?: { inlineData: { mimeType: string; data: string } }[] },
   options: { apiKey?: string; provider?: AIProvider; userId?: string; model?: string } = {}
 ): Promise<{ data: CompareMindMapData | null; error: string | null }> {
-  // TODO: Validate Firebase ID token server-side before invoking AI
+
 
   if (!input.topic1 || !input.topic2) {
     return { data: null, error: 'Both topics are required for comparison.' };
@@ -1500,8 +1498,8 @@ export async function syncUserStatisticsAction(userId: string) {
     const currentStats = user.statistics || {};
     const newStats = {
       ...currentStats,
-      totalMapsCreated: rootMaps.length,
-      totalNestedExpansions: subMaps.length,
+      totalMapsCreated: Math.max(currentStats.totalMapsCreated || 0, rootMaps.length),
+      totalNestedExpansions: Math.max(currentStats.totalNestedExpansions || 0, subMaps.length),
       totalNodes: totalNodes,
       totalChats: chatsCount || 0,
     };

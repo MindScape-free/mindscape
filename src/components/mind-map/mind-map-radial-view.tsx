@@ -6,7 +6,7 @@ import { MindMapData, SubCategory } from '@/types/mind-map';
 import { cn, toPascalCase, truncateText } from '@/lib/utils';
 import * as LucideIcons from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, ZoomIn, ZoomOut, Move, Plus, Minus, Search, Target, Zap, Info, ArrowRight, MessageSquare, Lightbulb, GraduationCap, PenTool, Image as ImageIcon } from 'lucide-react';
+import { Loader2, ZoomIn, ZoomOut, Move, Plus, Minus, Search, Target, Zap, Info, ArrowRight, MessageSquare, Lightbulb, GraduationCap, PenTool, Image as ImageIcon, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MindflowMinimap } from './mindflow-minimap';
 import {
@@ -57,6 +57,10 @@ interface MindMapRadialViewProps {
     focusedNodeName?: string | null;
     resonanceNodes?: string[];
     onSynthesize?: (nodeLabels: string[]) => void;
+    isSynthesisMode?: boolean;
+    setIsSynthesisMode?: (value: boolean) => void;
+    synthesisSelection?: string[];
+    setSynthesisSelection?: (value: string[] | ((prev: string[]) => string[])) => void;
 }
 
 // --- Constants (Tuning Knobs) ---
@@ -278,7 +282,11 @@ export const MindMapRadialView = React.memo(({
     onGenerateImage,
     focusedNodeName,
     resonanceNodes = [],
-    onSynthesize
+    onSynthesize,
+    isSynthesisMode = false,
+    setIsSynthesisMode,
+    synthesisSelection = [],
+    setSynthesisSelection
 }: MindMapRadialViewProps) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [zoom, setZoom] = useState(1);
@@ -292,8 +300,6 @@ export const MindMapRadialView = React.memo(({
     const [selectedNode, setSelectedNode] = useState<NodePosition | null>(null);
     const [lastTouchDistance, setLastTouchDistance] = useState<number | null>(null);
     const [selectedDetailNode, setSelectedDetailNode] = useState<any>(null);
-    const [isSynthesisMode, setIsSynthesisMode] = useState(false);
-    const [synthesisSelection, setSynthesisSelection] = useState<string[]>([]);
     const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     const { nodes, connections, width, height } = useMemo(() => LayoutEngine(data, collapsedNodes), [data, collapsedNodes]);
@@ -446,7 +452,7 @@ export const MindMapRadialView = React.memo(({
     };
 
     const handleNodeClick = (node: any) => {
-        if (isSynthesisMode) {
+        if (isSynthesisMode && setSynthesisSelection) {
             setSynthesisSelection(prev => {
                 if (prev.includes(node.data.label)) {
                     return prev.filter(l => l !== node.data.label);
@@ -463,7 +469,7 @@ export const MindMapRadialView = React.memo(({
     };
 
     const handleSynthesizeClick = () => {
-        if (synthesisSelection.length === 2 && onSynthesize) {
+        if (synthesisSelection.length === 2 && onSynthesize && setIsSynthesisMode && setSynthesisSelection) {
             onSynthesize(synthesisSelection);
             setIsSynthesisMode(false);
             setSynthesisSelection([]);
@@ -600,11 +606,11 @@ export const MindMapRadialView = React.memo(({
                                 initial={{ opacity: 0, scale: 0.8 }}
                                 animate={{
                                     opacity: isDimmed ? 0.2 : 1,
-                                    scale: resonanceNodes.some(r => r.toLowerCase() === node.data.label.toLowerCase()) || synthesisSelection.includes(node.data.label) ? [1, 1.05, 1] : 1,
+                                    scale: resonanceNodes.some(r => r.toLowerCase() === node.data.label.toLowerCase()) ? [1, 1.05, 1] : 1,
                                     left: node.x,
                                     top: node.y,
-                                    borderColor: synthesisSelection.includes(node.data.label) ? '#fbbf24' : (resonanceNodes.some(r => r.toLowerCase() === node.data.label.toLowerCase()) ? '#ec4899' : (isFocused || (searchQuery && node.data.label.toLowerCase().includes(searchQuery.toLowerCase())) ? 'rgba(168, 85, 247, 0.8)' : undefined)),
-                                    boxShadow: synthesisSelection.includes(node.data.label) ? '0 0 30px rgba(251, 191, 36, 0.5)' : (resonanceNodes.some(r => r.toLowerCase() === node.data.label.toLowerCase()) ? '0 0 30px rgba(236, 72, 153, 0.4)' : (isFocused ? '0 0 20px rgba(168, 85, 247, 0.3)' : (searchQuery && node.data.label.toLowerCase().includes(searchQuery.toLowerCase())) ? '0 0 15px rgba(168, 85, 247, 0.2)' : undefined))
+                                    borderColor: resonanceNodes.some(r => r.toLowerCase() === node.data.label.toLowerCase()) ? '#ec4899' : (isFocused || (searchQuery && node.data.label.toLowerCase().includes(searchQuery.toLowerCase())) ? 'rgba(168, 85, 247, 0.8)' : undefined),
+                                    boxShadow: resonanceNodes.some(r => r.toLowerCase() === node.data.label.toLowerCase()) ? '0 0 30px rgba(236, 72, 153, 0.4)' : (isFocused ? '0 0 20px rgba(168, 85, 247, 0.3)' : (searchQuery && node.data.label.toLowerCase().includes(searchQuery.toLowerCase())) ? '0 0 15px rgba(168, 85, 247, 0.2)' : undefined)
                                 }}
                                 exit={{ opacity: 0, scale: 0.8 }}
                                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
@@ -677,7 +683,12 @@ export const MindMapRadialView = React.memo(({
                                     )}
                                 </div>
 
-                                {/* Focus/Target Button */}
+                                {/* Focus/Target Button & Selection Checkmark */}
+                                {synthesisSelection.includes(node.data.label) && (
+                                    <div className="absolute right-9 top-1/2 -translate-y-1/2 p-1 bg-green-500 rounded-full text-black shadow-lg z-50">
+                                        <Check className="w-3 h-3 font-bold" />
+                                    </div>
+                                )}
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -715,6 +726,21 @@ export const MindMapRadialView = React.memo(({
                     )}
                 >
                     <Search className="w-4 h-4" />
+                </button>
+                <button
+                    onClick={() => {
+                        if (setIsSynthesisMode && setSynthesisSelection) {
+                            setIsSynthesisMode(!isSynthesisMode);
+                            setSynthesisSelection([]);
+                        }
+                    }}
+                    title="Knowledge Alchemy"
+                    className={cn(
+                        "w-10 h-10 rounded-xl border backdrop-blur-md transition-all flex items-center justify-center",
+                        isSynthesisMode ? "bg-amber-500/20 border-amber-500/40 text-amber-400" : "bg-white/5 border-white/10 text-white hover:bg-amber-500/20 hover:border-amber-500/40"
+                    )}
+                >
+                    <Zap className={cn("w-4 h-4", isSynthesisMode && "animate-pulse")} />
                 </button>
             </div>
 
@@ -775,56 +801,38 @@ export const MindMapRadialView = React.memo(({
                 )}
             </AnimatePresence>
 
-            {/* Synthesis / Alchemy Controls */}
-            <div className="absolute top-4 right-20 z-10 flex flex-col items-end gap-3 pointer-events-none">
-                <div className="pointer-events-auto flex flex-col gap-2">
-                    <Button
-                        size="sm"
-                        variant={isSynthesisMode ? "default" : "outline"}
-                        className={cn(
-                            "h-9 rounded-full px-4 border-white/10 backdrop-blur-md transition-all",
-                            isSynthesisMode ? "bg-amber-500 hover:bg-amber-600 text-black font-black" : "bg-zinc-950/50 text-zinc-400 hover:text-white"
-                        )}
-                        onClick={() => {
-                            setIsSynthesisMode(!isSynthesisMode);
-                            setSynthesisSelection([]);
-                        }}
-                    >
-                        <Zap className={cn("w-4 h-4 mr-2", isSynthesisMode && "animate-pulse")} />
-                        {isSynthesisMode ? "ACTIVE ALCHEMY" : "KNOWLEDGE ALCHEMY"}
-                    </Button>
-
-                    <AnimatePresence>
-                        {isSynthesisMode && (
-                            <motion.div
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: 20 }}
-                                className="p-3 rounded-2xl bg-zinc-900/90 border border-white/10 backdrop-blur-xl flex flex-col gap-3 min-w-[200px]"
-                            >
-                                <div className="space-y-1">
-                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Selection</h4>
-                                    <div className="flex flex-wrap gap-1.5 min-h-[32px]">
-                                        {synthesisSelection.length === 0 && <span className="text-[10px] text-zinc-600 italic">Select 2 nodes to synthesize...</span>}
-                                        {synthesisSelection.map(label => (
-                                            <Badge key={label} variant="secondary" className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[9px] font-bold">
-                                                {label}
-                                            </Badge>
-                                        ))}
-                                    </div>
+            {/* Synthesis / Alchemy Controls Floating Panel */}
+            <AnimatePresence>
+                {isSynthesisMode && (
+                    <div className="absolute top-6 right-[72px] z-50 pointer-events-none">
+                        <motion.div
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 20 }}
+                            className="pointer-events-auto p-3 rounded-2xl bg-zinc-900/90 border border-white/10 backdrop-blur-xl flex flex-col gap-3 min-w-[200px]"
+                        >
+                            <div className="space-y-1">
+                                <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Selection</h4>
+                                <div className="flex flex-wrap gap-1.5 min-h-[32px]">
+                                    {synthesisSelection.length === 0 && <span className="text-[10px] text-zinc-600 italic">Select 2 nodes to synthesize...</span>}
+                                    {synthesisSelection.map(label => (
+                                        <Badge key={label} variant="secondary" className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[9px] font-bold">
+                                            {label}
+                                        </Badge>
+                                    ))}
                                 </div>
-                                <Button
-                                    disabled={synthesisSelection.length !== 2}
-                                    onClick={handleSynthesizeClick}
-                                    className="w-full h-8 rounded-lg bg-amber-500 hover:bg-amber-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-black font-black text-[10px] uppercase tracking-wider"
-                                >
-                                    FUSE KNOWLEDGE
-                                </Button>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
-            </div>
+                            </div>
+                            <Button
+                                disabled={synthesisSelection.length !== 2}
+                                onClick={handleSynthesizeClick}
+                                className="w-full h-8 rounded-lg bg-amber-500 hover:bg-amber-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-black font-black text-[10px] uppercase tracking-wider"
+                            >
+                                FUSE KNOWLEDGE
+                            </Button>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             {/* Minimap */}
             <MindflowMinimap

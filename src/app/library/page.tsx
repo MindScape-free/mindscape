@@ -476,7 +476,7 @@ export default function DashboardPage() {
       try {
         const { data, error } = await generateMindMapAction({
           topic,
-          depth: (selectedMapForPreview as any).depth || 'low'
+          depth: (selectedMapForPreview as any).depth || 'quick'
         }, {
           provider: config.provider,
           apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,

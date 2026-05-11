@@ -31,14 +31,14 @@ export function ModerationCards({ onViewMap }: ModerationCardsProps) {
     setIsLoading(true);
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
-      .from('maps')
+      .from('mindmaps')
       .select('*')
-      .eq('isPublic', true)
-      .order('timestamp', { ascending: false })
+      .eq('is_public', true)
+      .order('created_at', { ascending: false })
       .limit(20);
 
     if (!error && data) {
-      setMaps(data as MindMapData[]);
+      setMaps(data as any[]);
     }
     setIsLoading(false);
   }, []);
@@ -109,7 +109,7 @@ export function ModerationCards({ onViewMap }: ModerationCardsProps) {
                 <Clock className="h-3.5 w-3.5 text-zinc-500" />
               </div>
               <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                {(map as any).timestamp ? formatDistanceToNow(toDate((map as any).timestamp), { addSuffix: true }) : 'Unknown'}
+                {map.created_at ? formatDistanceToNow(toDate(map.created_at), { addSuffix: true }) : 'Unknown'}
               </span>
             </div>
           </div>

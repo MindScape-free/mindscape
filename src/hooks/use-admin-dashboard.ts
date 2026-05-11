@@ -34,6 +34,7 @@ interface AdminBundle {
   users: any[];
   logs: any[];
   feedback: any[];
+  aiCalls: any[];
   serverTime: string;
   isIncremental: boolean;
 }
@@ -66,11 +67,13 @@ export function useAdminDashboard() {
     users: any[];
     logs: any[];
     feedback: any[];
+    aiCalls: any[];
     lastFetchTime: string | null;
   }>({
     users: [],
     logs: [],
     feedback: [],
+    aiCalls: [],
     lastFetchTime: null,
   });
 
@@ -80,10 +83,10 @@ export function useAdminDashboard() {
     if (!newData?.bundle) return;
 
     setPersistentBundle(prev => {
-      const { users, logs, feedback, serverTime, isIncremental } = newData.bundle;
+      const { users, logs, feedback, aiCalls, serverTime, isIncremental } = newData.bundle;
 
       if (!isIncremental || !prev.lastFetchTime) {
-        return { users, logs, feedback, lastFetchTime: serverTime };
+        return { users, logs, feedback, aiCalls: aiCalls || [], lastFetchTime: serverTime };
       }
 
       const userMap = new Map(prev.users.map(u => [u.id, u]));
@@ -95,10 +98,14 @@ export function useAdminDashboard() {
       const feedbackMap = new Map(prev.feedback.map(f => [f.id, f]));
       feedback.forEach((f: any) => feedbackMap.set(f.id, f));
 
+      const aiCallMap = new Map(prev.aiCalls.map(c => [c.id, c]));
+      (aiCalls || []).forEach((c: any) => aiCallMap.set(c.id, c));
+
       return {
         users: Array.from(userMap.values()).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()),
         logs: Array.from(logMap.values()).sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()),
         feedback: Array.from(feedbackMap.values()).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()),
+        aiCalls: Array.from(aiCallMap.values()).sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()),
         lastFetchTime: serverTime,
       };
     });
@@ -163,6 +170,7 @@ export function useAdminDashboard() {
           users: newData.bundle?.users || [],
           logs: newData.bundle?.logs || [],
           feedback: newData.bundle?.feedback || [],
+          aiCalls: newData.bundle?.aiCalls || [],
           lastFetchTime: newData.bundle?.serverTime || null,
         });
       } else {

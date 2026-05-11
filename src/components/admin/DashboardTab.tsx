@@ -101,6 +101,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
     depthCounts: { ...mapAnalyticsDefault.depthCounts, ...(metrics?.mapAnalytics?.depthCounts || {}) },
     subMapStats: { ...mapAnalyticsDefault.subMapStats, ...(metrics?.mapAnalytics?.subMapStats || {}) },
     publicPrivate: { ...mapAnalyticsDefault.publicPrivate, ...(metrics?.mapAnalytics?.publicPrivate || {}) },
+    sourceCounts: { ...mapAnalyticsDefault.sourceCounts, ...(metrics?.mapAnalytics?.sourceCounts || {}) },
+    personaCounts: { ...mapAnalyticsDefault.personaCounts, ...(metrics?.mapAnalytics?.personaCounts || {}) },
   };
   
   return (
@@ -182,7 +184,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
             </motion.div>
 
             {[
-              { label: 'Users', value: stats?.totalUsers || 0, icon: Users, color: 'violet', glow: 'shadow-violet-500/5' },
+              { label: 'Users', value: stats?.totalUsers || 0, icon: Users, color: 'violet' },
               { label: 'Active Maps', value: stats?.totalMaps || 0, icon: MapIcon, color: 'blue' },
               { label: 'Active Nodes', value: stats?.totalNodesActive || 0, icon: Layers, color: 'indigo' },
               { label: 'Global Nodes', value: stats?.totalNodes || 0, icon: Signal, color: 'violet' },
@@ -191,21 +193,21 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
               <motion.div 
                 key={stat.label}
                 whileHover={{ y: -2, scale: 1.01 }}
-                className={`relative overflow-hidden rounded-xl bg-white/5 border border-white/10 p-3 flex flex-col backdrop-blur-3xl shadow-xl group transition-all duration-500 ${stat.glow || ''}`}
+                className="relative overflow-hidden rounded-xl bg-white/5 border border-white/10 p-3 flex flex-col backdrop-blur-3xl shadow-xl group transition-all duration-500"
               >
-                <div className={`absolute inset-0 bg-gradient-to-br from-${stat.color}-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+                <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 
                 <div className="flex items-center justify-between mb-2 relative z-10">
                   <div className="flex items-center gap-1.5">
-                    <div className={`p-1.5 bg-${stat.color}-500/10 rounded-lg border border-${stat.color}-500/20 group-hover:bg-${stat.color}-500/20 transition-colors`}>
+                    <div className="p-1.5 bg-white/5 rounded-lg border border-white/10 group-hover:bg-white/10 transition-colors">
                       <stat.icon className={`h-3.5 w-3.5 text-${stat.color}-400`} />
                     </div>
-                    <span className={`text-[10px] font-black uppercase tracking-wider text-${stat.color}-400/80`}>{stat.label}</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">{stat.label}</span>
                   </div>
                 </div>
                 
                 <div className="relative z-10">
-                  <p className="text-2xl font-black text-white tracking-tighter">{(stat.value).toLocaleString()}</p>
+                  <p className="text-2xl font-black text-white tracking-tighter">{(stat.value || 0).toLocaleString()}</p>
                 </div>
               </motion.div>
             ))}
@@ -213,12 +215,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
-              { label: 'Total Created', value: totalMindmapsEver || 0, icon: RefreshCw, color: 'indigo' },
-              { label: 'Avg Complexity', value: Number(safeMapAnalytics.avgNodesPerMap).toFixed(1), icon: Layers, color: 'rose' },
-              { label: 'Total Images', value: stats?.totalImages || 0, icon: ImageIcon, color: 'amber' },
-              { label: 'Active Today', value: metrics?.activeUsers24h || 0, icon: Zap, color: 'emerald' },
-              { label: 'Engagement', value: `${Math.round(metrics?.engagementRate ?? 0)}%`, icon: ActivityIcon, color: 'violet' },
-              { label: 'New Users', value: metrics?.newUsersToday || 0, icon: UserPlus, color: 'blue', sub: metrics?.newUsersYesterday || 0, trend: (metrics?.newUsersToday || 0) >= (metrics?.newUsersYesterday || 0) },
+              { label: 'Total Created', value: totalMindmapsEver || 0, icon: RefreshCw },
+              { label: 'Avg Complexity', value: Number(safeMapAnalytics.avgNodesPerMap).toFixed(1), icon: Layers },
+              { label: 'Total Images', value: stats?.totalImages || 0, icon: ImageIcon },
+              { label: 'Active Today', value: metrics?.activeUsers24h || 0, icon: Zap },
+              { label: 'Engagement', value: `${Math.round(metrics?.engagementRate ?? 0)}%`, icon: ActivityIcon },
+              { label: 'New Users', value: metrics?.newUsersToday || 0, icon: UserPlus, sub: metrics?.newUsersYesterday || 0, trend: (metrics?.newUsersToday || 0) >= (metrics?.newUsersYesterday || 0) },
             ].map((stat) => (
               <motion.div 
                 key={stat.label}
@@ -226,8 +228,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                 className="relative overflow-hidden rounded-xl bg-white/5 border border-white/10 p-3 backdrop-blur-3xl shadow-lg group transition-all duration-500"
               >
                 <div className="flex items-center gap-2 mb-2 relative z-10">
-                  <div className={`p-1 bg-${stat.color}-500/10 rounded-md group-hover:bg-${stat.color}-500/20 transition-colors`}>
-                    <stat.icon className={`h-3 w-3 text-${stat.color}-400`} />
+                  <div className="p-1 bg-white/5 rounded-md group-hover:bg-white/10 transition-colors">
+                    <stat.icon className="h-3 w-3 text-white/50" />
                   </div>
                   <span className="text-[9px] font-black uppercase tracking-wider text-zinc-500">{stat.label}</span>
                 </div>
@@ -254,7 +256,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
             
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4 relative z-10">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-violet-500/10 rounded-xl border border-violet-500/20 shadow-lg shadow-violet-500/10">
+                <div className="p-2 bg-white/5 rounded-xl border border-white/10 shadow-lg">
                   <ActivityIcon className="h-4 w-4 text-violet-400" />
                 </div>
                 <div>
@@ -268,10 +270,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                   <span className="text-[8px] text-zinc-600 font-black uppercase tracking-tighter">Quiet</span>
                   <div className="flex gap-1.5">
                     {[
-                      'bg-zinc-800/50', 
-                      'bg-violet-900/40 border border-violet-500/20', 
-                      'bg-violet-700/60 border border-violet-400/20', 
-                      'bg-violet-500/80 border border-violet-300/20', 
+                      'bg-white/5', 
+                      'bg-white/10', 
+                      'bg-white/20', 
+                      'bg-violet-500/50', 
                       'bg-violet-400 shadow-[0_0_10px_rgba(167,139,250,0.4)]'
                     ].map((c, i) => (
                       <div key={i} className={`h-2.5 w-2.5 rounded-[2px] ${c}`} />
@@ -300,6 +302,21 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                   </button>
                 </div>
               </div>
+
+              {/* Data Limitation Warning */}
+              {!isSameMonth(selectedMonth, new Date()) && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="mt-6 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 flex items-center gap-3 relative z-10"
+                >
+                  <ShieldAlert className="h-4 w-4 text-amber-400 shrink-0" />
+                  <p className="text-[10px] font-bold text-amber-400/80 uppercase tracking-wide">
+                    Historical telemetry for <span className="text-amber-400 font-black">{format(selectedMonth, 'MMMM yyyy')}</span> is currently locked. 
+                    The current sync window is limited to the last 30 orbital cycles.
+                  </p>
+                </motion.div>
+              )}
             </div>
 
             <TooltipProvider delayDuration={0}>
@@ -326,14 +343,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                     });
                   }
                   
+                  const maxActivity = Math.max(1, ...allDays.map(d => (d.data.newUsers || 0) + (d.data.newMaps || 0) + (d.data.activeUsers || 0) + (d.data.totalActions || 0)));
+                  
                   return allDays.map(({ date, data, isToday, isFuture }) => {
                     const totalActivity = (data.newUsers || 0) + (data.newMaps || 0) + (data.activeUsers || 0) + (data.totalActions || 0);
+                    const ratio = totalActivity / maxActivity;
                     const intensity = isFuture ? 'bg-white/[0.02]' : 
-                      totalActivity === 0 ? 'bg-white/[0.05]' : 
-                      totalActivity <= 5 ? 'bg-violet-900/40 border border-violet-500/20' : 
-                      totalActivity <= 15 ? 'bg-violet-700/60 border border-violet-400/20' : 
-                      totalActivity <= 30 ? 'bg-violet-500/80 border border-violet-300/20' : 
-                      'bg-violet-400 shadow-[0_0_15px_rgba(167,139,250,0.3)] border border-violet-200/30';
+                      totalActivity === 0 ? 'bg-white/5' : 
+                      ratio <= 0.25 ? 'bg-white/10 border border-white/5' : 
+                      ratio <= 0.5 ? 'bg-white/20 border border-white/5' : 
+                      ratio <= 0.75 ? 'bg-violet-500/50 border border-violet-400/20' : 
+                      'bg-violet-400 shadow-[0_0_10px_rgba(167,139,250,0.4)] border border-violet-200/30';
                     
                     return (
                       <Tooltip key={date}>
@@ -367,18 +387,18 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
           <div className="space-y-8">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="flex items-center gap-4">
-                <div className="p-4 bg-gradient-to-br from-violet-500/20 to-blue-500/20 rounded-[1.5rem] border border-violet-500/30 shadow-2xl backdrop-blur-xl">
+                <div className="p-4 bg-white/5 rounded-[1.5rem] border border-white/10 shadow-2xl backdrop-blur-xl">
                   <BarChart3 className="h-6 w-6 text-violet-400" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-black text-white tracking-tight">Entity Analytics</h2>
+                  <h2 className="text-2xl font-black text-white tracking-tight">Mindmap Analytics</h2>
                   <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] mt-1">Deep structure & distribution metrics</p>
                 </div>
               </div>
               {safeMapAnalytics && (
                 <div className="flex items-center gap-6 px-6 py-3 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-2xl">
                   <div className="text-center">
-                    <p className="text-xl font-black text-white">{safeMapAnalytics.totalAnalyzed.toLocaleString()}</p>
+                    <p className="text-xl font-black text-white">{(safeMapAnalytics.totalAnalyzed || 0).toLocaleString()}</p>
                     <p className="text-[8px] text-violet-400/70 font-black uppercase tracking-wider">Analyzed</p>
                   </div>
                   <div className="w-px h-8 bg-white/10" />
@@ -397,7 +417,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                 className="relative overflow-hidden rounded-[1.5rem] bg-white/5 border border-white/10 p-6 backdrop-blur-3xl shadow-xl group"
               >
                 <div className="flex items-center gap-2.5 mb-6">
-                  <div className="p-2 bg-violet-500/10 rounded-xl border border-violet-500/20">
+                  <div className="p-2 bg-white/5 rounded-xl border border-white/10">
                     <MapIcon className="h-4 w-4 text-violet-400" />
                   </div>
                   <p className="text-base font-black text-white tracking-tight">Map Styles</p>
@@ -411,13 +431,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                   ] as const).map(({ key, label, value, color, icon: Icon }) => {
                     const percentage = Math.round((value / (safeMapAnalytics.totalAnalyzed || 1)) * 100);
                     return (
-                      <div key={key} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-3.5 group-hover:bg-${color}-500/10 transition-all`}>
+                      <div key={key} className="rounded-xl bg-white/5 border border-white/10 p-3.5 group-hover:bg-white/10 transition-all">
                         <div className="flex items-center gap-2 mb-3">
                           <Icon className={`h-4 w-4 text-${color}-400`} />
                           <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">{label}</span>
                         </div>
                         <div className="flex items-end justify-between">
-                          <p className="text-2xl font-black text-white tracking-tighter">{value.toLocaleString()}</p>
+                          <p className="text-2xl font-black text-white tracking-tighter">{(value || 0).toLocaleString()}</p>
                           <span className={`text-[10px] font-black text-${color}-400`}>{percentage}%</span>
                         </div>
                       </div>
@@ -432,7 +452,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                 className="relative overflow-hidden rounded-[1.5rem] bg-white/5 border border-white/10 p-6 backdrop-blur-3xl shadow-xl group"
               >
                 <div className="flex items-center gap-2.5 mb-6">
-                  <div className="p-2 bg-rose-500/10 rounded-xl border border-rose-500/20">
+                  <div className="p-2 bg-white/5 rounded-xl border border-white/10">
                     <Zap className="h-4 w-4 text-rose-400" />
                   </div>
                   <p className="text-base font-black text-white tracking-tight">Map Complexity</p>
@@ -440,13 +460,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   {([
-                    { key: 'low', label: 'Sprint', value: (safeMapAnalytics.depthCounts.low || 0) + (safeMapAnalytics.depthCounts.unspecified || 0), color: 'rose', icon: Zap },
-                    { key: 'medium', label: 'Dive', value: safeMapAnalytics.depthCounts.medium, color: 'orange', icon: Layers },
-                    { key: 'deep', label: 'Abyss', value: safeMapAnalytics.depthCounts.deep, color: 'amber', icon: Layers },
+                    { key: 'low', label: 'Quick', value: (safeMapAnalytics.depthCounts.low || 0) + (safeMapAnalytics.depthCounts.unspecified || 0), color: 'rose', icon: Zap },
+                    { key: 'medium', label: 'Balanced', value: safeMapAnalytics.depthCounts.medium || 0, color: 'orange', icon: Layers },
+                    { key: 'deep', label: 'Detailed', value: safeMapAnalytics.depthCounts.deep || 0, color: 'amber', icon: Layers },
                   ] as const).map(({ key, label, value, color, icon: Icon }) => {
                     const percentage = Math.round((value / (safeMapAnalytics.totalAnalyzed || 1)) * 100);
                     return (
-                      <div key={key} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-3.5 group-hover:bg-${color}-500/10 transition-all`}>
+                      <div key={key} className="rounded-xl bg-white/5 border border-white/10 p-3.5 group-hover:bg-white/10 transition-all">
                         <div className="flex items-center gap-2 mb-3">
                           <Icon className={`h-4 w-4 text-${color}-400`} />
                           <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">{label}</span>
@@ -470,7 +490,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
               <div className="absolute top-0 left-0 w-32 h-32 bg-blue-500/5 rounded-full blur-[60px] pointer-events-none" />
               <div className="relative">
                 <div className="flex items-center gap-2 mb-4">
-                  <div className="p-1.5 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                  <div className="p-1.5 bg-white/5 rounded-lg border border-white/10">
                     <Globe className="h-3 w-3 text-blue-400" />
                   </div>
                   <div>
@@ -493,14 +513,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                       return (
                         <div 
                           key={type} 
-                          className={`rounded-2xl bg-${color}-500/5 border border-${color}-500/15 p-4 group-hover:bg-${color}-500/10 transition-all`}
+                          className="rounded-2xl bg-white/5 border border-white/10 p-4 group-hover:bg-white/10 transition-all"
                         >
                           <div className="flex items-center gap-2 mb-3">
                             <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
                             <span className={`text-[8px] font-black uppercase tracking-wider text-${color}-400/60`}>{label}</span>
                           </div>
-                          <p className="text-xl font-black text-white tracking-tighter">{count.toLocaleString()}</p>
-                          <div className={`mt-2 h-1 w-full bg-${color}-500/10 rounded-full overflow-hidden`}>
+                          <p className="text-xl font-black text-white tracking-tighter">{(count || 0).toLocaleString()}</p>
+                          <div className="mt-2 h-1 w-full bg-white/5 rounded-full overflow-hidden">
                             <motion.div 
                               initial={{ width: 0 }}
                               animate={{ width: `${percentage}%` }}
@@ -527,7 +547,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                 className="relative overflow-hidden rounded-[1.5rem] bg-white/5 border border-white/10 p-6 backdrop-blur-3xl shadow-xl group"
               >
                 <div className="flex items-center gap-2.5 mb-6">
-                  <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                  <div className="p-2 bg-white/5 rounded-xl border border-white/10">
                     <Layers className="h-4 w-4 text-emerald-400" />
                   </div>
                   <div>
@@ -542,10 +562,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                       { label: 'Parent Maps', value: safeMapAnalytics.subMapStats?.parents ?? 0, color: 'indigo', icon: MapIcon, desc: 'Roots' },
                       { label: 'Avg / Parent', value: safeMapAnalytics.subMapStats?.avgPerParent ?? 0, color: 'emerald', icon: TrendingUp, desc: 'Ratio' },
                     ].map(({ label, value, color, icon: Icon, desc }) => (
-                      <div key={label} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-3.5 transition-all hover:bg-${color}-500/10 group/card`}>
+                      <div key={label} className="rounded-xl bg-white/5 border border-white/10 p-3.5 transition-all hover:bg-white/10">
                         <div className="flex items-center gap-2 mb-2">
                           <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
-                          <span className={`text-[9px] font-black uppercase tracking-wider text-zinc-500`}>{label}</span>
+                          <span className="text-[9px] font-black uppercase tracking-wider text-zinc-500">{label}</span>
                         </div>
                         <div className="flex items-end justify-between">
                           <p className="text-xl font-black text-white tracking-tighter">{typeof value === 'number' ? value.toLocaleString() : value}</p>
@@ -567,7 +587,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                 className="relative overflow-hidden rounded-[1.5rem] bg-white/5 border border-white/10 p-6 backdrop-blur-3xl shadow-xl group"
               >
                 <div className="flex items-center gap-2.5 mb-6">
-                  <div className="p-2 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                  <div className="p-2 bg-white/5 rounded-xl border border-white/10">
                     <Globe className="h-4 w-4 text-amber-400" />
                   </div>
                   <div>
@@ -582,12 +602,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                       { label: 'Private', value: safeMapAnalytics.publicPrivate.private, color: 'amber', icon: Lock },
                       { label: 'Public Rate', value: safeMapAnalytics.totalAnalyzed > 0 ? Math.round((safeMapAnalytics.publicPrivate.public / safeMapAnalytics.totalAnalyzed) * 100) : 0, color: 'rose', icon: TrendingUp, isPercent: true },
                     ].map(({ label, value, color, icon: Icon, isPercent }) => (
-                      <div key={label} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-3.5 transition-all hover:bg-${color}-500/10`}>
+                      <div key={label} className="rounded-xl bg-white/5 border border-white/10 p-3.5 transition-all hover:bg-white/10">
                         <div className="flex items-center gap-2 mb-2">
                           <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
-                          <span className={`text-[9px] font-black uppercase tracking-wider text-zinc-500`}>{label}</span>
+                          <span className="text-[9px] font-black uppercase tracking-wider text-zinc-500">{label}</span>
                         </div>
-                        <p className="text-xl font-black text-white tracking-tighter">{isPercent ? `${value}%` : value.toLocaleString()}</p>
+                        <p className="text-xl font-black text-white tracking-tighter">{isPercent ? `${value}%` : (value || 0).toLocaleString()}</p>
                       </div>
                     ))}
                   </div>
@@ -606,7 +626,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                 className="relative overflow-hidden rounded-[1.5rem] bg-white/5 border border-white/10 p-6 backdrop-blur-3xl shadow-xl group"
               >
                 <div className="flex items-center gap-2.5 mb-6">
-                  <div className="p-2 bg-violet-500/10 rounded-xl border border-violet-500/20">
+                  <div className="p-2 bg-white/5 rounded-xl border border-white/10">
                     <Brain className="h-4 w-4 text-violet-400" />
                   </div>
                   <div>
@@ -626,14 +646,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                       const percentage = (safeMapAnalytics.totalAnalyzed || 1) > 0 ? Math.round((count / (safeMapAnalytics.totalAnalyzed || 1)) * 100) : 0;
                       
                       return (
-                        <div key={key} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-3.5 transition-all hover:bg-${color}-500/10`}>
+                        <div key={key} className="rounded-xl bg-white/5 border border-white/10 p-3.5 transition-all hover:bg-white/10">
                           <div className="flex items-center gap-2 mb-3">
                             <Icon className={`h-4 w-4 text-${color}-400`} />
-                            <span className={`text-[10px] font-black uppercase tracking-wider text-zinc-500`}>{label}</span>
+                            <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">{label}</span>
                           </div>
                           <div className="flex items-end justify-between">
-                            <p className="text-2xl font-black text-white tracking-tighter">{count.toLocaleString()}</p>
-                            <span className={`px-2 py-0.5 rounded-lg bg-${color}-500/10 text-[9px] font-black text-${color}-400`}>{percentage}%</span>
+                            <p className="text-2xl font-black text-white tracking-tighter">{(count || 0).toLocaleString()}</p>
+                            <span className={`px-2 py-0.5 rounded-lg bg-white/5 text-[9px] font-black text-${color}-400`}>{percentage}%</span>
                           </div>
                         </div>
                       );
@@ -665,6 +685,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                     {([
                       { key: 'totalMapsCreated', label: 'Maps', icon: Flame },
                       { key: 'totalNodes', label: 'Nodes', icon: Layers },
+                      { key: 'totalStudyTimeMinutes', label: 'Time', icon: Clock },
                       { key: 'currentStreak', label: 'Streak', icon: Zap },
                     ] as const).map((s) => (
                       <button
@@ -689,15 +710,20 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                       let aVal = 0, bVal = 0;
                       if (topContributorsStatFilter === 'totalMapsCreated') { aVal = a.statistics?.totalMapsCreated || 0; bVal = b.statistics?.totalMapsCreated || 0; }
                       else if (topContributorsStatFilter === 'totalNodes') { aVal = a.statistics?.totalNodes || 0; bVal = b.statistics?.totalNodes || 0; }
+                      else if (topContributorsStatFilter === 'totalStudyTimeMinutes') { aVal = a.statistics?.totalStudyTimeMinutes || 0; bVal = b.statistics?.totalStudyTimeMinutes || 0; }
                       else if (topContributorsStatFilter === 'currentStreak') { aVal = a.statistics?.currentStreak || 0; bVal = b.statistics?.currentStreak || 0; }
                       return bVal - aVal;
                     }).slice(0, 5);
                     
                     return filtered.map((u: any, idx: number) => {
-                      let displayValue = 0;
+                      let displayValue: string | number = 0;
                       if (topContributorsStatFilter === 'totalMapsCreated') displayValue = u.statistics?.totalMapsCreated || 0;
-                      else if (topContributorsStatFilter === 'totalNodes') displayValue = u.statistics?.totalNodes || 0;
-                      else if (topContributorsStatFilter === 'currentStreak') displayValue = u.statistics?.currentStreak || 0;
+                      else if (topContributorsStatFilter === 'totalNodes') displayValue = (u.statistics?.totalNodes || 0).toLocaleString();
+                      else if (topContributorsStatFilter === 'totalStudyTimeMinutes') {
+                        const mins = u.statistics?.totalStudyTimeMinutes || 0;
+                        displayValue = mins > 60 ? `${(mins / 60).toFixed(1)}h` : `${mins}m`;
+                      }
+                      else if (topContributorsStatFilter === 'currentStreak') displayValue = `${u.statistics?.currentStreak || 0}d`;
                       
                       return (
                         <button 

@@ -35,6 +35,7 @@ const EVENT_LABELS: Record<PointEventType, string> = {
   STREAK_30:             '30-Day Streak!',
   STUDY_TIME_CANVAS:     '10 Min Study Time',
   STUDY_TIME_CHAT:       '10 Min Chat Time',
+  ALCHEMY_FUSION:        'Knowledge Fused',
   ACHIEVEMENT_BRONZE:    'Achievement Unlocked',
   ACHIEVEMENT_SILVER:    'Achievement Unlocked',
   ACHIEVEMENT_GOLD:      'Achievement Unlocked',

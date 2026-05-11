@@ -63,8 +63,25 @@ export async function getMindMapAdmin(mapId: string): Promise<any | null> {
 
 export async function isUserAdminServer(userId: string): Promise<boolean> {
   if (!userId) return false;
+  
+  // 1. Check Env Variable (Master override)
   const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '').split(',').map(s => s.trim());
-  return adminIds.includes(userId);
+  if (adminIds.includes(userId)) return true;
+
+  // 2. Check Database column
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data } = await supabase
+      .from('users')
+      .select('is_admin')
+      .eq('id', userId)
+      .single();
+    
+    return data?.is_admin === true;
+  } catch (e) {
+    console.error('Admin check failed:', e);
+    return false;
+  }
 }
 
 export async function logActivityAdmin(entry: Record<string, any>): Promise<void> {

@@ -8,6 +8,7 @@ import {
   ShieldAlert, 
   Loader2,
   Brain,
+  BrainCircuit,
   RefreshCw,
   MessageSquare, 
   Activity,
@@ -18,6 +19,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 import { formatDistanceToNow, format } from 'date-fns';
 import { AdminStats } from '@/types/chat';
@@ -40,6 +43,7 @@ import { Feedback } from '@/types/feedback';
 
 export default function AdminDashboard() {
   const { user, isAdmin, isUserLoading, supabase, session } = useAuth();
+  const { toast } = useToast();
 
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
@@ -60,6 +64,7 @@ export default function AdminDashboard() {
   const [liveLogs, setLiveLogs] = useState<any[]>([]);
   const [liveUsers, setLiveUsers] = useState<any[]>([]);
   const [extraUsers, setExtraUsers] = useState<any[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   const { logAdminActivity, subscribeToAdminActivityLogs } = useAdminActivityLog();
   
@@ -168,6 +173,12 @@ export default function AdminDashboard() {
       const { stats, mapAnalytics } = dashboardData;
       const extendedData = dashboardData as any;
       
+      console.log('📊 [Admin] Dashboard Data Arrived:', {
+        stats: dashboardData.stats,
+        mapAnalytics: dashboardData.mapAnalytics,
+        meta: dashboardData.meta
+      });
+
       setStats({
         date: format(new Date(), 'yyyy-MM-dd'),
         totalUsers: stats.totalUsers,
@@ -198,15 +209,12 @@ export default function AdminDashboard() {
         avgChatsPerUser: extendedData.avgChatsPerUser || 0,
         latestUsers: extendedData.latestUsers || [],
         latestMaps: extendedData.latestMaps || [],
-        usersLast7Days: (extendedData.heatmapDays || []).slice(-7).map((d: any) => ({ date: d.date, count: d.newUsers })),
-        mapsLast7Days: (extendedData.heatmapDays || []).slice(-7).map((d: any) => ({ date: d.date, count: d.newMaps })),
+        heatmapDays: extendedData.heatmapDays || [],
+        usersLast7Days: (extendedData.heatmapDays || []).slice(-7).map((d: any) => ({ date: d.date, count: (d.newUsers || 0) })),
+        mapsLast7Days: (extendedData.heatmapDays || []).slice(-7).map((d: any) => ({ date: d.date, count: (d.newMaps || 0) })),
         topUsers: extendedData.topUsers || [],
         topMaps: [],
-        heatmapDays: extendedData.heatmapDays || [],
-        mapAnalytics: {
-          ...mapAnalytics,
-          avgNodesPerMap: extendedData.avgNodesPerMap || mapAnalytics?.avgNodesPerMap || 0,
-        },
+        mapAnalytics: mapAnalytics, // Pass the whole object directly
       });
 
       setTotalMindmapsEver(extendedData.totalMindmapsEver || 0);
@@ -256,9 +264,21 @@ export default function AdminDashboard() {
       await refreshBundle(true);
     } catch (e: any) {
       console.error('Manual sync error:', e);
+      toast({
+        variant: 'destructive',
+        title: 'Sync Failed',
+        description: e.message || 'An unexpected error occurred during database synchronization.'
+      });
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  const handleMonthChange = (direction: 'prev' | 'next') => {
+    setSelectedMonth(prev => {
+      const next = new Date(prev.getFullYear(), prev.getMonth() + (direction === 'next' ? 1 : -1), 1);
+      return next > new Date() ? prev : next;
+    });
   };
 
   const navItems = [
@@ -269,24 +289,56 @@ export default function AdminDashboard() {
     { id: 'feedback' as AdminTab, label: 'Feedback', icon: MessageSquare, desc: 'User reports' },
   ];
 
-  if (isUserLoading || (isAdmin && isDashboardLoading && !dashboardData && activeTab === 'dashboard')) {
-    return <AdminPageSkeleton />;
+  // 1. Auth & Admin Guard
+  if (isUserLoading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
+      </div>
+    );
   }
 
-  if (!isAdmin) return null;
+  if (!isAdmin && !isUserLoading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 text-center">
+        <div className="h-20 w-20 rounded-3xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-6">
+          <ShieldAlert className="h-10 w-10 text-red-400" />
+        </div>
+        <h1 className="text-2xl font-black text-white mb-2">Access Restricted</h1>
+        <p className="text-zinc-500 max-w-md mb-8">
+          This command center is reserved for MindScape architects. Your ID is not registered in the administrative directory.
+        </p>
+        <Button onClick={() => window.location.href = '/'} variant="outline" className="border-white/10 hover:bg-white/5">
+          Return to Base
+        </Button>
+      </div>
+    );
+  }
 
+  // 2. Loading State with Timeout Fallback
+  if (isDashboardLoading && !dashboardData) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-4">
+        <div className="relative">
+          <div className="h-24 w-24 rounded-full border-t-2 border-r-2 border-violet-500 animate-spin" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <BrainCircuit className="h-8 w-8 text-violet-400 animate-pulse" />
+          </div>
+        </div>
+        <p className="text-zinc-400 font-bold uppercase tracking-[0.2em] text-[10px]">Synchronizing Neural Network...</p>
+      </div>
+    );
+  }
+
+  // 3. Main Render
   return (
-    <div className="min-h-screen bg-[#020202] text-zinc-100 flex flex-col selection:bg-violet-500/30 font-sans overflow-x-hidden">
-      {/* Mesh Background Experience */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+    <div className="min-h-screen bg-zinc-950 flex flex-col relative overflow-hidden selection:bg-violet-500/30 selection:text-violet-200">
+      {/* Dynamic Background */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <motion.div 
-          animate={{ 
-            x: [0, 100, 0], 
-            y: [0, 50, 0],
-            scale: [1, 1.2, 1] 
-          }}
-          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-          className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-violet-600/10 blur-[150px] rounded-full" 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="absolute inset-0 bg-gradient-to-br from-violet-900/10 via-transparent to-rose-900/5" 
         />
         <motion.div 
           animate={{ 
@@ -318,43 +370,39 @@ export default function AdminDashboard() {
             </motion.div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <AnimatePresence mode='wait'>
-              {lastSyncedAt && activeTab === 'dashboard' && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                >
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xl cursor-help hover:bg-white/10 transition-colors">
-                          <div className={`w-1.5 h-1.5 rounded-full ${
-                            dashboardData?.meta?.cached ? 'bg-amber-500' : 'bg-emerald-500'
-                          } animate-pulse`} />
-                          <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
-                            Synced {formatDistanceToNow(new Date(lastSyncedAt), { addSuffix: true })}
-                          </span>
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent className="bg-zinc-950 border-white/10 text-[10px] p-2">
-                        <p className="font-bold text-white">Full System Sync: {format(new Date(lastSyncedAt), 'HH:mm:ss')}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <Button 
-              onClick={handleForceRefresh} 
-              disabled={isSyncing || isDashboardLoading}
-              className="h-12 px-6 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 backdrop-blur-xl transition-all hover:scale-105 active:scale-95"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span className="font-bold text-xs uppercase tracking-widest">Sync</span>
-            </Button>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4 bg-white/5 px-6 py-2.5 rounded-2xl border border-white/10 backdrop-blur-3xl shadow-xl">
+              <div className="flex flex-col items-end">
+                <span className="text-[8px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1">Central Sync</span>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className={cn(
+                      "h-2 w-2 rounded-full transition-all duration-700",
+                      isDashboardLoading || isSyncing ? "bg-violet-500 animate-pulse shadow-[0_0_10px_rgba(139,92,246,0.5)] scale-110" : "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                    )} />
+                    <span className="text-[10px] font-black text-white uppercase tracking-widest">
+                      {isDashboardLoading || isSyncing ? 'Syncing...' : 'Live'}
+                    </span>
+                  </div>
+                  <div className="w-px h-3 bg-white/10" />
+                  <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-tighter">
+                    {lastSyncedAt 
+                      ? `Updated ${formatDistanceToNow(new Date(lastSyncedAt), { addSuffix: true })}` 
+                      : 'Syncing...'}
+                  </span>
+                </div>
+              </div>
+              <button 
+                onClick={handleForceRefresh}
+                disabled={isSyncing || isDashboardLoading}
+                className={cn(
+                  "p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white transition-all group",
+                  (isSyncing || isDashboardLoading) && "opacity-50 cursor-not-allowed"
+                )}
+              >
+                <RefreshCw className={cn("h-4 w-4 group-hover:rotate-180 transition-transform duration-700", (isSyncing || isDashboardLoading) && "animate-spin")} />
+              </button>
+            </div>
           </div>
         </header>
 
@@ -373,9 +421,9 @@ export default function AdminDashboard() {
                   metrics={metrics}
                   healthScore={calculatedHealthScore}
                   totalMindmapsEver={totalMindmapsEver}
-                  isMonthLoading={false}
-                  selectedMonth={new Date()}
-                  setSelectedMonth={() => {}}
+                  isMonthLoading={isDashboardLoading}
+                  selectedMonth={selectedMonth}
+                  setSelectedMonth={setSelectedMonth}
                   topContributorsStatFilter={topContributorsStatFilter}
                   setTopContributorsStatFilter={setTopContributorsStatFilter}
                   setSelectedUser={setSelectedUser}
@@ -413,7 +461,7 @@ export default function AdminDashboard() {
                 <FeedbackCards data={feedbackData} adminUserId={user?.uid || ''} onRefresh={refreshBundle} isLoading={isDashboardLoading && feedbackData.length === 0} />
               )}
               {activeTab === 'ai_telemetry' && (
-                <AITelemetryTab logs={activityLogs} isLoading={isDashboardLoading} />
+                <AITelemetryTab aiCalls={bundle.aiCalls} isLoading={isDashboardLoading} />
               )}
             </Suspense>
           </motion.div>

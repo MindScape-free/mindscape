@@ -23,6 +23,7 @@ export type PointEventType =
   | 'STREAK_30'
   | 'STUDY_TIME_CANVAS'
   | 'STUDY_TIME_CHAT'
+  | 'ALCHEMY_FUSION'
   | 'ACHIEVEMENT_BRONZE'
   | 'ACHIEVEMENT_SILVER'
   | 'ACHIEVEMENT_GOLD'
@@ -99,6 +100,7 @@ export const EVENT_LABELS: Record<PointEventType, { label: string; icon: string;
   STREAK_30:             { label: '30-Day Streak',             icon: 'flame',       category: 'Streak' },
   STUDY_TIME_CANVAS:     { label: 'Canvas Study Time',         icon: 'pen-tool',    category: 'Study' },
   STUDY_TIME_CHAT:       { label: 'Chat Study Time',            icon: 'clock',       category: 'Study' },
+  ALCHEMY_FUSION:        { label: 'Knowledge Fused',            icon: 'zap',         category: 'Learning' },
   ACHIEVEMENT_BRONZE:    { label: 'Bronze Achievement',         icon: 'medal',       category: 'Achievement' },
   ACHIEVEMENT_SILVER:    { label: 'Silver Achievement',         icon: 'medal',       category: 'Achievement' },
   ACHIEVEMENT_GOLD:      { label: 'Gold Achievement',           icon: 'award',       category: 'Achievement' },
@@ -154,6 +156,7 @@ export const POINT_VALUES: Record<PointEventType, number> = {
   STREAK_30:            100,
   STUDY_TIME_CANVAS:      3,
   STUDY_TIME_CHAT:        2,
+  ALCHEMY_FUSION:         5,
   ACHIEVEMENT_BRONZE:    25,
   ACHIEVEMENT_SILVER:    75,
   ACHIEVEMENT_GOLD:     200,
@@ -186,6 +189,7 @@ export const DAILY_CAPS: Record<PointEventType, number> = {
   STREAK_30:              1,
   STUDY_TIME_CANVAS:     30,
   STUDY_TIME_CHAT:       20,
+  ALCHEMY_FUSION:         5,
   ACHIEVEMENT_BRONZE:     0,
   ACHIEVEMENT_SILVER:     0,
   ACHIEVEMENT_GOLD:       0,

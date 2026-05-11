@@ -19,7 +19,7 @@ export function useMindMapRouter() {
         publicMapId: searchParams.get('publicMapId'),
         studioId: searchParams.get('studioId'),
         lang: searchParams.get('lang') || 'en',
-        depth: (searchParams.get('depth') as 'low' | 'medium' | 'deep') || 'low',
+        depth: (searchParams.get('depth') as 'quick' | 'balanced' | 'detailed') || 'quick',
         persona: searchParams.get('persona') || 'teacher',
         parent: searchParams.get('parent'),
         isSelfReference: searchParams.get('selfReference') === 'true',

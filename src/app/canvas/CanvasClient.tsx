@@ -239,6 +239,9 @@ function MindMapPageContent() {
   const [sourceFileContent, setSourceFileContent] = useState<string | null>(null);
   const [sourceFileType, setSourceFileType] = useState<string | null>(null);
   const [originalPdfFileContent, setOriginalPdfFileContent] = useState<string | null>(null);
+  const [sourceFile2Content, setSourceFile2Content] = useState<string | null>(null);
+  const [sourceFile2Type, setSourceFile2Type] = useState<string | null>(null);
+  const [originalPdf2FileContent, setOriginalPdf2FileContent] = useState<string | null>(null);
   const [isSourceFileModalOpen, setIsSourceFileModalOpen] = useState(false);
 
   // Toolbar pin button → open chat panel at canvas-pins view
@@ -360,6 +363,8 @@ function MindMapPageContent() {
         });
       };
 
+      let sessionContent: any = null;
+
       try {
         if (params.isSelfReference) {
           currentMode = 'self-reference';
@@ -461,7 +466,7 @@ function MindMapPageContent() {
           }
  else if (params.sessionId) {
             const sessionType = safeGetItem<string>(`session-type-${params.sessionId}`);
-            const sessionContent = safeGetItem<{file?: string; text?: string; originalFile?: string}>(`session-content-${params.sessionId}`);
+            sessionContent = safeGetItem<{file?: string; text?: string; originalFile?: string}>(`session-content-${params.sessionId}`);
             if (sessionContent) {
               let fileContent, additionalText, originalPdf;
               try {
@@ -558,6 +563,39 @@ function MindMapPageContent() {
                   model: config.pollinationsModel,
                   userId: user?.id,
                 });
+              } else if (sessionType === 'compare') {
+                currentMode = 'compare';
+                const compContent = sessionContent as any;
+                const images: { inlineData: { mimeType: string; data: string } }[] = [];
+                
+                if (compContent.file1 && compContent.file1Type === 'image') {
+                  const parts = compContent.file1.split(';');
+                  const mimeType = parts[0].split(':')[1];
+                  const data = parts[1].split(',')[1];
+                  images.push({ inlineData: { mimeType, data } });
+                }
+                
+                if (compContent.file2 && compContent.file2Type === 'image') {
+                  const parts = compContent.file2.split(';');
+                  const mimeType = parts[0].split(':')[1];
+                  const data = parts[1].split(',')[1];
+                  images.push({ inlineData: { mimeType, data } });
+                }
+
+                result = await generateComparisonMapAction({
+                  topic1: compContent.topic1 || 'Topic A',
+                  topic2: compContent.topic2 || 'Topic B',
+                  targetLang: params.lang,
+                  persona: params.persona || aiPersona,
+                  depth: params.depth,
+                  useSearch: params.useSearch === 'true',
+                  images: images.length > 0 ? images : undefined
+                }, {
+                  provider: config.provider,
+                  apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
+                  model: config.pollinationsModel,
+                  userId: user?.uid,
+                });
               } else if (sessionType === 'multi') {
                 currentMode = 'multi-source';
                 result = await generateMindMapFromTextAction({
@@ -647,6 +685,9 @@ function MindMapPageContent() {
           if (result.data.sourceFileContent) setSourceFileContent(result.data.sourceFileContent);
           if (result.data.sourceFileType) setSourceFileType(result.data.sourceFileType);
           if (result.data.originalPdfFileContent) setOriginalPdfFileContent(result.data.originalPdfFileContent);
+          if (result.data.sourceFile2Content) setSourceFile2Content(result.data.sourceFile2Content);
+          if (result.data.sourceFile2Type) setSourceFile2Type(result.data.sourceFile2Type);
+          if (result.data.originalPdf2FileContent) setOriginalPdf2FileContent(result.data.originalPdf2FileContent);
 
           const isNewlyGenerated = !['saved', 'self-reference', 'studio'].includes(currentMode);
           if (isNewlyGenerated && user && result.data) {
@@ -656,7 +697,9 @@ function MindMapPageContent() {
               ...result.data,
               sourceFileContent: pendingSourceFileContent || result.data.sourceFileContent,
               sourceFileType: pendingSourceFileType || result.data.sourceFileType,
-              originalPdfFileContent: pendingOriginalPdfContent || result.data.originalPdfFileContent
+              originalPdfFileContent: pendingOriginalPdfContent || result.data.originalPdfFileContent,
+              sourceFile2Content: (sessionContent as any)?.file2,
+              sourceFile2Type: (sessionContent as any)?.file2Type,
             };
 
             const existingMapWithId = mindMapsRef.current.find(m => m.topic?.toLowerCase() === result.data!.topic?.toLowerCase() && m.id);
@@ -923,7 +966,7 @@ function MindMapPageContent() {
         toast({ title: "🧠 Creating Sub-Map", description: `Generating "${subTopic}" in the background — it will appear in your Nested Maps shortly.` });
       }
 
-      await expandNode(subTopic, nodeId || `sub-${Date.now()}`, { mode, parentDepth: parentAbsoluteDepth, branchDepth });
+      const { newId, parentId } = await expandNode(subTopic, nodeId || `sub-${Date.now()}`, { mode, parentDepth: parentAbsoluteDepth, branchDepth });
       refreshBalance();
       awardXP('SUB_MAP_CREATED', { topic: subTopic }).catch(() => {});
 
@@ -931,11 +974,12 @@ function MindMapPageContent() {
         toast({ title: "Sub-Map Generated", description: `Created detailed map for "${subTopic}".` });
       } else {
         // Re-fetch hierarchy after background generation so the new map
-        // appears in the Nested Maps list immediately without waiting for
-        // the mindMap object reference to change.
+        // appears in the Nested Maps list immediately.
         const currentMap = mindMapRef.current;
-        if (currentMap) {
-          fetchMapHierarchy(currentMap);
+        if (currentMap || parentId) {
+          // If the parent map was just saved for the first time, use parentId
+          const mapToRefresh = currentMap ? { ...currentMap, id: parentId || currentMap.id } : { id: parentId } as any;
+          fetchMapHierarchy(mapToRefresh);
         }
       }
     } catch (error: any) {
@@ -1055,16 +1099,31 @@ function MindMapPageContent() {
   }, [mindMap, isSharing, user, toast]);
 
   const handleSynthesize = useCallback(async (nodeLabels: string[]) => {
-    if (nodeLabels.length !== 2 || !mindMap) return;
+    const currentMap = mindMapRef.current;
+    if (nodeLabels.length !== 2 || !currentMap) return;
     
     setGlobalStatus(`Synthesizing ${nodeLabels[0]} and ${nodeLabels[1]}...`);
     setActiveTaskName('Knowledge Alchemy');
+    
+    const dummyId = `alchemy-loading-${Date.now()}`;
+    const dummyNode = {
+      id: dummyId,
+      name: "Synthesizing...",
+      description: "Fusing concepts in the background...",
+      categories: []
+    };
+
+    // Add dummy loading node using functional update
+    onMapUpdate((prev) => ({
+      subTopics: [...(prev.subTopics || []), dummyNode as any]
+    }));
+    setGeneratingNodeId("Synthesizing...");
     
     try {
       const { data, error } = await synthesizeNodesAction({
         nodeA: nodeLabels[0],
         nodeB: nodeLabels[1],
-        topic: mindMap.topic,
+        topic: currentMap.topic,
         persona: aiPersona as any
       }, {
         apiKey: config.pollinationsApiKey,
@@ -1080,37 +1139,50 @@ function MindMapPageContent() {
         id: nexusId,
         name: data.nexusTitle,
         description: data.explanation,
-        subTopics: data.subConcepts.map((s: any, i: number) => ({
-          id: `${nexusId}-sub-${i}`,
+        icon: 'Zap',
+        categories: data.subConcepts.map((s: any, i: number) => ({
+          id: `${nexusId}-cat-${i}`,
           name: s.title,
-          description: s.description
+          thought: s.description,
+          icon: 'Sparkles',
+          subCategories: s.leafNodes.map((l: any, j: number) => ({
+            id: `${nexusId}-cat-${i}-leaf-${j}`,
+            name: l.title,
+            description: l.description,
+            icon: 'FileText'
+          }))
         }))
       };
 
-      const updatedMap = { ...mindMap };
-      if (!updatedMap.subTopics) updatedMap.subTopics = [];
-      updatedMap.subTopics.push(newNode);
-
-      onMapUpdate(updatedMap);
+      // Replace dummy node with actual result using functional update
+      onMapUpdate((prev) => ({
+        subTopics: [...(prev.subTopics || []).filter(st => st.id !== dummyId), newNode as any]
+      }));
       
       toast({
         title: 'Alchemy Successful ⚗️',
         description: `Born from ${nodeLabels[0]} and ${nodeLabels[1]}: "${data.nexusTitle}"`,
       });
       
-      awardXP('MAP_CREATED').catch(() => {});
+      awardXP('ALCHEMY_FUSION').catch(() => {});
       
     } catch (e: any) {
+      console.error("Synthesis failed:", e);
+      // Remove dummy node on failure
+      onMapUpdate((prev) => ({
+        subTopics: (prev.subTopics || []).filter(st => st.id !== dummyId)
+      }));
       toast({
         variant: 'destructive',
         title: 'Alchemy Failed',
         description: e.message,
       });
     } finally {
+      setGeneratingNodeId(null);
       setGlobalStatus('idle');
       setActiveTaskName(null);
     }
-  }, [mindMap, aiPersona, config, user?.uid, setGlobalStatus, setActiveTaskName, toast, awardXP, onMapUpdate]);
+  }, [aiPersona, config, user?.uid, setGlobalStatus, setActiveTaskName, toast, awardXP, onMapUpdate, setGeneratingNodeId]);
 
   if (isLoading) return <NeuralLoader sourceType={sourceFileType || undefined} />;
 
@@ -1324,14 +1396,16 @@ function MindMapPageContent() {
       </button>
 
       {/* View Source File Button */}
-      {sourceFileContent && sourceFileType && (
+      {(sourceFileContent || sourceFile2Content) && (sourceFileType || sourceFile2Type) && (
         <button
           onClick={() => setIsSourceFileModalOpen(true)}
           className="fixed bottom-24 right-6 rounded-full bg-zinc-800/80 backdrop-blur-md border border-white/10 p-4 text-zinc-300 shadow-lg transition-all hover:scale-110 hover:text-white hover:bg-zinc-700/80 z-50 group flex items-center justify-center"
           aria-label="View Source File"
           title="View Source File"
         >
-          {sourceFileType === 'image' ? (
+          {mindMap.mode === 'compare' ? (
+             <Scale className="h-5 w-5 text-primary" />
+          ) : sourceFileType === 'image' ? (
             <ImageIcon className="h-5 w-5" />
           ) : sourceFileType === 'youtube' ? (
             <Youtube className="h-5 w-5 text-red-500" />
@@ -1349,6 +1423,9 @@ function MindMapPageContent() {
         sourceFileContent={sourceFileContent}
         sourceFileType={sourceFileType}
         originalPdfFileContent={originalPdfFileContent}
+        sourceFile2Content={sourceFile2Content}
+        sourceFile2Type={sourceFile2Type}
+        originalPdf2FileContent={originalPdf2FileContent}
         mindMap={mindMap}
       />
 

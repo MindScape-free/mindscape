@@ -291,11 +291,11 @@ const UserCard = memo(({ user: u, onSelect }: UserCardProps) => (
               <div className="flex flex-col">
                 <span className="text-[8px] text-zinc-600 font-black uppercase tracking-tighter">Last Seen</span>
                 <span className="text-[9px] font-black text-zinc-400">
-                  {u.statistics?.lastActiveDate 
-                    ? (u.statistics.lastActiveDate.includes('T') 
-                        ? format(new Date(u.statistics.lastActiveDate), 'dd MMM yyyy')
-                        : format(new Date(u.statistics.lastActiveDate + 'T12:00:00'), 'dd MMM yyyy'))
-                    : 'System Origin'}
+                    {(() => {
+                      if (!u.statistics?.lastActiveDate) return 'System Origin';
+                      const date = new Date(u.statistics.lastActiveDate);
+                      return isNaN(date.getTime()) ? 'System Origin' : format(date, 'dd MMM yyyy');
+                    })()}
                 </span>
               </div>
             </div>

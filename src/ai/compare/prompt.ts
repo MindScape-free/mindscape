@@ -31,6 +31,13 @@ RULES:
 - Ensure all JSON strings are properly escaped.
 - When search context is provided → weave it as factual grounding.
 - Prefer recent, technical, authoritative data points.
+
+IMAGE EXTRACTION & ANALYSIS (IF PROVIDED):
+- If images are provided (e.g., marksheets, IDs, documents) → PRIMARY GOAL is exact data extraction for comparison.
+- TABLES: Read row-by-row. If tilted, mentally flatten the image.
+- BILINGUAL: Capture both Hindi and English if present.
+- If OCR is blurry → skip the specific cell but maintain the row context.
+- Use the extracted data to build the "Nexus" and "Dimensions".
 `;
 
 export const userPromptTemplate = (
@@ -89,14 +96,14 @@ INSTRUCTIONS:
 
 OUTPUT FORMAT (RAW JSON only):
 {
-  "mode": "compare",
-  "topic": "${topicA} vs ${topicB}",
-  "shortTitle": "${topicA} vs ${topicB}",
-  "compareData": {
-    "root": {
-      "title": "${topicA} vs ${topicB}",
-      "description": "Cross-dimensional intelligence synthesis between ${topicA} and ${topicB}."
-    },
+    "mode": "compare",
+    "topic": "Concise, professional title for the comparison (e.g., 'Marksheet Comparison' or 'Strategic Analysis')",
+    "shortTitle": "Short 2-3 word title",
+    "compareData": {
+      "root": {
+        "title": "Concise Comparison Title",
+        "description": "Cross-dimensional intelligence synthesis between Topic A and Topic B."
+      },
     "unityNexus": [
       { "id": "nexus-1", "title": "...", "description": "One high-impact sentence on the shared principle.", "icon": "lucide-kebab" }
     ],

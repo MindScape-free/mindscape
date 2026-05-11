@@ -163,6 +163,8 @@ import { BreadcrumbNavigation } from './breadcrumb-navigation';
 import { NestedMapsDialog } from './nested-maps-dialog';
 import { PracticeQuestionsDialog } from './practice-questions-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Badge } from '@/components/ui/badge';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
@@ -188,7 +190,6 @@ import { ExampleDialog } from './example-dialog';
 import { Icons } from './icons';
 import { ImageGalleryDialog } from './image-gallery-dialog';
 import Image from 'next/image';
-import { Badge } from './ui/badge';
 import { toPascalCase } from '@/lib/utils';
 import { toPlainObject } from '@/lib/serialize';
 import { findMatchingCategory } from '@/lib/depth-analysis';
@@ -308,6 +309,32 @@ export const MindMap = ({
   onSynthesize,
 }: MindMapProps) => {
   const [focusedNodeName, setFocusedNodeName] = useState<string | null>(null);
+  const [isSynthesisMode, setIsSynthesisMode] = useState(false);
+  const [synthesisSelection, setSynthesisSelection] = useState<string[]>([]);
+
+  const handleToggleNodeSelection = (label: string) => {
+    setSynthesisSelection(prev => {
+      if (prev.includes(label)) {
+        return prev.filter(l => l !== label);
+      }
+      if (prev.length >= 2) {
+        return [prev[1], label];
+      }
+      return [...prev, label];
+    });
+  };
+
+  const handleSynthesizeClick = () => {
+    if (synthesisSelection.length === 2 && onSynthesize) {
+      onSynthesize(synthesisSelection);
+      setIsSynthesisMode(false);
+      setSynthesisSelection([]);
+      toast({
+        title: "Synthesis Initiated",
+        description: "Your knowledge fusion is being prepared. Scroll to the bottom of the map to witness the birth of your new concept.",
+      });
+    }
+  };
 
   // Wire zoomToNode to the ref
   useEffect(() => {
@@ -517,13 +544,14 @@ export const MindMap = ({
           setGeneratedImages(data.savedImages);
         }
       }
-      if (data.nestedExpansions) {
-        const expansionsStr = JSON.stringify(data.nestedExpansions);
-        if (expansionsStr !== lastSyncedExpansionsRef.current) {
-          lastSyncedExpansionsRef.current = expansionsStr;
-          setNestedExpansions(data.nestedExpansions);
-        }
+      
+      const currentExpansions = propNestedExpansions || data.nestedExpansions || [];
+      const expansionsStr = JSON.stringify(currentExpansions);
+      if (expansionsStr !== lastSyncedExpansionsRef.current) {
+        lastSyncedExpansionsRef.current = expansionsStr;
+        setNestedExpansions(currentExpansions);
       }
+
       if (data.explanations) {
         const explanationsStr = JSON.stringify(data.explanations);
         if (explanationsStr !== lastSyncedExplanationsRef.current) {
@@ -532,7 +560,7 @@ export const MindMap = ({
         }
       }
     }
-  }, [data.savedImages, data.nestedExpansions, data.explanations]);
+  }, [data.savedImages, data.nestedExpansions, data.explanations, propNestedExpansions]);
 
   // AUTO-SUMMARIZE when canvas content is fully loaded/generated
   useEffect(() => {
@@ -1568,6 +1596,11 @@ export const MindMap = ({
         onViewSource={onViewSource}
         onOpenPinnedMessages={onOpenPinnedMessages}
         pinnedMessagesCount={pinnedMessagesCount}
+        isSynthesisMode={isSynthesisMode}
+        onToggleSynthesis={() => {
+          setIsSynthesisMode(!isSynthesisMode);
+          setSynthesisSelection([]);
+        }}
       />
 
       <div className={cn(
@@ -1617,26 +1650,79 @@ export const MindMap = ({
                 </p>
               </div>
             ) : (
-              <MindMapAccordion
-                mindMap={data}
-                openSubTopics={openSubTopics}
-                setOpenSubTopics={setOpenSubTopics}
-                openCategories={openCategories}
-                setOpenCategories={setOpenCategories}
-                onGenerateNewMap={onGenerateNewMap}
-                handleSubCategoryClick={handleSubCategoryClick}
-                handleGenerateImageClick={handleGenerateImageClick}
-                onExplainInChat={onExplainInChat}
-                nestedExpansions={nestedExpansions}
-                onOpenNestedMap={onOpenNestedMap}
-                generatingNode={generatingNode}
-                mainTopic={data.topic}
-                onExplainWithExample={handleExplainWithExample}
-                onStartQuiz={onStartQuiz}
-                status={status}
-                onPracticeClick={handleGeneratePracticeQuestions}
-                deepeningTags={deepeningTags}
-              />
+              <>
+                <MindMapAccordion
+                  mindMap={data}
+                  openSubTopics={openSubTopics}
+                  setOpenSubTopics={setOpenSubTopics}
+                  openCategories={openCategories}
+                  setOpenCategories={setOpenCategories}
+                  onGenerateNewMap={onGenerateNewMap}
+                  onSubCategoryClick={handleSubCategoryClick}
+                  onGenerateImage={handleGenerateImageClick}
+                  onExplainInChat={onExplainInChat}
+                  nestedExpansions={mergedExpansions}
+                  onOpenNestedMap={onOpenNestedMap}
+                  generatingNode={expandingNodeId}
+                  mainTopic={data.topic}
+                  onExplainWithExample={handleExplainWithExample}
+                  onStartQuiz={onStartQuiz}
+                  status={status}
+                  onPracticeClick={handleGeneratePracticeQuestions}
+                  deepeningTags={deepeningTags}
+                  isSynthesisMode={isSynthesisMode}
+                  synthesisSelection={synthesisSelection}
+                  onToggleNodeSelection={handleToggleNodeSelection}
+                />
+
+                {/* Synthesis / Alchemy Controls Floating Panel - Shared for Accordion/Roadmap */}
+                <AnimatePresence>
+                  {isSynthesisMode && (viewMode === 'accordion' || viewMode === 'roadmap') && (
+                    <div className="fixed bottom-12 right-12 z-50 pointer-events-none">
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                        className="pointer-events-auto p-4 rounded-3xl bg-zinc-900/90 border border-white/10 backdrop-blur-2xl shadow-2xl flex flex-col gap-4 min-w-[240px] ring-1 ring-amber-500/20"
+                      >
+                        <div className="flex items-center gap-3 border-b border-white/5 pb-3">
+                          <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-500">
+                            <Zap className="w-4 h-4 animate-pulse" />
+                          </div>
+                          <div>
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Knowledge Alchemy</h4>
+                            <p className="text-[9px] text-zinc-400">Select 2 concepts to fuse</p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap gap-2 min-h-[40px]">
+                            {synthesisSelection.length === 0 && (
+                              <div className="flex flex-col gap-1 w-full py-2">
+                                <div className="h-1.5 w-2/3 bg-white/5 rounded-full" />
+                                <div className="h-1.5 w-1/2 bg-white/5 rounded-full" />
+                              </div>
+                            )}
+                            {synthesisSelection.map(label => (
+                              <Badge key={label} variant="secondary" className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px] font-bold px-2 py-1 rounded-lg">
+                                {label}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+
+                        <Button
+                          disabled={synthesisSelection.length !== 2}
+                          onClick={handleSynthesizeClick}
+                          className="w-full h-10 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-black font-black text-[11px] uppercase tracking-widest shadow-lg shadow-amber-500/20 transition-all active:scale-95"
+                        >
+                          FUSE KNOWLEDGE
+                        </Button>
+                      </motion.div>
+                    </div>
+                  )}
+                </AnimatePresence>
+              </>
             )}
           </>
         ) : (
@@ -1660,6 +1746,10 @@ export const MindMap = ({
                 focusedNodeName={focusedNodeName}
                 resonanceNodes={resonanceNodes}
                 onSynthesize={onSynthesize}
+                isSynthesisMode={isSynthesisMode}
+                setIsSynthesisMode={setIsSynthesisMode}
+                synthesisSelection={synthesisSelection}
+                setSynthesisSelection={setSynthesisSelection}
               />
             </div>,
             mountNode

@@ -43,6 +43,9 @@ interface LeafNodeCardProps {
     isGlobalBusy?: boolean;
     onPracticeClick: (topic: string) => void;
     videoId?: string;
+    isSynthesisMode?: boolean;
+    isSelected?: boolean;
+    onToggleSelection?: (label: string) => void;
 }
 
 export const LeafNodeCard = memo(function LeafNodeCard({
@@ -61,6 +64,9 @@ export const LeafNodeCard = memo(function LeafNodeCard({
     isGlobalBusy = false,
     onPracticeClick,
     videoId,
+    isSynthesisMode = false,
+    isSelected = false,
+    onToggleSelection,
 }: LeafNodeCardProps) {
     const Icon = (LucideIcons as any)[toPascalCase(node.icon || 'FileText')] || FileText;
 
@@ -102,22 +108,40 @@ export const LeafNodeCard = memo(function LeafNodeCard({
                 "group/item relative h-full cursor-pointer rounded-2xl bg-white/[0.03] border hover:bg-white/[0.06] hover:shadow-[0_0_40px_rgba(139,92,246,0.1)] transition-all duration-500 overflow-hidden flex flex-col",
                 node.source === 'quiz'
                     ? "border-amber-500/40 border-l-2 border-l-amber-500/70 hover:border-amber-500/60"
-                    : "border-white/5 hover:border-primary/40"
+                    : "border-white/5 hover:border-primary/40",
+                isSelected && "border-amber-500 ring-2 ring-amber-500/20 bg-amber-500/[0.05]"
             )}
-            onClick={() => onSubCategoryClick(node)}
+            onClick={() => {
+                if (isSynthesisMode && onToggleSelection) {
+                    onToggleSelection(node.name);
+                } else {
+                    onSubCategoryClick(node);
+                }
+            }}
         >
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover/item:opacity-100 transition-opacity duration-500" />
 
             <div className="relative z-10 p-5 flex flex-col h-full">
                 <div className="flex items-start gap-4 mb-4">
-                    <div className={cn(
-                        "flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-xl border transition-all duration-500 group-hover/item:scale-110",
-                        node.source === 'quiz'
-                            ? "bg-amber-500/10 border-amber-500/30 text-amber-400 group-hover/item:bg-amber-500 group-hover/item:text-white"
-                            : "bg-primary/10 border-primary/20 text-primary group-hover/item:bg-primary group-hover/item:text-white"
-                    )}>
-                        <Icon className="h-5 w-5" />
-                    </div>
+                    {isSynthesisMode ? (
+                        <div className={cn(
+                            "flex-shrink-0 w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all duration-500",
+                            isSelected
+                                ? "bg-amber-500 border-amber-500 text-black shadow-[0_0_20px_rgba(245,158,11,0.5)] scale-110"
+                                : "bg-white/5 border-white/20 text-transparent"
+                        )}>
+                            <Check className="w-5 h-5 stroke-[4px]" />
+                        </div>
+                    ) : (
+                        <div className={cn(
+                            "flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-xl border transition-all duration-500 group-hover/item:scale-110",
+                            node.source === 'quiz'
+                                ? "bg-amber-500/10 border-amber-500/30 text-amber-400 group-hover/item:bg-amber-500 group-hover/item:text-white"
+                                : "bg-primary/10 border-primary/20 text-primary group-hover/item:bg-primary group-hover/item:text-white"
+                        )}>
+                            <Icon className="h-5 w-5" />
+                        </div>
+                    )}
                     <div className="flex-1 min-w-0">
                         <h4 className="text-base font-semibold text-zinc-100 leading-snug group-hover/item:text-white transition-colors">
                             {cleanCitations(node.name)}
@@ -146,94 +170,97 @@ export const LeafNodeCard = memo(function LeafNodeCard({
                     {cleanCitations(node.description)}
                 </p>
 
-                <div className="flex items-center justify-between gap-2 mt-auto pt-4 border-t border-white/5">
-                    <div className="flex items-center gap-0.5">
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className={cn(
-                                            "h-8 w-8 rounded-lg transition-all",
-                                            existingExpansion ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-500 hover:text-primary hover:bg-primary/10'
-                                        )}
-                                        onClick={(e) => {
-                                            if (existingExpansion?.fullData && onOpenMap) {
-                                                onOpenMap(existingExpansion.fullData, existingExpansion.id);
-                                            } else {
-                                                handleExpandClick(e);
-                                            }
-                                        }}
-                                        disabled={isGeneratingMap || isGlobalBusy}
-                                    >
-                                        {isGeneratingMap ? <Loader2 className="h-4 w-4 animate-spin" /> : <Network className="h-4 w-4" />}
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="glassmorphism"><p>Generate Sub-Map</p></TooltipContent>
-                            </Tooltip>
 
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-pink-400 hover:bg-pink-400/10 transition-all" onClick={handleImageClick}>
-                                        <ImageIcon className="h-4 w-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="glassmorphism"><p>Visual Insight</p></TooltipContent>
-                            </Tooltip>
+                {!isSynthesisMode && (
+                    <div className="flex items-center justify-between gap-2 mt-auto pt-4 border-t border-white/5">
+                        <div className="flex items-center gap-0.5">
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className={cn(
+                                                "h-8 w-8 rounded-lg transition-all",
+                                                existingExpansion ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-500 hover:text-primary hover:bg-primary/10'
+                                            )}
+                                            onClick={(e) => {
+                                                if (existingExpansion?.fullData && onOpenMap) {
+                                                    onOpenMap(existingExpansion.fullData, existingExpansion.id);
+                                                } else {
+                                                    handleExpandClick(e);
+                                                }
+                                            }}
+                                            disabled={isGeneratingMap || isGlobalBusy}
+                                        >
+                                            {isGeneratingMap ? <Loader2 className="h-4 w-4 animate-spin" /> : <Network className="h-4 w-4" />}
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="glassmorphism"><p>Generate Sub-Map</p></TooltipContent>
+                                </Tooltip>
 
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-emerald-400 hover:bg-emerald-400/10 transition-all" onClick={handleQuizClick}>
-                                        <BrainCircuit className="h-4 w-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="glassmorphism"><p>Start Concept Quiz</p></TooltipContent>
-                            </Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-pink-400 hover:bg-pink-400/10 transition-all" onClick={handleImageClick}>
+                                            <ImageIcon className="h-4 w-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="glassmorphism"><p>Visual Insight</p></TooltipContent>
+                                </Tooltip>
 
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-orange-400 hover:bg-orange-400/10 transition-all" onClick={(e) => {
-                                        e.stopPropagation();
-                                        onPracticeClick(node.name);
-                                    }}>
-                                        <LucideIcons.Swords className="h-4 w-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="glassmorphism"><p>Practice Arena</p></TooltipContent>
-                            </Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-emerald-400 hover:bg-emerald-400/10 transition-all" onClick={handleQuizClick}>
+                                            <BrainCircuit className="h-4 w-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="glassmorphism"><p>Start Concept Quiz</p></TooltipContent>
+                                </Tooltip>
 
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-blue-400 hover:bg-blue-400/10 transition-all" onClick={handleChatClick}>
-                                        <MessageCircle className="h-4 w-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="glassmorphism"><p>Ask AI Assistant</p></TooltipContent>
-                            </Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-orange-400 hover:bg-orange-400/10 transition-all" onClick={(e) => {
+                                            e.stopPropagation();
+                                            onPracticeClick(node.name);
+                                        }}>
+                                            <LucideIcons.Swords className="h-4 w-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="glassmorphism"><p>Practice Arena</p></TooltipContent>
+                                </Tooltip>
 
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-amber-400 hover:bg-amber-400/10 transition-all" onClick={handleCopy}>
-                                        {isCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="glassmorphism"><p>{isCopied ? 'Copied!' : 'Copy Context'}</p></TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-blue-400 hover:bg-blue-400/10 transition-all" onClick={handleChatClick}>
+                                            <MessageCircle className="h-4 w-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="glassmorphism"><p>Ask AI Assistant</p></TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-amber-400 hover:bg-amber-400/10 transition-all" onClick={handleCopy}>
+                                            {isCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="glassmorphism"><p>{isCopied ? 'Copied!' : 'Copy Context'}</p></TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        </div>
+
+                        <Button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onSubCategoryClick(node);
+                            }}
+                            variant="ghost"
+                            className="h-8 py-0 px-3 text-xs font-bold text-zinc-400 hover:text-white hover:bg-white/5 rounded-full group-hover/item:bg-primary/20 group-hover/item:text-primary transition-all flex items-center gap-1"
+                        >
+                            More <ArrowRight className="w-3 h-3 group-hover/item:translate-x-1 transition-transform" />
+                        </Button>
                     </div>
-
-                    <Button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onSubCategoryClick(node);
-                        }}
-                        variant="ghost"
-                        className="h-8 py-0 px-3 text-xs font-bold text-zinc-400 hover:text-white hover:bg-white/5 rounded-full group-hover/item:bg-primary/20 group-hover/item:text-primary transition-all flex items-center gap-1"
-                    >
-                        More <ArrowRight className="w-3 h-3 group-hover/item:translate-x-1 transition-transform" />
-                    </Button>
-                </div>
+                )}
             </div>
         </Card >
     );

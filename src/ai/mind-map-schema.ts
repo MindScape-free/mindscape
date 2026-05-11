@@ -28,6 +28,7 @@ const NestedSubCategorySchema: z.ZodType<any> = z.lazy(() =>
       .optional()
       .describe('Nested sub-mindmap expansion for this category'),
     isExpanded: z.boolean().optional(),
+    insight: z.string().optional().describe('A quick specific insight for this leaf node.'),
   })
 );
 
@@ -54,6 +55,7 @@ const SubCategorySchema = z.object({
     .optional()
     .describe('Nested sub-mindmap expansion for this category'),
   isExpanded: z.boolean().optional(),
+  insight: z.string().optional().describe('A quick specific insight for this leaf node.'),
 });
 
 const CategorySchema = z.object({
@@ -152,7 +154,7 @@ export const CompareMindMapSchema = z.object({
   nestedExpansions: z.array(NestedExpansionItemSchema).optional(),
   savedImages: z.array(GeneratedImageSchema).optional(),
   thumbnailUrl: z.string().optional(),
-  depth: z.enum(['low', 'medium', 'deep']).optional(),
+  depth: z.enum(['quick', 'balanced', 'detailed']).optional(),
 });
 
 export const SingleMindMapSchema = z.object({
@@ -172,7 +174,7 @@ export const SingleMindMapSchema = z.object({
   nestedExpansions: z.array(NestedExpansionItemSchema).optional(),
   savedImages: z.array(GeneratedImageSchema).optional(),
   thumbnailUrl: z.string().optional(),
-  depth: z.enum(['low', 'medium', 'deep']).optional(),
+  depth: z.enum(['quick', 'balanced', 'detailed']).optional(),
 });
 
 export const MindMapSchema = z.union([SingleMindMapSchema, CompareMindMapSchema]);
@@ -220,7 +222,8 @@ export const AIGeneratedMindMapSchema = z.object({
         description: z.string().min(1).describe('A one-sentence detailed explanation of this node.'),
         icon: z.string().optional(),
         tags: z.array(z.string()).optional(),
-        timestamp: z.number().optional().describe('Video timestamp in seconds for this concept.')
+        timestamp: z.number().optional().describe('Video timestamp in seconds for this concept.'),
+        insight: z.string().optional().describe('A quick specific insight for this leaf node.')
       })).min(1).describe('Crucial leaf nodes with detailed descriptions.')
     })).min(1)
   })).min(1)

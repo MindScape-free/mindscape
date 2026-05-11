@@ -15,6 +15,9 @@ interface SourceFileModalProps {
   sourceFileContent: string | null;
   sourceFileType: string | null;
   originalPdfFileContent: string | null;
+  sourceFile2Content?: string | null;
+  sourceFile2Type?: string | null;
+  originalPdf2FileContent?: string | null;
   mindMap?: MindMapData | null;
 }
 
@@ -24,20 +27,31 @@ export function SourceFileModal({
   sourceFileContent,
   sourceFileType,
   originalPdfFileContent,
+  sourceFile2Content,
+  sourceFile2Type,
+  originalPdf2FileContent,
   mindMap,
 }: SourceFileModalProps) {
-  if (!sourceFileContent && !sourceFileType) return null;
+  const [activeTab, setActiveTab] = useState<'A' | 'B'>('A');
+  const hasSecondSource = !!sourceFile2Content || !!sourceFile2Type;
+  
+  if (!sourceFileContent && !sourceFileType && !hasSecondSource) return null;
+
+  const currentContent = activeTab === 'A' ? sourceFileContent : sourceFile2Content;
+  const currentType = activeTab === 'A' ? sourceFileType : sourceFile2Type;
+  const currentPdf = activeTab === 'A' ? originalPdfFileContent : originalPdf2FileContent;
+  const currentTopic = activeTab === 'A' ? (mindMap as any)?.topic1 || 'Topic A' : (mindMap as any)?.topic2 || 'Topic B';
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent showCloseButton={false} className="glassmorphism border-white/10 w-[95vw] sm:max-w-7xl h-[92vh] flex flex-col gap-0 rounded-[2rem] p-0 overflow-hidden outline-none shadow-[0_0_50px_rgba(0,0,0,0.5)]">
         <DialogHeader className="px-6 py-2 border-b border-white/10 shrink-0 bg-black/60 flex flex-row items-center justify-between space-y-0">
           <DialogTitle className="text-xl font-bold text-white flex items-center gap-2 font-orbitron tracking-wide whitespace-nowrap">
-            {sourceFileType === 'website' && mindMap?.sourceUrl ? (
+            {currentType === 'website' && mindMap?.sourceUrl ? (
               <>
                 <Globe className="h-5 w-5 text-blue-400" />
                 <div className="flex items-center gap-2">
-                  <span>Website Content</span>
+                  <span>{currentTopic}</span>
                   <a
                     href={mindMap.sourceUrl}
                     target="_blank"
@@ -48,17 +62,39 @@ export function SourceFileModal({
                   </a>
                 </div>
               </>
-            ) : sourceFileType === 'image' ? (
-              <><ImageIcon className="h-5 w-5 text-purple-400" /> Source Image</>
-            ) : sourceFileType === 'youtube' ? (
+            ) : currentType === 'image' ? (
+              <><ImageIcon className="h-5 w-5 text-purple-400" /> {currentTopic}</>
+            ) : currentType === 'youtube' ? (
               <><Youtube className="h-5 w-5 text-red-500" /> YouTube Video</>
-            ) : sourceFileType === 'website' ? (
-              <><Globe className="h-5 w-5 text-blue-400" /> Website Content</>
+            ) : currentType === 'website' ? (
+              <><Globe className="h-5 w-5 text-blue-400" /> {currentTopic}</>
             ) : (
-              <><FileText className="h-5 w-5 text-blue-400" /> Source Document</>
+              <><FileText className="h-5 w-5 text-blue-400" /> {currentTopic}</>
             )}
           </DialogTitle>
           <div className="flex items-center gap-3">
+            {hasSecondSource && (
+              <div className="flex items-center bg-white/5 rounded-full p-1 border border-white/10 mr-4">
+                <button
+                  onClick={() => setActiveTab('A')}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all",
+                    activeTab === 'A' ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-zinc-500 hover:text-zinc-300"
+                  )}
+                >
+                  Source A
+                </button>
+                <button
+                  onClick={() => setActiveTab('B')}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all",
+                    activeTab === 'B' ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-zinc-500 hover:text-zinc-300"
+                  )}
+                >
+                  Source B
+                </button>
+              </div>
+            )}
             <button
               onClick={onClose}
               className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-white/10 transition-all active:scale-95"
@@ -71,25 +107,25 @@ export function SourceFileModal({
 
         <div className="flex-1 overflow-y-auto px-6 pb-2 pt-0 bg-black/5 custom-scrollbar flex flex-col">
           <div className="flex-1 min-h-0 flex flex-col pt-0">
-            {sourceFileType === 'image' && sourceFileContent ? (
+            {currentType === 'image' && currentContent ? (
               <div className="flex items-center justify-center flex-1 bg-black/20 rounded-xl overflow-hidden border border-white/5">
                 <img
-                  src={sourceFileContent}
+                  src={currentContent}
                   alt="Source"
                   className="max-w-full max-h-full object-contain shadow-2xl"
                 />
               </div>
-            ) : sourceFileType === 'pdf' && originalPdfFileContent ? (
+            ) : currentType === 'pdf' && currentPdf ? (
               <div className="flex-1 w-full rounded-xl overflow-hidden border border-white/10 shadow-inner bg-white/5">
                 <BlobPdfViewer
-                  dataUri={originalPdfFileContent}
+                  dataUri={currentPdf}
                   className="border-none w-full h-full block bg-white"
                 />
               </div>
-            ) : sourceFileType === 'youtube' && sourceFileContent ? (
+            ) : currentType === 'youtube' && currentContent ? (
               <div className="flex-1 w-full rounded-xl overflow-hidden border border-white/10 shadow-inner bg-black">
                 <iframe
-                  src={`https://www.youtube.com/embed/${extractYoutubeId(sourceFileContent)}`}
+                  src={`https://www.youtube.com/embed/${extractYoutubeId(currentContent)}`}
                   width="100%"
                   height="100%"
                   className="border-none w-full h-full block"
@@ -100,7 +136,7 @@ export function SourceFileModal({
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto space-y-6 pb-6">
-                {parseSourceContent(sourceFileContent || '').map((source, idx) => (
+                {parseSourceContent(currentContent || '').map((source, idx) => (
                   <div 
                     key={idx} 
                     className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden shadow-sm hover:border-white/20 transition-all"

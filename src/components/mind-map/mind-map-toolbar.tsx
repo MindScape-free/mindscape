@@ -95,6 +95,8 @@ interface MindMapToolbarProps {
     pinnedMessagesCount?: number;
     onOpenPinnedMessages?: () => void;
     onOpenChat?: () => void;
+    isSynthesisMode?: boolean;
+    onToggleSynthesis?: () => void;
 }
 
 export const MindMapToolbar = ({
@@ -138,6 +140,8 @@ export const MindMapToolbar = ({
     pinnedMessagesCount = 0,
     onOpenPinnedMessages,
     onOpenChat,
+    isSynthesisMode = false,
+    onToggleSynthesis,
 }: MindMapToolbarProps) => {
     // Helper to determine if interaction should be disabled
     const isBusy = status !== 'idle' || isTranslating || isPublishing;
@@ -299,6 +303,33 @@ export const MindMapToolbar = ({
                                     </Button>
                                 </TooltipTrigger>
                                 <TooltipContent className="glassmorphism"><p>View uploaded source file</p></TooltipContent>
+                            </Tooltip>
+                        </div>
+                    )}
+
+                    {/* Knowledge Alchemy - AMBER/GOLD - NEW FEATURE */}
+                    {onToggleSynthesis && (
+                        <div className="hidden sm:block">
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={onToggleSynthesis}
+                                        className={cn(
+                                            "h-9 gap-2 text-[10px] font-black font-orbitron uppercase tracking-widest px-3 rounded-xl transition-all active:scale-95 shadow-[0_0_10px_-4px_rgba(245,158,11,0.3)]",
+                                            isSynthesisMode
+                                                ? "bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 scale-105"
+                                                : "bg-white/5 text-zinc-500 border border-white/10 hover:bg-white/10 hover:text-amber-400/70"
+                                        )}
+                                    >
+                                        <Zap className={cn("h-4 w-4", isSynthesisMode && "text-amber-400 animate-pulse")} />
+                                        {isSynthesisMode ? 'Alchemy ON' : 'Alchemy'}
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent className="glassmorphism">
+                                    <p>{isSynthesisMode ? 'Exit Knowledge Alchemy mode' : 'Enter Knowledge Alchemy mode to fuse concepts'}</p>
+                                </TooltipContent>
                             </Tooltip>
                         </div>
                     )}

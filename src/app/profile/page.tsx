@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { mapMindMapRows, mapUserRow } from '@/lib/map-mappers';
 import { useAuth, useUser } from '@/lib/auth-context';
 import { getSupabaseClient } from '@/lib/supabase-db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -155,50 +156,18 @@ function ProfileContent() {
                     .single();
 
                 if (profileError && profileError.code !== 'PGRST116') {
-                    console.error("Profile fetch error:", profileError);
+                    console.error("📊 [Profile] Fetch Error Detail:", {
+                        message: profileError.message,
+                        code: profileError.code,
+                        details: profileError.details,
+                        hint: profileError.hint
+                    });
                 }
 
                 if (profileData) {
-                    const data = profileData;
-                    const userProfile: UserProfile = {
-                        displayName: data.display_name || user.displayName || 'ADMIN',
-                        email: data.email || user.email || '',
-                        photoURL: data.photo_url || undefined,
-                        createdAt: data.created_at || undefined,
-                        activeBadgeId: data.active_badge_id,
-                        preferences: {
-                            preferredLanguage: data.preferences?.preferred_language || 'en',
-                            defaultAIPersona: data.preferences?.default_ai_persona?.toLowerCase() || 'concise',
-                            defaultDepth: data.preferences?.default_depth || 'auto',
-                            defaultExplanationMode: data.preferences?.default_explanation_mode,
-                            autoGenerateImages: data.preferences?.auto_generate_images,
-                            deepExpansionMode: data.preferences?.deep_expansion_mode || false,
-                            defaultMapView: data.preferences?.default_map_view,
-                            autoSaveFrequency: data.preferences?.auto_save_frequency,
-                        },
-                        statistics: {
-                            totalMapsCreated: data.statistics?.total_maps_created || 0,
-                            totalNestedExpansions: data.statistics?.total_nested_expansions || 0,
-                            totalImagesGenerated: data.statistics?.total_images_generated || 0,
-                            totalStudyTimeMinutes: data.statistics?.total_study_time_minutes || 0,
-                            currentStreak: data.statistics?.current_streak || 0,
-                            longestStreak: data.statistics?.longest_streak || 0,
-                            lastActiveDate: data.statistics?.last_active_date || '',
-                            totalNodes: data.statistics?.total_nodes || 0,
-                        },
-                        apiSettings: {
-                            provider: data.api_settings?.provider || 'pollinations',
-                            imageProvider: data.api_settings?.image_provider || 'pollinations',
-                            imageModel: data.api_settings?.image_model || 'flux',
-                            textModel: data.api_settings?.text_model || 'openai',
-                            pollinationsModel: data.api_settings?.pollinations_model || '',
-                            pollinationsApiKey: data.api_settings?.pollinations_api_key || '',
-                        },
-                        goals: data.goals,
-                        activity: data.activity || {},
-                    };
-                    setProfile(userProfile);
-                    setEditName(userProfile.displayName);
+                    const mappedData = mapUserRow(profileData);
+                    setProfile(mappedData);
+                    setEditName(mappedData.displayName);
                 } else {
                     const defaultData: UserProfile = {
                         displayName: user.displayName || 'ADMIN',
@@ -248,25 +217,14 @@ function ProfileContent() {
                     }
                 });
 
-                // Fetch user's mind maps with all necessary metadata for analytics
                 const { data: mapsData } = await supabase
                     .from('mindmaps')
-                    .select('id, topic, created_at, updated_at, node_count, is_sub_map, public_views, source_type, source_file_type, mode, depth, ai_persona, video_id, source_url')
+                    .select('id, topic, created_at, updated_at, node_count, is_sub_map, source_file_type, mode, depth, ai_persona, source_url')
                     .eq('user_id', user.id)
                     .order('updated_at', { ascending: false });
 
                 if (mapsData) {
-                    const maps = mapsData.map((m: any) => ({ 
-                        id: m.id, 
-                        ...m, 
-                        // Map snake_case from DB to camelCase used in component logic
-                        nodeCount: m.node_count || 0,
-                        isSubMap: m.is_sub_map || false,
-                        publicViews: m.public_views || 0,
-                        sourceType: m.source_type,
-                        sourceFileType: m.source_file_type,
-                        aiPersona: m.ai_persona
-                    }));
+                    const maps = mapMindMapRows(mapsData);
                     
                     // Active Maps = Root maps only
                     const rootMaps = maps.filter(m => !m.isSubMap);
@@ -516,30 +474,21 @@ function ProfileContent() {
         try {
             const result = await syncUserStatisticsAction(user.id);
             if (result.success) {
-                // Refresh profile data locally
                 const { data: userData } = await supabase.from('users').select('*').eq('id', user.id).single();
                 if (userData) {
-                    setProfile(userData);
+                    const mappedUser = mapUserRow(userData);
+                    setProfile(mappedUser);
+                    setEditName(mappedUser.displayName);
                 }
                 
-                // Also trigger a re-fetch of maps to be sure
                 const { data: mapsData } = await supabase
                     .from('mindmaps')
-                    .select('id, topic, created_at, updated_at, node_count, is_sub_map, public_views, source_type, source_file_type, mode, depth, ai_persona, video_id, source_url')
+                    .select('id, topic, created_at, updated_at, node_count, is_sub_map, source_file_type, mode, depth, ai_persona, source_url')
                     .eq('user_id', user.id)
                     .order('updated_at', { ascending: false });
 
                 if (mapsData) {
-                    const maps = mapsData.map((m: any) => ({ 
-                        id: m.id, 
-                        ...m, 
-                        nodeCount: m.node_count || 0,
-                        isSubMap: m.is_sub_map || false,
-                        publicViews: m.public_views || 0,
-                        sourceType: m.source_type,
-                        sourceFileType: m.source_file_type,
-                        aiPersona: m.ai_persona
-                    }));
+                    const maps = mapMindMapRows(mapsData);
                     const rootMaps = maps.filter(m => !m.isSubMap);
                     setActiveMapsCount(rootMaps.length);
                     setUserMaps(maps);
@@ -629,8 +578,8 @@ function ProfileContent() {
         studyMinutes: profile.statistics.totalStudyTimeMinutes || 0,
         lastActiveDate: profile.statistics.lastActiveDate || '',
         weeklyGoal: profile.goals?.weeklyMapGoal || 5,
-        avgNodesPerMap: userMaps.length > 0 
-            ? Math.round((userMaps.reduce((acc, m) => acc + (m.nodeCount || 0), 0)) / userMaps.length) 
+        avgNodesPerMap: activeMapsCount > 0 
+            ? Math.round((userMaps.reduce((acc, m) => acc + (m.nodeCount || 0), 0)) / activeMapsCount) 
             : 0,
     };
 
@@ -1108,7 +1057,7 @@ function ProfileContent() {
                                                                 </td>
                                                                 <td className="py-4 text-center">
                                                                     <span className="text-[10px] font-bold text-zinc-400 family-mono">
-                                                                        {m.createdAt ? format(m.createdAt.toMillis ? m.createdAt.toMillis() : (m.createdAt instanceof Date ? m.createdAt : new Date(m.createdAt)), 'dd/MM/yy HH:mm') : '-'}
+                                                                        {m.createdAt ? format(new Date(m.createdAt), 'dd/MM/yy HH:mm') : '-'}
                                                                     </span>
                                                                 </td>
                                                                 <td className="py-4 text-center">
@@ -1123,10 +1072,11 @@ function ProfileContent() {
                                                                 <td className="py-4 text-center">
                                                                     {(() => {
                                                                         const st = m.sourceFileType || m.sourceType;
+                                                                        const isYouTube = m.sourceUrl?.includes('youtube.com') || m.sourceUrl?.includes('youtu.be') || st === 'youtube' || !!m.videoId;
                                                                         const isMulti = st === 'multi';
-                                                                        const icon = st === 'youtube' || m.videoId ? '🎥' : st === 'pdf' ? '📄' : st === 'image' ? '🖼️' : st === 'website' || m.sourceUrl ? '🌐' : isMulti ? '📦' : '📝';
-                                                                        const color = st === 'youtube' || m.videoId ? 'text-red-400 bg-red-500/10 border-red-500/20 hover:bg-red-500/20' : st === 'pdf' ? 'text-orange-400 bg-orange-500/10 border-orange-500/20 hover:bg-orange-500/20' : st === 'image' ? 'text-pink-400 bg-pink-500/10 border-pink-500/20 hover:bg-pink-500/20' : st === 'website' || m.sourceUrl ? 'text-blue-400 bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/20' : isMulti ? 'text-violet-400 bg-violet-500/10 border-violet-500/20 hover:bg-violet-500/20' : 'text-zinc-400 bg-zinc-500/10 border-zinc-500/20 hover:bg-zinc-500/20';
-                                                                        const label = st === 'youtube' || m.videoId ? 'Video' : st === 'pdf' ? 'PDF' : st === 'image' ? 'Image' : st === 'website' || m.sourceUrl ? 'Web' : isMulti ? 'Multi' : 'Text';
+                                                                        const icon = isYouTube ? '🎥' : st === 'pdf' ? '📄' : st === 'image' ? '🖼️' : st === 'website' || m.sourceUrl ? '🌐' : isMulti ? '📦' : '📝';
+                                                                        const color = isYouTube ? 'text-red-400 bg-red-500/10 border-red-500/20 hover:bg-red-500/20' : st === 'pdf' ? 'text-orange-400 bg-orange-500/10 border-orange-500/20 hover:bg-orange-500/20' : st === 'image' ? 'text-pink-400 bg-pink-500/10 border-pink-500/20 hover:bg-pink-500/20' : st === 'website' || m.sourceUrl ? 'text-blue-400 bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/20' : isMulti ? 'text-violet-400 bg-violet-500/10 border-violet-500/20 hover:bg-violet-500/20' : 'text-zinc-400 bg-zinc-500/10 border-zinc-500/20 hover:bg-zinc-500/20';
+                                                                        const label = isYouTube ? 'Video' : st === 'pdf' ? 'PDF' : st === 'image' ? 'Image' : st === 'website' || m.sourceUrl ? 'Web' : isMulti ? 'Multi' : 'Text';
                                                                         return (
                                                                             <button
                                                                                 onClick={() => setSelectedSourceMap(m)}

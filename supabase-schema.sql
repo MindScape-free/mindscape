@@ -19,6 +19,7 @@ create table if not exists public.users (
   statistics jsonb default '{}'::jsonb,
   activity jsonb default '{}'::jsonb,
   unlocked_achievements text[] default '{}',
+  last_active timestamptz default now(),
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -143,6 +144,9 @@ create table if not exists public.admin_stats (
   total_users int default 0,
   total_chats int default 0,
   total_public_maps int default 0,
+  total_nodes int default 0,
+  total_nodes_active int default 0,
+  total_images int default 0,
   active_users int default 0,
   health_score int default 0,
   engagement_rate numeric default 0,

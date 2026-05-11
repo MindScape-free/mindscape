@@ -14,13 +14,11 @@ export function getSupabaseClient(): SupabaseClient {
       console.error('[Supabase] Missing configuration! Google Login and database features will not work until NEXT_PUBLIC_SUPABASE_URL is set.');
     }
     
-    // Fallback to the project URL if we can't find it in env, to prevent total failure in some contexts
-    // but still using placeholders to avoid leaking sensitive keys in source if not already there.
     const fallbackUrl = 'https://dnwsjvxitcndeqepovvo.supabase.co';
     const fallbackKey = key || 'placeholder'; 
 
     return createClient(url || fallbackUrl, key || fallbackKey, { 
-      auth: { persistSession: false } 
+      auth: { persistSession: true, autoRefreshToken: true } 
     });
   }
 
@@ -43,13 +41,13 @@ export function getSupabaseClientWithOptions(options?: { persistSession?: boolea
   if (!url || !key) {
     const fallbackUrl = 'https://dnwsjvxitcndeqepovvo.supabase.co';
     return createClient(url || fallbackUrl, key || 'placeholder', { 
-      auth: { persistSession: options?.persistSession ?? true } 
+      auth: { persistSession: true, autoRefreshToken: true } 
     });
   }
 
   clientInstance = createClient(url, key, {
     auth: {
-      persistSession: options?.persistSession ?? true,
+      persistSession: true,
       autoRefreshToken: true,
     }
   });

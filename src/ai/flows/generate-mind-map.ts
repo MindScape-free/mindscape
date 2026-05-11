@@ -10,7 +10,7 @@ const GenerateMindMapInputSchema = z.object({
   parentTopic: z.string().optional(),
   targetLang: z.string().optional(),
   persona: z.string().optional(),
-  depth: z.enum(['low', 'medium', 'deep']).default('low'),
+  depth: z.enum(['quick', 'balanced', 'detailed']).default('quick'),
   capability: z.enum(['fast', 'creative', 'reasoning', 'coding']).optional(),
   context: z.string().optional(),
 });
@@ -46,13 +46,13 @@ GLOBAL RULES:
 // Resolves contradictions before hitting the AI
 function resolvePersonaDepth(
   persona: string,
-  depth: 'low' | 'medium' | 'deep'
-): { depth: 'low' | 'medium' | 'deep'; note: string } {
+  depth: 'quick' | 'balanced' | 'detailed'
+): { depth: 'quick' | 'balanced' | 'detailed'; note: string } {
   const p = persona.toLowerCase().trim();
-  if (p === 'concise' && depth === 'deep')
-    return { depth: 'medium', note: 'Concise persona: depth capped at medium — dense but focused.' };
-  if ((p === 'sage' || p === 'cognitive sage') && depth === 'low')
-    return { depth: 'medium', note: 'Cognitive Sage: depth raised to medium for analytical richness.' };
+  if (p === 'concise' && depth === 'detailed')
+    return { depth: 'balanced', note: 'Concise persona: depth capped at balanced — dense but focused.' };
+  if ((p === 'sage' || p === 'cognitive sage') && depth === 'quick')
+    return { depth: 'balanced', note: 'Cognitive Sage: depth raised to balanced for analytical richness.' };
   return { depth, note: '' };
 }
 
@@ -69,7 +69,7 @@ function buildPersona(persona: string, note: string): string {
 export async function generateMindMap(
   input: GenerateMindMapInput & { apiKey?: string; provider?: AIProvider; searchContext?: SearchContext | null; model?: string }
 ): Promise<GenerateMindMapOutput> {
-  const { topic, parentTopic, targetLang, persona, depth: rawDepth = 'low', provider, apiKey, searchContext, model, context } = input;
+  const { topic, parentTopic, targetLang, persona, depth: rawDepth = 'quick', provider, apiKey, searchContext, model, context } = input;
 
   // #3 — Resolve persona×depth contradictions before generation
   const { depth, note: personaDepthNote } = resolvePersonaDepth(persona || 'teacher', rawDepth);
@@ -78,17 +78,17 @@ export async function generateMindMap(
   const hasContext = !!context && context.trim().length > 0;
   const isConcise = (persona || '').toLowerCase().trim() === 'concise';
   const densityMap = {
-    low: {
+    quick: {
       base:    `subTopics: 2–3 | categories per subTopic: 2 | subCategories per category: 2–3`,
       context: `subTopics: 4–5 | categories per subTopic: 3–4 | subCategories per category: 3–4`,
       concise: `subTopics: 2–3 | categories per subTopic: 2 | subCategories per category: 2`,
     },
-    medium: {
+    balanced: {
       base:    `subTopics: 3–5 | categories per subTopic: 3 | subCategories per category: 3–4`,
       context: `subTopics: 5–7 | categories per subTopic: 4–5 | subCategories per category: 4–5`,
       concise: `subTopics: 3–4 | categories per subTopic: 2–3 | subCategories per category: 2–3`,
     },
-    deep: {
+    detailed: {
       base:    `subTopics: 5–7 | categories per subTopic: 3–4 | subCategories per category: 4–6`,
       context: `subTopics: 7–9 | categories per subTopic: 4–5 | subCategories per category: 5–6`,
       concise: `subTopics: 4–5 | categories per subTopic: 3 | subCategories per category: 3–4`,

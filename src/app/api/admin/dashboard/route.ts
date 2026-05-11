@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin, isUserAdminServer } from '@/lib/supabase-server';
 import { DEFAULT_MAP_ANALYTICS } from '@/types/admin';
+import { mapUserRow } from '@/lib/map-mappers';
 
 async function verifyAdmin(request: Request): Promise<{ authorized: boolean; uid?: string; error?: string }> {
   try {
@@ -75,125 +76,112 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const since = url.searchParams.get('since') || undefined;
 
+    const { authorized, uid, error } = await verifyAdmin(request);
     const supabase = getSupabaseAdmin();
-    console.log(`📊 [DashboardAPI] Fetching stats from Supabase ${since ? ` (since ${since})` : ''}`);
+    console.log(`📊 [DashboardAPI] Fetching unified analytics`);
 
-    const [statsResult, usersResult, logsResult, feedbackResult] = await Promise.all([
-      supabase.from('admin_stats').select('*').eq('period', 'all-time').single(),
-      since 
-        ? supabase.from('users').select('*').gte('created_at', since).order('created_at', { ascending: false })
-        : supabase.from('users').select('*').order('created_at', { ascending: false }).limit(500),
-      since
-        ? supabase.from('admin_activity_log').select('*').gte('timestamp', since).order('timestamp', { ascending: false })
-        : supabase.from('admin_activity_log').select('*').order('timestamp', { ascending: false }).limit(100),
-      supabase.from('feedback').select('*').order('created_at', { ascending: false }).limit(200)
-    ]);
-
-    const data = statsResult.data || {};
+    // 1. Fetch the "Single Sheet" Analytics via RPC
+    const { data: analyticsResult, error: analyticsError } = await supabase.rpc('refresh_platform_analytics');
     
-    // Map snake_case to camelCase for the bundle
-    const bundleUsers = (usersResult.data || []).map(u => ({
-      ...u,
-      createdAt: u.created_at,
-      displayName: u.display_name,
-      photoURL: u.photo_url,
-      lastActive: u.last_active,
-      statistics: u.statistics
+    // 2. Fetch the persisted stats (Heatmap, etc.) from admin_stats
+    const { data: fallbackData } = await supabase.from('admin_stats').select('data').eq('id', 'global').single();
+    
+    // 3. Merge: Persistent data (heatmap) + Fresh data (RPC totals)
+    let analytics = {
+      ...(fallbackData?.data || {}),
+      ...(analyticsResult || {})
+    };
+    
+    // If both failed, log warning
+    if (analyticsError && !fallbackData) {
+      console.error('❌ [DashboardAPI] Both RPC and Table-read failed');
+    }
+
+    const { data: usersResult } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+    const { data: logsResult } = await supabase.from('admin_activity_log').select('*').order('timestamp', { ascending: false }).limit(50);
+    const { data: feedbackResult } = await supabase.from('feedback').select('*').order('created_at', { ascending: false }).limit(20);
+    
+    // Safe fetch for telemetry
+    const { data: aiCallsResult } = await supabase.from('ai_calls')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    // Map titles fallback logic
+    const processedAiCalls = (aiCallsResult || []).map(call => ({
+      ...call,
+      mapTitle: call.prompt || 'Neural Stream'
     }));
 
-    const bundleLogs = (logsResult.data || []).map(l => ({
+    const platform = analytics?.platform || {};
+    const mapAnalyticsSource = analytics?.map_analytics || analytics?.mapAnalytics || {};
+    const ai = analytics?.ai_performance || {};
+    const bundleUsers = (usersResult || []).map(mapUserRow);
+    const bundleLogs = (logsResult || []).map(l => ({
       ...l,
+      createdAt: l.timestamp,
       performedBy: l.performed_by,
       targetId: l.target_id,
       targetType: l.target_type,
       performedByEmail: l.performed_by_email
     }));
-
-    const bundleFeedback = (feedbackResult.data || []).map(f => ({
+    const bundleFeedback = (feedbackResult || []).map(f => ({
       ...f,
       createdAt: f.created_at,
-      updatedAt: f.updated_at,
       userId: f.user_id,
-      userName: f.user_name,
-      userEmail: f.user_email,
-      trackingId: f.tracking_id,
-      affectedArea: f.affected_area,
-      adminNotes: f.admin_notes,
-      adminActivityLogs: f.admin_activity_logs
-    }));
-
-    // Map heatmap_days to heatmapDays
-    const heatmapDays = (data.heatmap_days || []).map((day: any) => ({
-      date: day.date,
-      newUsers: day.newUsers || day.new_users || 0,
-      newMaps: day.newMaps || day.new_maps || 0,
-      newSubMaps: day.newSubMaps || day.new_sub_maps || 0,
-      activeUsers: day.activeUsers || day.active_users || 0,
-      publicMaps: day.publicMaps || day.public_maps || 0,
-      privateMaps: day.privateMaps || day.private_maps || 0,
-      totalActions: day.totalActions || day.total_actions || 0,
     }));
 
     const response = {
-      ...data,
       stats: {
-        totalUsers: data?.total_users ?? 0,
-        totalMaps: data?.total_mindmaps ?? 0,
-        totalMindmaps: data?.total_mindmaps ?? 0,
-        totalMindmapsEver: data?.total_mindmaps_ever ?? 0,
-        totalChats: data?.total_chats ?? 0,
-        totalNodes: data?.total_nodes ?? 0,
-        totalNodesActive: data?.total_nodes_active ?? 0,
-        totalImages: data?.total_images ?? 0,
-        activeUsers: data?.active_users_24h ?? data?.active_users ?? 0,
-        healthScore: data?.health_score ?? 0,
-        lastUpdated: data?.last_updated ?? null,
-        timestamp: data?.timestamp ?? null,
+        totalUsers: platform.total_users ?? 0,
+        totalMindmaps: platform.active_root_maps ?? 0,
+        totalChats: platform.total_chats ?? 0,
+        totalNodes: platform.global_nodes ?? platform.active_nodes ?? 0,
+        totalNodesActive: platform.active_nodes ?? 0,
+        totalImages: platform.total_images ?? 0,
+        activeUsers: platform.active_users ?? platform.active_users_24h ?? 0,
+        healthScore: analytics.health_score ?? 100,
+        timestamp: new Date().toISOString(),
+        lastUpdated: Date.now()
       },
       // Field mappings for frontend
-      newUsersToday: data?.new_users_today ?? 0,
-      newUsersYesterday: data?.new_users_yesterday ?? 0,
-      newMapsToday: data?.new_maps_today ?? 0,
-      newMapsYesterday: data?.new_maps_yesterday ?? 0,
-      activeUsers24h: data?.active_users_24h ?? data?.active_users ?? 0,
-      engagementRate: data?.engagement_rate ?? 0,
-      avgMapsPerUser: data?.avg_maps_per_user ?? 0,
-      avgChatsPerUser: data?.avg_chats_per_user ?? 0,
-      avgNodesPerMap: data?.avg_nodes_per_map ?? 0,
-      totalMindmapsEver: data?.total_mindmaps_ever ?? 0,
-      latestUsers: (data?.latest_users || []).map((u: any) => ({
-        ...u,
-        photoURL: u.photoURL || u.photo_url,
-        displayName: u.displayName || u.display_name,
-        createdAt: u.createdAt || u.created_at,
-        lastActive: u.lastActive || u.last_active || u.statistics?.lastActiveDate
-      })),
-      latestMaps: (data?.latest_maps || []).map((m: any) => ({
-        ...m,
-        topic: m.topic || m.title || null,
-        createdAt: m.createdAt || m.created_at,
-      })),
-      topUsers: (data?.top_users || []).map((u: any) => ({
-        ...u,
-        photoURL: u.photoURL || u.photo_url,
-        displayName: u.displayName || u.display_name,
-        createdAt: u.createdAt || u.created_at,
-        lastActive: u.lastActive || u.last_active || u.statistics?.lastActiveDate
-      })),
-      mapAnalytics: safeMapAnalytics(data?.map_analytics || data),
-      heatmapDays: heatmapDays,
+      activeUsers24h: platform.active_users ?? platform.active_users_24h ?? 0,
+      totalMindmapsEver: platform.total_mindmaps_ever ?? platform.total_maps_ever ?? 0,
+      engagementRate: analytics.engagement_rate ?? (platform.total_users > 0 ? (platform.active_users_24h / platform.total_users) * 100 : 0),
+      avgMapsPerUser: analytics.avg_maps_per_user ?? (platform.total_users > 0 ? (platform.total_maps_ever / platform.total_users) : 0),
+      avgChatsPerUser: analytics.avg_chats_per_user ?? (platform.total_users > 0 ? (platform.total_chats / platform.total_users) : 0),
+      latestUsers: bundleUsers.slice(0, 10),
+      topUsers: bundleUsers.sort((a, b) => (b.statistics?.totalMapsCreated || 0) - (a.statistics?.totalMapsCreated || 0)).slice(0, 10),
+      mapAnalytics: { 
+        ...DEFAULT_MAP_ANALYTICS, 
+        totalAnalyzed: mapAnalyticsSource.totalAnalyzed ?? mapAnalyticsSource.total_analyzed ?? platform.active_root_maps ?? 0,
+        avgNodesPerMap: (platform.active_root_maps > 0) 
+          ? (platform.global_nodes / platform.active_root_maps) 
+          : 0,
+        modeCounts: mapAnalyticsSource.modeCounts ?? mapAnalyticsSource.mode_counts ?? {},
+        sourceCounts: mapAnalyticsSource.sourceCounts ?? mapAnalyticsSource.source_counts ?? {},
+        personaCounts: mapAnalyticsSource.personaCounts ?? mapAnalyticsSource.persona_counts ?? {},
+        depthCounts: mapAnalyticsSource.depthCounts ?? mapAnalyticsSource.depth_counts ?? {},
+        subMapStats: {
+          total: mapAnalyticsSource.subMapStats?.total ?? mapAnalyticsSource.sub_map_stats?.total ?? 0,
+          parents: mapAnalyticsSource.subMapStats?.parents ?? mapAnalyticsSource.sub_map_stats?.parents ?? 0,
+          avgPerParent: mapAnalyticsSource.subMapStats?.avgPerParent ?? mapAnalyticsSource.sub_map_stats?.avg_per_parent ?? 0,
+        },
+        publicPrivate: mapAnalyticsSource.publicPrivate ?? mapAnalyticsSource.public_private ?? { public: 0, private: 0 }
+      },
+      heatmapDays: analytics?.heatmap_days || [], 
       bundle: {
         users: bundleUsers,
-        logs: bundleLogs,
-        feedback: bundleFeedback,
+        logs: bundleLogs || [],
+        feedback: bundleFeedback || [],
+        aiCalls: processedAiCalls,
         serverTime: new Date().toISOString(),
-        isIncremental: !!since,
+        isIncremental: false
       },
       meta: {
         cached: false,
-        cacheAge: null,
-        source: 'supabase',
-      },
+        source: 'rpc_single_sheet'
+      }
     };
 
     return NextResponse.json(response, {

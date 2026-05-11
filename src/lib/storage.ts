@@ -1,8 +1,8 @@
 import pako from 'pako';
 
 const STORAGE_KEY_PREFIX = 'ms_compressed_';
-const SOFT_LIMIT_MB = 4;
-const HARD_LIMIT_MB = 5;
+const SOFT_LIMIT_MB = 15;
+const HARD_LIMIT_MB = 20;
 const SOFT_LIMIT = SOFT_LIMIT_MB * 1024 * 1024;
 const HARD_LIMIT = HARD_LIMIT_MB * 1024 * 1024;
 

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/lib/auth-context';
 import { useAdminActivityLog } from '@/lib/admin-utils';
-// firebase/firestore removed
+import { mapMindMapRows } from '@/lib/map-mappers';
 import { format } from 'date-fns';
 import { formatDistanceToNow } from 'date-fns';
 import { 
@@ -127,16 +127,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
           
           if (mapsError) throw mapsError;
 
-          setUserMaps((mapsData || []).map(m => ({
-            ...m,
-            // Map snake_case to camelCase for the UI
-            createdAt: m.created_at,
-            updatedAt: m.updated_at,
-            nodeCount: m.node_count,
-            publicViews: m.public_views,
-            aiPersona: m.ai_persona,
-            shortTitle: m.short_title || m.title || m.topic
-          })));
+          setUserMaps(mapMindMapRows(mapsData || []));
         } catch (e) {
           console.error('Error fetching profile detail:', e);
         } finally {
@@ -332,23 +323,27 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.03 }}
-                className="relative overflow-hidden p-3.5 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 transition-all group"
+                className="relative overflow-hidden p-4 rounded-[1.75rem] bg-white/[0.03] border border-white/5 hover:border-white/20 transition-all group shadow-[inset_0_0_20px_rgba(255,255,255,0.02)] hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
               >
-                <div className={`absolute top-0 right-0 w-16 h-16 bg-${stat.color}-500/5 rounded-full blur-xl group-hover:bg-${stat.color}-500/10 transition-colors pointer-events-none`} />
-                <div className="relative flex flex-col gap-2.5">
+                <div className={`absolute top-0 right-0 w-20 h-20 bg-${stat.color}-500/[0.03] rounded-full blur-2xl group-hover:bg-${stat.color}-500/[0.07] transition-all duration-500 pointer-events-none`} />
+                <div className="relative flex flex-col gap-3">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={`p-1.5 rounded-lg bg-${stat.color}-500/10 border border-${stat.color}-500/20 group-hover:scale-110 transition-transform duration-500`}>
-                        <stat.icon className={`h-3.5 w-3.5 text-${stat.color}-400`} />
+                    <div className="flex items-center gap-2.5">
+                      <div className={`p-2 rounded-xl bg-${stat.color}-500/10 border border-${stat.color}-500/20 group-hover:scale-110 group-hover:bg-${stat.color}-500/20 transition-all duration-500`}>
+                        <stat.icon className={`h-4 w-4 text-${stat.color}-400`} />
                       </div>
-                      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500">{stat.label}</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-500 group-hover:text-zinc-400 transition-colors">{stat.label}</p>
                     </div>
-                    {stat.trend && <span className="text-[7px] font-black text-emerald-400 bg-emerald-500/5 px-1.5 py-0.5 rounded-md">{stat.trend}</span>}
                   </div>
-                  <div>
-                    <p className="text-2xl font-black text-white tracking-tighter leading-none">
+                  <div className="flex items-end justify-between gap-2">
+                    <p className="text-2xl font-black text-white tracking-tighter leading-none group-hover:scale-[1.02] origin-left transition-transform">
                       {stat.value}
                     </p>
+                    {stat.trend && (
+                      <span className="text-[8px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 mb-0.5">
+                        {stat.trend}
+                      </span>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -357,8 +352,8 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
 
           {/* Activity Insight */}
           {user.activity && Object.keys(user.activity).length > 0 && (
-            <div className="relative overflow-hidden rounded-3xl bg-white/5 border border-white/10 p-6 transition-all hover:border-white/20">
-              <div className="absolute top-0 right-0 w-80 h-80 bg-violet-600/5 rounded-full blur-[100px] pointer-events-none" />
+            <div className="relative overflow-hidden rounded-[2.5rem] bg-white/[0.02] border border-white/10 p-8 transition-all hover:border-white/20 hover:bg-white/[0.04] shadow-[inset_0_0_40px_rgba(255,255,255,0.01)] group/insight">
+              <div className="absolute top-0 right-0 w-96 h-96 bg-violet-600/[0.03] rounded-full blur-[120px] pointer-events-none group-hover/insight:bg-violet-600/[0.06] transition-all duration-700" />
               <div className="flex items-center justify-between mb-6 relative z-10">
                 <div className="flex items-center gap-3">
                   <div className="p-3 bg-violet-500/10 rounded-xl border border-violet-500/20">
@@ -430,8 +425,9 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
             </div>
           )}
 
-          <div className="relative overflow-hidden rounded-3xl bg-white/5 border border-white/10 p-6 transition-all hover:border-white/20">
-            <div className="absolute top-0 left-0 w-80 h-80 bg-indigo-600/5 rounded-full blur-[100px] pointer-events-none" />
+          {/* Subject Library Card */}
+          <div className="relative overflow-hidden rounded-[2.5rem] bg-white/[0.02] border border-white/10 p-8 transition-all hover:border-white/20 hover:bg-white/[0.04] shadow-[inset_0_0_40px_rgba(255,255,255,0.01)] group/library">
+            <div className="absolute top-0 left-0 w-96 h-96 bg-indigo-600/[0.03] rounded-full blur-[120px] pointer-events-none group-hover/library:bg-indigo-600/[0.06] transition-all duration-700" />
             <div className="flex items-center justify-between mb-6 relative z-10">
               <div className="flex items-center gap-3">
                 <div className="p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
@@ -503,9 +499,18 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
                               </div>
                             </td>
                             <td className="py-2.5 text-center bg-white/[0.02] border-y border-white/5 group-hover/row:bg-white/[0.05] transition-colors">
-                              <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/5 border border-white/5 text-[8px] font-black uppercase tracking-tighter text-zinc-500">
-                                {m.sourceFileType === 'youtube' ? '🎥' : m.sourceFileType === 'pdf' ? '📄' : '📝'} {m.sourceFileType || 'Text'}
-                              </div>
+                              {(() => {
+                                const st = m.sourceFileType || m.sourceType;
+                                const isYouTube = m.sourceUrl?.includes('youtube.com') || m.sourceUrl?.includes('youtu.be') || st === 'youtube' || !!m.videoId;
+                                const icon = isYouTube ? '🎥' : st === 'pdf' ? '📄' : st === 'image' ? '🖼️' : st === 'website' || m.sourceUrl ? '🌐' : st === 'multi' ? '📦' : '📝';
+                                const label = isYouTube ? 'Video' : st === 'pdf' ? 'PDF' : st === 'image' ? 'Image' : st === 'website' || m.sourceUrl ? 'Web' : st === 'multi' ? 'Multi' : 'Text';
+                                return (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/5 border border-white/5 text-[8px] font-black uppercase tracking-tighter text-zinc-400">
+                                    <span>{icon}</span>
+                                    <span>{label}</span>
+                                  </div>
+                                );
+                              })()}
                             </td>
                             <td className="py-2.5 text-right pr-4 bg-white/[0.02] rounded-r-2xl border-y border-r border-white/5 group-hover/row:bg-white/[0.05] transition-colors">
                               <motion.button 
@@ -535,9 +540,9 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
             )}
           </div>
 
-          {/* Map Analytics */}
+          {/* Map Analytics Card */}
           {userMaps.length > 0 && (
-            <div className="space-y-6 border border-violet-500/30 rounded-2xl p-6 bg-violet-500/5">
+            <div className="space-y-6 border border-violet-500/20 rounded-[2.5rem] p-8 bg-violet-500/[0.02] hover:bg-violet-500/[0.04] hover:border-violet-500/40 transition-all shadow-[inset_0_0_40px_rgba(139,92,246,0.02)] group/analytics">
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-3">
                   <div className="p-3 bg-gradient-to-br from-violet-500/20 to-indigo-500/20 rounded-2xl border border-violet-500/30 shadow-lg shadow-violet-500/10">
@@ -577,7 +582,11 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
                   </div>
                 </div>
               </div>
-              <UserMapAnalytics userMaps={userMaps} />
+              {analyticsView === 'current' ? (
+                <UserMapAnalytics userMaps={userMaps} />
+              ) : (
+                <AllTimeAnalytics stats={stats} />
+              )}
             </div>
           )}
         </div>
@@ -635,7 +644,7 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
   const modeCounts = { single: 0, compare: 0, multi: 0 };
   const depthCounts = { low: 0, medium: 0, deep: 0, unspecified: 0 };
   const sourceCounts: Record<string, number> = {
-    'text': 0, 'pdf': 0, 'youtube': 0, 'web': 0, 'unknown': 0
+    'text': 0, 'pdf': 0, 'youtube': 0, 'website': 0, 'unknown': 0
   };
   const publicPrivate = { public: 0, private: 0 };
   const personaCounts: Record<string, number> = {
@@ -658,9 +667,9 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
       resolvedDepth = (m.nodeCount || 0) > 75 ? 'deep' : (m.nodeCount || 0) > 35 ? 'medium' : 'low';
     }
 
-    if (resolvedDepth === 'low') depthCounts.low++;
-    else if (resolvedDepth === 'medium') depthCounts.medium++;
-    else if (resolvedDepth === 'deep') depthCounts.deep++;
+    if (resolvedDepth === 'low' || resolvedDepth === 'quick') depthCounts.low++;
+    else if (resolvedDepth === 'medium' || resolvedDepth === 'balanced') depthCounts.medium++;
+    else if (resolvedDepth === 'deep' || resolvedDepth === 'detailed') depthCounts.deep++;
     else depthCounts.low++;
 
     // Source Type detection
@@ -670,7 +679,8 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
     } else {
       sourceType = sourceType || (m.sourceUrl ? 'website' : m.videoId ? 'youtube' : 'text');
     }
-    sourceCounts[sourceType] = (sourceCounts[sourceType] || 0) + 1;
+    const finalSourceType = sourceType === 'web' ? 'website' : sourceType;
+    sourceCounts[finalSourceType] = (sourceCounts[finalSourceType] || 0) + 1;
 
     // Persona
     const rawPersona = m.aiPersona;
@@ -722,14 +732,14 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
               ] as const).map(({ key, label, value, color, icon: Icon }) => {
                 const percentage = Math.round((value / total) * 100);
                 return (
-                  <div key={key} className="rounded-2xl bg-white/[0.03] border border-white/5 p-5 transition-all hover:bg-white/[0.06] group/item">
+                  <div key={key} className="rounded-[1.5rem] bg-white/[0.03] border border-white/5 p-5 transition-all hover:bg-white/[0.06] hover:border-white/20 group/item shadow-[inset_0_0_20px_rgba(255,255,255,0.01)] hover:shadow-[0_10px_25px_rgba(0,0,0,0.3)]">
                     <div className="flex items-center gap-2 mb-3">
                       <Icon className={`h-4 w-4 text-${color}-400`} />
-                      <span className="text-[10px] font-black uppercase tracking-tighter text-zinc-500">{label}</span>
+                      <span className="text-[10px] font-black uppercase tracking-tighter text-zinc-500 group-hover/item:text-zinc-400 transition-colors">{label}</span>
                     </div>
                     <div className="flex items-end justify-between">
-                      <p className="text-3xl font-black text-white tracking-tighter">{value}</p>
-                      <span className={`text-[10px] font-black text-${color}-400`}>{percentage}%</span>
+                      <p className="text-3xl font-black text-white tracking-tighter group-hover/item:scale-105 origin-left transition-transform">{value}</p>
+                      <span className={`text-[10px] font-black text-${color}-400 bg-${color}-500/10 px-1.5 py-0.5 rounded-lg border border-${color}-500/20`}>{percentage}%</span>
                     </div>
                   </div>
                 );
@@ -756,16 +766,16 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
               ] as const).map(({ key, label, value, color, icon: Icon }) => {
                 const percentage = Math.round((value / total) * 100);
                 return (
-                  <div key={key} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10`}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className={`p-1.5 bg-${color}-500/10 rounded-lg`}>
-                        <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
+                  <div key={key} className={`rounded-[1.5rem] bg-${color}-500/5 border border-${color}-500/15 p-5 transition-all hover:bg-${color}-500/10 hover:border-${color}-500/30 group/depth shadow-[inset_0_0_20px_rgba(255,255,255,0.01)]`}>
+                    <div className="flex items-center gap-2.5 mb-3">
+                      <div className={`p-2 bg-${color}-500/10 rounded-xl border border-${color}-500/20 group-hover/depth:scale-110 transition-transform duration-500`}>
+                        <Icon className={`h-4 w-4 text-${color}-400`} />
                       </div>
-                      <span className="text-[8px] font-bold uppercase tracking-wider text-${color}-400/70">{label}</span>
+                      <span className={`text-[10px] font-black uppercase tracking-widest text-${color}-400/70`}>{label}</span>
                     </div>
                     <div className="flex items-end justify-between">
-                      <p className="text-2xl font-black text-white tracking-tight">{value}</p>
-                      <span className={`px-1.5 py-0.5 rounded-lg bg-${color}-500/10 text-[9px] font-black text-${color}-400`}>{percentage}%</span>
+                      <p className="text-3xl font-black text-white tracking-tighter group-hover/depth:scale-105 origin-left transition-transform">{value}</p>
+                      <span className={`px-2 py-0.5 rounded-lg bg-${color}-500/10 text-[10px] font-black text-${color}-400 border border-${color}-500/20`}>{percentage}%</span>
                     </div>
                   </div>
                 );
@@ -800,16 +810,16 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
               const count = sourceCounts[type] || 0;
               const percentage = Math.round((count / total) * 100);
               return (
-                <div key={type} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10 ${count === 0 ? 'opacity-20' : ''}`}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className={`p-1.5 bg-${color}-500/10 rounded-lg`}>
-                      <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
+                <div key={type} className={`rounded-[1.25rem] bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10 hover:border-${color}-500/30 group/source shadow-[inset_0_0_15px_rgba(255,255,255,0.01)] ${count === 0 ? 'opacity-20' : ''}`}>
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <div className={`p-2 bg-${color}-500/10 rounded-xl border border-${color}-500/20 group-hover/source:scale-110 transition-transform duration-500`}>
+                      <Icon className={`h-4 w-4 text-${color}-400`} />
                     </div>
-                    <span className="text-[8px] font-bold uppercase tracking-wider text-${color}-400/70">{label}</span>
+                    <span className={`text-[9px] font-black uppercase tracking-wider text-${color}-400/70 group-hover/source:text-${color}-400 transition-colors`}>{label}</span>
                   </div>
                   <div className="flex items-end justify-between">
-                    <p className="text-2xl font-black text-white tracking-tight">{count}</p>
-                    <span className={`px-1.5 py-0.5 rounded-lg bg-${color}-500/10 text-[9px] font-bold text-${color}-400`}>{percentage}%</span>
+                    <p className="text-2xl font-black text-white tracking-tighter group-hover/source:scale-105 origin-left transition-transform">{count}</p>
+                    <span className={`px-1.5 py-0.5 rounded-lg bg-${color}-500/10 text-[10px] font-black text-${color}-400 border border-${color}-500/20`}>{percentage}%</span>
                   </div>
                 </div>
               );
@@ -821,29 +831,29 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
       {/* Row 3: Sub-Maps & Public vs Private */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Sub-Maps Stats */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-6">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/5 rounded-full blur-3xl" />
+        <div className="relative overflow-hidden rounded-[2.5rem] bg-white/[0.02] border border-white/10 p-8 transition-all hover:border-white/20 hover:bg-white/[0.04] shadow-[inset_0_0_40px_rgba(255,255,255,0.01)] group/submaps">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/[0.03] rounded-full blur-[80px] pointer-events-none group-hover/submaps:bg-emerald-500/[0.06] transition-all duration-700" />
           <div className="relative">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 bg-green-500/10 rounded-xl border border-green-500/20">
-                <Layers className="h-4 w-4 text-green-400" />
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                <Layers className="h-5 w-5 text-emerald-400" />
               </div>
-              <p className="text-sm font-bold text-white">Sub-Maps Statistics</p>
+              <h3 className="text-lg font-black text-white tracking-tight uppercase tracking-[0.1em]">Hierarchy Stats</h3>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-4">
               {[
                 { label: 'Sub-Maps', value: totalSubMaps, color: 'violet' as const, icon: Layers },
                 { label: 'Parents', value: parentMapIds.size, color: 'indigo' as const, icon: MapIcon },
                 { label: 'Avg/Parent', value: parentMapIds.size > 0 ? (totalSubMaps / parentMapIds.size).toFixed(1) : '0', color: 'blue' as const, icon: TrendingUp },
               ].map(({ label, value, color, icon: Icon }) => (
-                <div key={label} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10`}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className={`p-1.5 bg-${color}-500/10 rounded-lg`}>
+                <div key={label} className={`rounded-[1.25rem] bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10 hover:border-${color}-500/30 group/item shadow-[inset_0_0_15px_rgba(255,255,255,0.01)]`}>
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <div className={`p-1.5 bg-${color}-500/10 rounded-lg group-hover/item:scale-110 transition-transform`}>
                       <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
                     </div>
-                    <span className="text-[8px] font-bold uppercase tracking-wider text-${color}-400/70">{label}</span>
+                    <span className={`text-[8px] font-black uppercase tracking-wider text-${color}-400/70`}>{label}</span>
                   </div>
-                  <p className="text-2xl font-black text-white tracking-tight">{value}</p>
+                  <p className="text-2xl font-black text-white tracking-tighter group-hover/item:translate-x-1 transition-transform">{value}</p>
                 </div>
               ))}
             </div>
@@ -851,29 +861,29 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
         </div>
 
         {/* Public vs Private */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-6">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500/5 rounded-full blur-3xl" />
+        <div className="relative overflow-hidden rounded-[2.5rem] bg-white/[0.02] border border-white/10 p-8 transition-all hover:border-white/20 hover:bg-white/[0.04] shadow-[inset_0_0_40px_rgba(255,255,255,0.01)] group/visibility">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/[0.03] rounded-full blur-[80px] pointer-events-none group-hover/visibility:bg-amber-500/[0.06] transition-all duration-700" />
           <div className="relative">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 bg-yellow-500/10 rounded-xl border border-yellow-500/20">
-                <Globe className="h-4 w-4 text-yellow-400" />
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                <Globe className="h-5 w-5 text-amber-400" />
               </div>
-              <p className="text-sm font-bold text-white">Public vs Private</p>
+              <h3 className="text-lg font-black text-white tracking-tight uppercase tracking-[0.1em]">Visibility Spectrum</h3>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-4">
               {[
                 { label: 'Public', value: publicPrivate.public, color: 'emerald' as const, icon: Unlock },
                 { label: 'Private', value: publicPrivate.private, color: 'yellow' as const, icon: Lock },
-                { label: 'Public Rate', value: total > 0 ? Math.round((publicPrivate.public / total) * 100) : 0, color: 'orange' as const, icon: TrendingUp, isPercent: true },
+                { label: 'Rate', value: total > 0 ? Math.round((publicPrivate.public / total) * 100) : 0, color: 'orange' as const, icon: TrendingUp, isPercent: true },
               ].map(({ label, value, color, icon: Icon, isPercent }) => (
-                <div key={label} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10`}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className={`p-1.5 bg-${color}-500/10 rounded-lg`}>
+                <div key={label} className={`rounded-[1.25rem] bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10 hover:border-${color}-500/30 group/item shadow-[inset_0_0_15px_rgba(255,255,255,0.01)]`}>
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <div className={`p-1.5 bg-${color}-500/10 rounded-lg group-hover/item:scale-110 transition-transform`}>
                       <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
                     </div>
-                    <span className="text-[8px] font-bold uppercase tracking-wider text-${color}-400/70">{label}</span>
+                    <span className={`text-[8px] font-black uppercase tracking-wider text-${color}-400/70`}>{label}</span>
                   </div>
-                  <p className="text-2xl font-black text-white tracking-tight">{isPercent ? `${value}%` : value}</p>
+                  <p className="text-2xl font-black text-white tracking-tighter group-hover/item:translate-x-1 transition-transform">{isPercent ? `${value}%` : value}</p>
                 </div>
               ))}
             </div>
@@ -882,16 +892,16 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
       </div>
 
       {/* Row 4: Persona */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-6">
-        <div className="absolute top-0 right-0 w-40 h-40 bg-violet-500/5 rounded-full blur-3xl" />
+      <div className="relative overflow-hidden rounded-[2.5rem] bg-white/[0.02] border border-white/10 p-8 transition-all hover:border-white/20 hover:bg-white/[0.04] shadow-[inset_0_0_40px_rgba(255,255,255,0.01)] group/persona">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-violet-500/[0.03] rounded-full blur-[100px] pointer-events-none group-hover/persona:bg-violet-500/[0.06] transition-all duration-700" />
         <div className="relative">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-violet-500/10 rounded-xl border border-violet-500/20">
-              <Brain className="h-4 w-4 text-violet-400" />
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-3 bg-violet-500/10 rounded-xl border border-violet-500/20">
+              <Brain className="h-5 w-5 text-violet-400" />
             </div>
-            <p className="text-sm font-bold text-white">Maps by Persona</p>
+            <h3 className="text-lg font-black text-white tracking-tight uppercase tracking-[0.1em]">AI Persona Distribution</h3>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {( [
               { key: 'Teacher', label: 'Teacher', color: 'violet', icon: UserRound },
               { key: 'Concise', label: 'Concise', color: 'indigo', icon: Zap },
@@ -901,16 +911,16 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
               const count = personaCounts[key] || 0;
               const percentage = Math.round((count / total) * 100);
               return (
-                <div key={key} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10`}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className={`p-1.5 bg-${color}-500/10 rounded-lg`}>
-                      <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
+                <div key={key} className={`rounded-[1.25rem] bg-${color}-500/5 border border-${color}-500/15 p-5 transition-all hover:bg-${color}-500/10 hover:border-${color}-500/30 group/item shadow-[inset_0_0_15px_rgba(255,255,255,0.01)]`}>
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <div className={`p-2 bg-${color}-500/10 rounded-xl border border-${color}-500/20 group-hover/item:scale-110 transition-transform duration-500`}>
+                      <Icon className={`h-4 w-4 text-${color}-400`} />
                     </div>
-                    <span className="text-[8px] font-bold uppercase tracking-wider text-${color}-400/70">{label}</span>
+                    <span className={`text-[10px] font-black uppercase tracking-widest text-${color}-400/70`}>{label}</span>
                   </div>
                   <div className="flex items-end justify-between">
-                    <p className="text-2xl font-black text-white tracking-tight">{count}</p>
-                    <span className={`px-1.5 py-0.5 rounded-lg bg-${color}-500/10 text-[9px] font-bold text-${color}-400`}>{percentage}%</span>
+                    <p className="text-3xl font-black text-white tracking-tighter group-hover/item:translate-x-1 transition-transform">{count}</p>
+                    <span className={`px-2 py-0.5 rounded-lg bg-${color}-500/10 text-[10px] font-black text-${color}-400 border border-${color}-500/20`}>{percentage}%</span>
                   </div>
                 </div>
               );

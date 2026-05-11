@@ -41,6 +41,12 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
 
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '50mb',
+    },
+  },
+
   async headers() {
     return [
       {
