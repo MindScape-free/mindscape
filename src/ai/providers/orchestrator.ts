@@ -35,7 +35,7 @@ async function retryWithProvider<T>(
       const msg = err.message || '';
 
       // Non-retryable errors
-      if (msg.includes('Authentication failed') || msg.includes('invalid')) {
+      if (msg.includes('Authentication failed') || msg.includes('invalid') || msg.includes('InsufficientBalance')) {
         throw err;
       }
 
@@ -320,8 +320,8 @@ export async function orchestrate(
       return await executeProvider(provider);
     } catch (err: any) {
       const errMsg = err.message || String(err);
-      // Auth errors for primary → don't failover (user's key is bad)
-      if (errMsg.includes('Authentication failed') && provider === providers[0]) {
+      // Auth/balance errors for primary → don't failover (user's key is bad)
+      if ((errMsg.includes('Authentication failed') || errMsg.includes('InsufficientBalance')) && provider === providers[0]) {
         throw err;
       }
       // Continue to next provider

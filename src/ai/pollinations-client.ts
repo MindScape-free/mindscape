@@ -245,6 +245,11 @@ CRITICAL SAFETY & OUTPUT RULES:
             console.error(`❌ Pollinations API Error [${status}]: ${errorMessage}`);
 
             // Error handling (Auth, 400, 5xx)
+            if (status === 402) {
+                console.error(`❌ Pollinations Insufficient Balance (402). Top up at pollinations.ai.`);
+                throw new Error(`InsufficientBalance: Your Pollinations API key has run out of pollen. Please top up your balance at pollinations.ai or use a different key.`);
+            }
+
             if (status === 401 || status === 403) {
                 console.error(`❌ Pollinations Auth Failed (${status}). Ensure your API key is correct and has balance.`);
                 throw new Error(`Authentication failed: Your API key is invalid or has no balance. Please check your settings.`);
