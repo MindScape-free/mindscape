@@ -29,24 +29,34 @@ interface ModelDef {
 
 const AVAILABLE_MODELS: ModelDef[] = [
   // Fast & Search
-  { id: 'gemini-fast', feature: 'fast', description: 'Google Gemini 2.5 Flash Lite', context: 32000, isFree: true },
-  { id: 'perplexity-fast', feature: 'fast', description: 'Perplexity Sonar', context: 32000, isFree: true },
-  { id: 'gemini-search', feature: 'fast', description: 'Google Gemini 2.5 Flash Lite + Search', context: 32000, isFree: true },
-  { id: 'openai-fast', feature: 'fast', description: 'OpenAI GPT-5 Nano', context: 128000, isFree: true },
+  { id: 'gemini-fast', feature: 'fast', description: 'Gemini Flash Lite 3.1', context: 32000, isFree: true },
+  { id: 'openai-fast', feature: 'fast', description: 'GPT-5 Nano', context: 128000, isFree: true },
   { id: 'nova-fast', feature: 'fast', description: 'Amazon Nova Micro', context: 32000, isFree: true },
-  { id: 'step-3.5-flash', feature: 'fast', description: 'Step 3.5 Flash', context: 12800, isFree: true },
+  { id: 'step-flash', feature: 'fast', description: 'Step Flash', context: 32000, isFree: true },
+  { id: 'step-3.5-flash', feature: 'fast', description: 'Step 3.5 Flash', context: 32000, isFree: true },
+  { id: 'gemini-search-fast', feature: 'fast', description: 'Gemini Flash Lite + Search', context: 32000, isFree: true },
   // Creative
-  { id: 'openai', feature: 'creative', description: 'OpenAI GPT-5 Mini', context: 128000, isFree: true },
-  { id: 'claude-fast', feature: 'creative', description: 'Anthropic Claude Haiku 4.5', context: 128000, isFree: true },
+  { id: 'openai', feature: 'creative', description: 'GPT-5 Mini', context: 128000, isFree: true },
+  { id: 'claude-fast', feature: 'creative', description: 'Claude Haiku 4.5', context: 128000, isFree: true },
+  { id: 'claude', feature: 'creative', description: 'Claude Sonnet 4.5', context: 200000, isFree: true },
   { id: 'minimax', feature: 'creative', description: 'MiniMax M2.5', context: 32000, isFree: true },
-  { id: 'claude-airforce', feature: 'creative', description: 'Claude Sonnet 4.6', context: 250000, isFree: true },
+  { id: 'minimax-m3', feature: 'creative', description: 'MiniMax M3', context: 32000, isFree: true },
+  { id: 'grok', feature: 'creative', description: 'Grok 3 Mini', context: 128000, isFree: true },
+  { id: 'llama', feature: 'creative', description: 'Llama 4 Maverick', context: 128000, isFree: true },
+  { id: 'gemini', feature: 'creative', description: 'Gemini 2.5 Flash', context: 32000, isFree: true },
   // Reasoning
-  { id: 'deepseek', feature: 'reasoning', description: 'DeepSeek V3.2', context: 64000, isFree: true },
-  { id: 'kimi', feature: 'reasoning', description: 'Moonshot Kimi K2.5', context: 256000, isFree: true },
+  { id: 'deepseek', feature: 'reasoning', description: 'DeepSeek V3', context: 64000, isFree: true },
+  { id: 'deepseek-pro', feature: 'reasoning', description: 'DeepSeek R2', context: 64000, isFree: true },
+  { id: 'kimi', feature: 'reasoning', description: 'Kimi K2', context: 256000, isFree: true },
+  { id: 'kimi-k2.6', feature: 'reasoning', description: 'Kimi K2.6', context: 256000, isFree: true },
   { id: 'perplexity-reasoning', feature: 'reasoning', description: 'Perplexity Sonar Reasoning', context: 32000, isFree: true },
+  { id: 'perplexity', feature: 'reasoning', description: 'Perplexity Sonar Pro', context: 32000, isFree: true },
+  { id: 'gemini-search', feature: 'reasoning', description: 'Gemini 2.5 Flash + Search', context: 32000, isFree: true },
   // Coding
-  { id: 'mistral', feature: 'coding', description: 'Mistral Small 3.2 24B', context: 32000, isFree: true },
   { id: 'qwen-coder', feature: 'coding', description: 'Qwen3 Coder 30B', context: 32000, isFree: true },
+  { id: 'qwen-coder-large', feature: 'coding', description: 'Qwen3 Coder 235B', context: 32000, isFree: true },
+  { id: 'mistral', feature: 'coding', description: 'Mistral Small 3.2', context: 32000, isFree: true },
+  { id: 'mistral-large', feature: 'coding', description: 'Mistral Large 3.2', context: 128000, isFree: true },
   { id: 'qwen-safety', feature: 'coding', description: 'Qwen3Guard 8B', context: 125000, isFree: true },
 ];
 
@@ -284,8 +294,9 @@ export class PollinationsAdapter implements IAIProvider {
     // Token limits
     if (targetModelDef && targetModelDef.context >= 16000) {
       if (model?.includes('deepseek')) body.max_tokens = 8192;
-      else if (['qwen-coder', 'gemini-fast', 'gemini-search'].includes(model)) body.max_tokens = 16000;
-      else if (['openai', 'openai-fast'].includes(model)) body.max_tokens = 12000;
+      else if (['qwen-coder', 'qwen-coder-large', 'gemini-fast', 'gemini-search', 'gemini-search-fast'].includes(model)) body.max_tokens = 16000;
+      else if (['openai', 'openai-fast', 'claude', 'claude-fast', 'mistral-large'].includes(model)) body.max_tokens = 12000;
+      else if (['kimi', 'kimi-k2.6'].includes(model)) body.max_tokens = 16000;
       else body.max_tokens = 8192;
     } else {
       body.max_tokens = 8192;
@@ -375,6 +386,10 @@ export class PollinationsAdapter implements IAIProvider {
     }
 
     console.error(`❌ Pollinations API Error [${status}]: ${errorMessage}`);
+
+    if (status === 402) {
+      throw new Error(`InsufficientBalance: Your Pollinations API key has run out of pollen. Please top up at pollinations.ai or use a different key.`);
+    }
 
     if (status === 401 || status === 403) {
       throw new Error('Authentication failed: Your API key is invalid or has no balance.');

@@ -81,8 +81,8 @@ export class OpenAICompatibleAdapter implements IAIProvider {
 
   async generate(request: AIRequest): Promise<AIResponse> {
     const startTime = Date.now();
-    const model = request.model || this.defaultModel;
-    const apiKey = request.apiKey || this.apiKey;
+    const model = this.defaultModel;
+    const apiKey = this.apiKey;
 
     if (!apiKey || apiKey.trim() === '') {
       throw new Error(`${this.name}: No API key configured`);
@@ -121,8 +121,8 @@ export class OpenAICompatibleAdapter implements IAIProvider {
 
   async generateStream(request: AIRequest, onChunk: AIStreamCallback): Promise<AIResponse> {
     const startTime = Date.now();
-    const model = request.model || this.defaultModel;
-    const apiKey = request.apiKey || this.apiKey;
+    const model = this.defaultModel;
+    const apiKey = this.apiKey;
 
     if (!apiKey) throw new Error(`${this.name}: No API key for streaming`);
 

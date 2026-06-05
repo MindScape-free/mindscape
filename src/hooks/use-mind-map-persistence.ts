@@ -179,7 +179,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
                 prompt: finalPrompt, 
-                model: 'flux', 
+                model: 'nanobanana-2', 
                 width: 512, 
                 height: 288, 
                 userId: user.id, 

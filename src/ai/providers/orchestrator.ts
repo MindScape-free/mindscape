@@ -197,6 +197,11 @@ export async function orchestrate(
     const forced = registry.get(options.providerOverride);
     if (!forced) throw new Error(`Provider "${options.providerOverride}" not registered`);
     providers = [forced];
+    // When multi-provider is enabled, append other providers as fallbacks
+    if (config.multiProviderEnabled) {
+      const fallbacks = registry.getOrdered().filter(p => p.name !== options.providerOverride);
+      providers.push(...fallbacks);
+    }
   } else if (options.taskType && config.pipelineOverrides[options.taskType]) {
     providers = registry.getForTask(options.taskType, config);
   } else if (request.capability) {
@@ -320,8 +325,8 @@ export async function orchestrate(
       return await executeProvider(provider);
     } catch (err: any) {
       const errMsg = err.message || String(err);
-      // Auth/balance errors for primary → don't failover (user's key is bad)
-      if ((errMsg.includes('Authentication failed') || errMsg.includes('InsufficientBalance')) && provider === providers[0]) {
+      // Auth/balance errors for primary → only bail if no other providers exist
+      if ((errMsg.includes('Authentication failed') || errMsg.includes('InsufficientBalance')) && providers.length === 1) {
         throw err;
       }
       // Continue to next provider

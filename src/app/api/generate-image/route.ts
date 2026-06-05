@@ -4,11 +4,16 @@ export const maxDuration = 60; // 60s timeout for serverless environments
 
 // Hardcoded Fallback Models (Verified Stable)
 const FALLBACK_MODELS = {
-  'flux': { cost: 0.001, quality: 'high', description: 'Flux Schnell - Fast high-quality image generation', paid_only: false },
+  'flux': { cost: 0.001, quality: 'high', description: 'Flux Schnell - Fast high-quality', paid_only: false },
   'zimage': { cost: 0.002, quality: 'high', description: 'Z-Image Turbo - Fast 6B Flux with 2x upscaling', paid_only: false },
-  'klein': { cost: 0.01, quality: 'high', description: 'FLUX.2 Klein 4B - Compact high-quality model', paid_only: false },
-  'gptimage': { cost: 0.0105, quality: 'high', description: 'GPT Image 1 Mini - OpenAI lightweight gen', paid_only: false },
-  'qwen-image': { cost: 0.03, quality: 'high', description: 'Qwen Image Plus - Alibaba High-fidelity', paid_only: false },
+  'klein': { cost: 0.01, quality: 'high', description: 'FLUX.2 Klein 4B - Compact high-quality', paid_only: false },
+  'gptimage': { cost: 0.0105, quality: 'high', description: 'GPT Image 1 Mini', paid_only: false },
+  'qwen-image': { cost: 0.03, quality: 'high', description: 'Qwen Image Plus - High-fidelity', paid_only: false },
+  'nanobanana': { cost: 0.001, quality: 'rapid', description: 'NanoBanana - Ultra-fast generation', paid_only: false },
+  'nanobanana-2': { cost: 0.001, quality: 'rapid', description: 'NanoBanana 2 - Ultra-fast generation', paid_only: false },
+  'seedream': { cost: 0.005, quality: 'high', description: 'SeeDream - High quality image gen', paid_only: false },
+  'wan-image': { cost: 0.005, quality: 'high', description: 'Wan Image - Multi-style generation', paid_only: false },
+  'kontext': { cost: 0.02, quality: 'ultra', description: 'Kontext - Context-aware image editing', paid_only: false },
 } as const;
 
 // In-memory cache for dynamic models
@@ -29,7 +34,7 @@ async function getDynamicModels() {
 
   console.log("🌐 [DynamicModels] Fetching from Pollinations...");
   try {
-    const response = await fetch('https://image.pollinations.ai/models', { next: { revalidate: 3600 } });
+    const response = await fetch('https://gen.pollinations.ai/image/models', { next: { revalidate: 3600 } });
     if (!response.ok) throw new Error(`Pollinations Status: ${response.status}`);
     
     const rawModels = await response.json();
@@ -204,7 +209,7 @@ function applyStyleToPrompt(prompt: string, style?: string, composition?: string
 /**
  * Model registry for rotation
  */
-const DEFAULT_ROTATION = ['qwen-image', 'flux', 'zimage', 'klein', 'gptimage'];
+const DEFAULT_ROTATION = ['nanobanana-2', 'zimage', 'wan-image', 'klein', 'flux', 'seedream', 'gptimage'];
 
 
 /**
@@ -248,22 +253,23 @@ export async function POST(req: Request) {
     // Map legacy or incorrect model names to current valid models
     let model = requestedModel;
     const modelMapping: Record<string, string> = {
-      // Old deprecated models
       'flux-realism': 'flux',
       'flux-cablyai': 'flux',
       'flux-anime': 'flux',
       'flux-3d': 'flux',
       'any-dark': 'flux',
       'flux-pro': 'flux',
-      'turbo': 'flux',
+      'turbo': 'zimage',
       'flux-2-dev': 'flux',
       'klein-large': 'klein',
-      'klein': 'klein',
       'dirtberry': 'flux',
       'dirtberry-pro': 'flux',
-      'zimage': 'zimage',
-      'imagen-4': 'flux',
-      'grok-imagine': 'grok-imagine',
+      'imagen-4': 'seedream',
+      'grok-imagine': 'flux',
+      'nanobanana-pro': 'nanobanana-2',
+      'seedream5': 'seedream',
+      'seedream-pro': 'seedream',
+      'wan-image-pro': 'wan-image',
     };
     if (modelMapping[model]) model = modelMapping[model];
 
@@ -315,7 +321,7 @@ export async function POST(req: Request) {
         console.log(`🎨 Attempt ${attempt + 1}/${maxRetries}: Generating image with model: ${currentModel}`);
 
         // Build Pollinations API URL
-        const baseUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}`;
+        const baseUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(enhancedPrompt)}`;
         const params = new URLSearchParams({
           model: currentModel,
           width: safeWidth.toString(),
@@ -333,15 +339,16 @@ export async function POST(req: Request) {
             'Authorization': `Bearer ${apiKey}`,
             'Accept': 'image/jpeg, image/png'
           },
-          signal: AbortSignal.timeout(60000) 
+          signal: AbortSignal.timeout(60000)
         });
 
         if (!response.ok) {
           const errorText = await response.text();
           const isModeration = errorText.includes('moderation_blocked') || errorText.includes('safety system');
           const is429 = response.status === 429;
-          const isRetryable = response.status >= 500 || is429 || response.status === 530;
-          const isRotationCandidate = isRetryable || isModeration || response.status === 401 || response.status === 403;
+          const is402QueueFull = response.status === 402 && errorText.includes('Queue full');
+          const isRetryable = response.status >= 500 || is429 || response.status === 530 || is402QueueFull;
+          const isRotationCandidate = isRetryable || isModeration || response.status === 401 || response.status === 403 || is402QueueFull;
 
           console.error(`❌ Pollinations API error [Model: ${currentModel}]: ${response.status} - ${errorText.substring(0, 100)}...`);
 
@@ -353,8 +360,8 @@ export async function POST(req: Request) {
             }
 
             // Exponential backoff with jitter
-            const baseDelay = is429 ? 3000 : 1000;
-            const delay = (baseDelay * Math.pow(2, attempt)) + (Math.random() * 1000);
+            const baseDelay = is429 ? 3000 : is402QueueFull ? 500 : 1000;
+            const delay = (baseDelay * Math.pow(2, attempt)) + (Math.random() * 500);
             console.log(`⏳ Waiting ${Math.round(delay)}ms before retry...`);
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
