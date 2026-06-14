@@ -33,10 +33,11 @@ import {
   Brain,
   RefreshCw,
   Signal,
+  ShieldAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { format, formatDistanceToNow, isSameMonth, differenceInMinutes } from 'date-fns';
 import { AdminStats, toDate } from '@/types/chat';

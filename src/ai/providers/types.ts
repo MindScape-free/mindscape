@@ -31,7 +31,7 @@ export interface AIRequest {
 export interface AIResponse {
   content: any;                          // Parsed object or string
   raw: string;                           // Raw text before parsing
-  provider: string;                      // e.g. 'pollinations', 'openrouter'
+  provider: string;                      // e.g. 'pollinations'
   model: string;                         // Actual model used
   latencyMs: number;
   usage?: {

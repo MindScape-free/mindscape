@@ -14,18 +14,6 @@ function formatPollenCount(cost: number): string {
     return Math.round(imagesPerPollen).toString();
 }
 
-export const FALLBACK_MODELS = [
-    {
-        value: 'flux',
-        label: 'Flux Schnell',
-        cost: 0.001,
-        icon: Zap,
-        description: 'Flux Schnell - High Quality & Rapid Speed (Instant)',
-        isNew: false,
-        pollenApprox: '1K'
-    }
-] as const;
-
 export type ModelItem = {
     value: string;
     label: string;

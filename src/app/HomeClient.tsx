@@ -574,7 +574,7 @@ export default function Home() {
     trackGenerationStart(genId, {
       sourceType: (f1 || f2) ? 'image' : 'text', // simplified for tracking
       mode: 'compare',
-      depth: 'balanced',
+      depth: 'medium',
       persona,
       userId: user?.uid
     });
@@ -602,7 +602,7 @@ export default function Home() {
     trackGenerationStart(sessionId, {
       sourceType: 'multi',
       mode: 'multi',
-      depth: 'detailed',
+      depth: 'deep',
       persona,
       userId: user?.uid
     });

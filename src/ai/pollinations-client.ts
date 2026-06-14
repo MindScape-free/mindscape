@@ -60,7 +60,7 @@ const AVAILABLE_MODELS: ModelDef[] = [
 
 /**
  * Selects the best available model based on requested capability.
- * Handles fallbacks based on attempt count.
+ * Selects the best available model based on requested capability.
  */
 function selectModel(capability: ModelCapability = 'creative', attempt: number = 0): string {
     // 1. Filter models matching capability and are free
@@ -71,10 +71,7 @@ function selectModel(capability: ModelCapability = 'creative', attempt: number =
         return validModels[attempt].id;
     }
 
-    // 3. Fallback: Rotate through ALL free models
-    const allFreeModels = AVAILABLE_MODELS.filter(m => m.isFree === true);
-    if (allFreeModels.length === 0) return 'mistral'; // Hard fallback
-    return allFreeModels[attempt % allFreeModels.length].id;
+    throw new Error(`No available model found for capability: ${capability}`);
 }
 
 export async function generateContentWithPollinations(
@@ -98,12 +95,9 @@ export async function generateContentWithPollinations(
     // Use specific model if provided, OR select based on capability, OR default to creative
     let model = options.model || (hasImages ? 'openai' : selectModel(options.capability || 'creative', attempt));
 
-    // Validate model: if user has a saved model that's no longer available, fall back
+    // Validate model
     if (options.model && !AVAILABLE_MODELS.find(m => m.id === options.model)) {
-        console.warn(`⚠️ Model "${options.model}" not found in available models, falling back to auto-select.`);
-        model = hasImages ? 'openai' : selectModel(options.capability || 'creative', attempt);
-        // Clear the invalid model from options so retries don't re-use it
-        options = { ...options, model: undefined };
+        throw new Error(`Model "${options.model}" is not available.`);
     }
 
     // Override if specific capabilities are needed

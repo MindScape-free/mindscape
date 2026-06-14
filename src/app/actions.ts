@@ -90,6 +90,23 @@ export interface AIActionOptions {
  * Ensures AI-generated data strictly adheres to the frontend MindMapData interface.
  * Fills in default values for required fields like tags and isExpanded.
  */
+function depthToServer(depth: 'low' | 'medium' | 'deep'): 'low' | 'medium' | 'deep' {
+  return depth;
+}
+
+
+
+function stableId(id: string | undefined, prefix: string, name: string): string {
+  if (id) return id;
+  let hash = 0;
+  const key = `${prefix}-${name}`;
+  for (let i = 0; i < key.length; i++) {
+    hash = ((hash << 5) - hash) + key.charCodeAt(i);
+    hash |= 0;
+  }
+  return `${prefix}-${Math.abs(hash).toString(36)}`;
+}
+
 export async function mapToMindMapData(raw: any, depth: 'low' | 'medium' | 'deep' = 'low'): Promise<MindMapData> {
   if (raw.mode === 'compare' || raw.compareData) {
     // If the data is already in the new nested compareData format, pass it through
@@ -105,7 +122,7 @@ export async function mapToMindMapData(raw: any, depth: 'low' | 'medium' | 'deep
           ...raw.compareData,
           unityNexus: (raw.compareData.unityNexus || []).map((n: any) => ({
             ...n,
-            id: n.id || `nexus-${Math.random().toString(36).substr(2, 9)}`
+            id: stableId(n.id, 'nexus', n.title || n.name || '')
           })),
           dimensions: (raw.compareData.dimensions || []).map((d: any) => ({
             ...d
@@ -114,14 +131,13 @@ export async function mapToMindMapData(raw: any, depth: 'low' | 'medium' | 'deep
       } as CompareMindMapData;
     }
 
-    // Legacy Fallback: If it's old flat format, we wrap it (though new generations won't go here)
     return {
       ...raw,
       mode: 'compare',
       depth,
       compareData: {
         root: raw.root || { title: raw.topic || 'Comparison' },
-        unityNexus: (raw.similarities || []).map((n: any) => ({ ...n, id: n.id || Math.random().toString(36).substr(2, 9) })),
+        unityNexus: (raw.similarities || []).map((n: any) => ({ ...n, id: stableId(n.id, 'nexus', n.title || n.name || '') })),
         dimensions: [], // Old format can't satisfy dimensions easily
         synthesisHorizon: { expertVerdict: '', futureEvolution: '' },
         relevantLinks: raw.relevantLinks || []
@@ -150,14 +166,14 @@ export async function mapToMindMapData(raw: any, depth: 'low' | 'medium' | 'deep
         name: normalizedName,
         icon: st.icon || 'flag',
         insight: st.insight || '',
-        id: st.id || `topic-${Math.random().toString(36).substr(2, 9)}`,
+        id: stableId(st.id, 'topic', normalizedName),
         categories: (st.categories || []).map((cat: any): Category => {
           const catName = (cat.name || '').trim().replace(/[:.!?]$/, '');
           return {
             name: catName,
             icon: cat.icon || 'folder',
             insight: cat.insight || '',
-            id: cat.id || `cat-${Math.random().toString(36).substr(2, 9)}`,
+            id: stableId(cat.id, 'cat', catName),
             subCategories: (cat.subCategories || [])
               .map((sub: any) => {
                 if (typeof sub === 'string') {
@@ -172,7 +188,7 @@ export async function mapToMindMapData(raw: any, depth: 'low' | 'medium' | 'deep
                 description: sub.description || '',
                 icon: sub.icon || 'book-open',
                 tags: Array.isArray(sub.tags) ? sub.tags : [],
-                id: sub.id || `sub-${Math.random().toString(36).substr(2, 9)}`,
+                id: stableId(sub.id, 'sub', sub.name || ''),
                 isExpanded: false
               }))
           };
@@ -229,17 +245,17 @@ export async function resolveApiKey(options: AIActionOptions): Promise<string | 
           apiKeyCache.set(options.userId, { key: undefined, timestamp: Date.now() });
         }
       } catch (err: any) {
-        console.warn(`⚠️ resolveApiKey: Failed to fetch user API key from supabase Admin (${err.message}). Falling back to server default.`);
+        console.warn(`⚠️ resolveApiKey: Failed to fetch user API key from supabase Admin (${err.message}). Using server default.`);
       }
     }
   }
 
-  // Final fallback to server-side environment variable
+  // Use server-side environment variable as primary default
   if (!effectiveApiKey) {
     effectiveApiKey = process.env.POLLINATIONS_API_KEY;
     if (effectiveApiKey) {
       source = 'system-default';
-      console.log(`ℹ️ No user API key found for ${options.userId || 'anonymous'}. Falling back to System Default Pollinations key.`);
+      console.log(`ℹ️ No user API key found for ${options.userId || 'anonymous'}. Using System Default Pollinations key.`);
     }
   }
 
@@ -530,7 +546,7 @@ export async function generateMindMapAction(
     const generationResult = await generateMindMap({
       ...input,
       topic,
-      depth,
+      depth: ({ low: 'quick' as const, medium: 'balanced' as const, deep: 'detailed' as const })[depth] ?? 'balanced',
       searchContext, 
       ...options,
       apiKey: effectiveApiKey,
@@ -545,11 +561,6 @@ export async function generateMindMapAction(
     if (searchContext && searchContext.sources.length > 0) {
       sanitized.searchSources = searchContext.sources;
       sanitized.searchTimestamp = searchContext.timestamp;
-    }
-
-    // Award XP — fire and forget
-    if (options.userId) {
-      awardPoints(options.userId, 'MAP_CREATED', { topic }).catch(() => {});
     }
 
     return { data: sanitized, error: null };
@@ -635,7 +646,6 @@ export async function generateMindMapFromImageAction(
 
     const sanitized = await mapToMindMapData(rawResult, depth);
     sanitized.aiPersona = input.persona as string || 'Teacher';
-    if (options.userId) awardPoints(options.userId, 'MAP_CREATED', { source: 'image' }).catch(() => {});
     return { data: sanitized, error: null };
   } catch (error) {
     console.error('Error in generateMindMapFromImageAction:', error);
@@ -666,7 +676,6 @@ export async function generateMindMapFromPdfAction(
 
     const sanitized = await mapToMindMapData(result, depth);
     sanitized.aiPersona = input.persona as string || 'Teacher';
-    if (options.userId) awardPoints(options.userId, 'MAP_CREATED', { source: 'pdf' }).catch(() => {});
     return { data: sanitized, error: null };
   } catch (error) {
     console.error('Error in generateMindMapFromPdfAction:', error);
@@ -701,10 +710,6 @@ export async function generateMindMapFromTextAction(
     if (!result) return { data: null, error: 'AI failed to process text.' };
     const sanitized = await mapToMindMapData(result, depth);
     sanitized.aiPersona = input.persona as string || 'Teacher';
-    if (options.userId) {
-      const eventType = (input as any).isMultiSource ? 'MAP_MULTI_SOURCE' : 'MAP_CREATED';
-      awardPoints(options.userId, eventType, { source: 'text' }).catch(() => {});
-    }
     return { data: sanitized, error: null };
   } catch (error) {
     console.error('Error in generateMindMapFromTextAction:', error);
@@ -742,9 +747,13 @@ export async function generateYouTubeMindMapAction(
     const result = await generateYouTubeMindMap(input, finalOptions);
     if (!result.data) return result;
 
-    const sanitized = await mapToMindMapData(result.data, input.depth || 'low');
+    const validDepths = ['low', 'medium', 'deep'] as const;
+    const safeDepth = validDepths.includes(input.depth as any)
+      ? (input.depth as 'low' | 'medium' | 'deep')
+      : 'low';
+
+    const sanitized = await mapToMindMapData(result.data, safeDepth);
     sanitized.aiPersona = input.persona as string || 'Teacher';
-    if (options.userId) awardPoints(options.userId, 'MAP_CREATED', { source: 'youtube' }).catch(() => {});
     return { data: sanitized, error: null };
   } catch (error) {
     console.error('Error in generateYouTubeMindMapAction:', error);
@@ -938,7 +947,6 @@ export async function chatAction(
       const contextKey = input.sessionId || input.topic || 'default';
       pdfContext = getPdfContext(contextKey) || undefined;
 
-      // Fallback: Try supabase if sessionId is a valid doc ID
       if (!pdfContext && input.sessionId && !input.sessionId.startsWith('session-')) {
         try {
           const { getMindMapAdmin } = await import('@/lib/supabase-server');
@@ -996,10 +1004,6 @@ export async function translateMindMapAction(
     const result = await translateMindMap({ ...input, ...options, apiKey: effectiveApiKey });
     if (!result) return { translation: null, error: 'AI failed to get translation.' };
     const sanitized = await mapToMindMapData(result);
-    // Award XP — fire and forget
-    if (options.userId) {
-      awardPoints(options.userId as string, 'MAP_TRANSLATED').catch(() => {});
-    }
     return { translation: sanitized, error: null };
   } catch (error) {
     console.error(error);
@@ -1264,11 +1268,7 @@ export async function generateComparisonMapAction(
 
     const sanitized = await mapToMindMapData(result, input.depth || 'low');
     sanitized.aiPersona = input.persona as string || 'Teacher';
-
-    // Award XP — fire and forget
-    if (options.userId) {
-      awardPoints(options.userId, 'MAP_COMPARE', { topic1: input.topic1, topic2: input.topic2 }).catch(() => {});
-    }
+    // Note: XP for MAP_COMPARE is awarded client-side via awardXP() to avoid double-counting
 
     // Attach search metadata if search was used
     if (searchContextA || searchContextB) {
@@ -1384,7 +1384,7 @@ Return ONLY a JSON array:
       description: n.description || '',
       icon: n.icon || 'lightbulb',
       tags: [],
-      id: `quiz-${Math.random().toString(36).substr(2, 9)}`,
+      id: stableId(undefined, 'quiz', n.name || ''),
       isExpanded: false,
       source: 'quiz' as const,
       quizScore: input.quizScore,
@@ -1443,11 +1443,6 @@ export async function synthesizeNodesAction(
     const effectiveApiKey = await resolveApiKey(options);
     const result = await synthesizeNodes({ ...input, ...options, apiKey: effectiveApiKey });
     
-    // Award XP - Synthesis is a high-level cognitive act, worth more XP
-    if (options.userId) {
-      awardPoints(options.userId, 'MAP_CREATED', { topic: `Synthesis: ${input.nodeA} + ${input.nodeB}` }).catch(() => {});
-    }
-
     return { data: result, error: null };
   } catch (error) {
     console.error('Error in synthesizeNodesAction:', error);

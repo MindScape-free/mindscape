@@ -61,9 +61,17 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
       .channel(`mindmap-${mapId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'mindmaps', filter: `id=eq.${mapId}` }, (payload) => {
         const remoteData = payload.new as any;
-        const remoteUpdatedAt = new Date(remoteData.updated_at).getTime();
-        const localUpdatedAt = (currentMap as any)?.updatedAt || 0;
-        if (remoteUpdatedAt > localUpdatedAt && onRemoteUpdateRef.current) {
+        // Bug #11: normalize both timestamps to milliseconds before comparing
+        const getMillis = (ts: any): number => {
+          if (!ts) return 0;
+          if (typeof ts === 'number') return ts;
+          if (ts instanceof Date) return ts.getTime();
+          return new Date(ts).getTime();
+        };
+        const remoteUpdatedAt = getMillis(remoteData.updated_at);
+        const localUpdatedAt = getMillis((currentMap as any)?.updatedAt);
+        // 1 s tolerance to suppress same-save echoes
+        if (remoteUpdatedAt > localUpdatedAt + 1000 && onRemoteUpdateRef.current) {
           const content = remoteData.content || {};
           onRemoteUpdateRef.current({ ...remoteData, ...content, id: mapId } as MindMapData);
         }
@@ -247,13 +255,26 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
     }
   }, [user, supabase, toast, aiPersona, options.userApiKey]);
 
-  // Track study time every 5 minutes
+  // Track study time every 5 minutes (only if user has been active)
+  const lastActivityRef = useRef(Date.now());
   useEffect(() => {
     if (!user || !supabase) return;
+    const onActivity = () => { lastActivityRef.current = Date.now(); };
+    window.addEventListener('mousedown', onActivity);
+    window.addEventListener('keydown', onActivity);
+    window.addEventListener('touchstart', onActivity);
     const intervalId = setInterval(() => {
-      trackStudyTime(supabase, user.id, 5).catch(console.error);
+      const idleMs = Date.now() - lastActivityRef.current;
+      if (idleMs < 10 * 60 * 1000) {
+        trackStudyTime(supabase, user.id, 5).catch(console.error);
+      }
     }, 5 * 60 * 1000);
-    return () => clearInterval(intervalId);
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('mousedown', onActivity);
+      window.removeEventListener('keydown', onActivity);
+      window.removeEventListener('touchstart', onActivity);
+    };
   }, [user, supabase]);
 
   const setupAutoSave = useCallback((mindMap: MindMapData | undefined, hasUnsavedChanges: boolean, isSelfReference: boolean, persistFn: (silent: boolean) => void) => {

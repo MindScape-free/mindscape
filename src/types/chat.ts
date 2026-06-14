@@ -85,12 +85,11 @@ export function toDate(val: any): Date {
     date = new Date(val);
   }
 
-  // Final validation
   if (!isValid(date)) {
     if (process.env.NODE_ENV === 'development') {
       console.warn('Invalid date encountered in toDate utility:', val);
     }
-    return new Date(); // Fallback to current time
+    date = new Date();
   }
 
   return date;

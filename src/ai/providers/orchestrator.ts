@@ -197,16 +197,10 @@ export async function orchestrate(
     const forced = registry.get(options.providerOverride);
     if (!forced) throw new Error(`Provider "${options.providerOverride}" not registered`);
     providers = [forced];
-    // When multi-provider is enabled, append other providers as fallbacks
-    if (config.multiProviderEnabled) {
-      const fallbacks = registry.getOrdered().filter(p => p.name !== options.providerOverride);
-      providers.push(...fallbacks);
-    }
   } else if (options.taskType && config.pipelineOverrides[options.taskType]) {
     providers = registry.getForTask(options.taskType, config);
   } else if (request.capability) {
     providers = registry.getForCapability(request.capability);
-    // If no capability-specific providers, fallback to all
     if (providers.length === 0) providers = registry.getOrdered();
   } else {
     providers = registry.getOrdered();
@@ -292,50 +286,7 @@ export async function orchestrate(
     }
   };
 
-  // 1. Parallel Fallback Strategy (Race)
-  // If we have multiple providers and multi-provider is enabled, use the race strategy.
-  if (providers.length > 1 && config.multiProviderEnabled && !options.providerOverride) {
-    const latencyBudget = options.latencyBudget || 2500; // ms
-    
-    try {
-      // Launch primary
-      const primaryPromise = executeProvider(providers[0]);
-      
-      // Wait for primary or timeout budget
-      const timeoutPromise = new Promise(resolve => setTimeout(() => resolve('TIMEOUT'), latencyBudget));
-      const firstOutcome = await Promise.race([primaryPromise, timeoutPromise]);
-      
-      if (firstOutcome === 'TIMEOUT') {
-        console.log(`⏱️ Primary ${providers[0].name} slow (>${latencyBudget}ms), launching parallel fallback ${providers[1].name}`);
-        // Launch fallback and race it against the still-running primary
-        const fallbackPromise = executeProvider(providers[1]);
-        return await Promise.race([primaryPromise, fallbackPromise]);
-      }
-      
-      return firstOutcome as AIResponse;
-    } catch (err: any) {
-      console.warn(`⚠️ Parallel race failed, falling back to sequential: ${err.message}`);
-      // Fall through to sequential if the race fails catastrophically
-    }
-  }
-
-  // 2. Sequential Fallback (Default)
-  for (const provider of providers) {
-    try {
-      return await executeProvider(provider);
-    } catch (err: any) {
-      const errMsg = err.message || String(err);
-      // Auth/balance errors for primary → only bail if no other providers exist
-      if ((errMsg.includes('Authentication failed') || errMsg.includes('InsufficientBalance')) && providers.length === 1) {
-        throw err;
-      }
-      // Continue to next provider
-    }
-  }
-
-  // All providers failed
-  const errSummary = errors.map(e => `${e.provider}: ${e.error}`).join('; ');
-  throw new Error(`All AI providers failed. ${errSummary}`);
+  return await executeProvider(providers[0]);
 }
 
 // ── Streaming Orchestration ────────────────────────────────────────────
@@ -365,28 +316,12 @@ export async function orchestrateStream(
   const healthy = providers.filter(p => p.health().status !== 'down');
   if (healthy.length > 0) providers = healthy;
 
-  for (const provider of providers) {
-    if (!provider.generateStream) {
-      // Fallback: use non-streaming and emit full result
-      try {
-        const result = await provider.generate(request);
-        onChunk({ text: typeof result.content === 'string' ? result.content : JSON.stringify(result.content), done: true, model: result.model });
-        return result;
-      } catch (err: any) {
-        console.warn(`❌ Provider ${provider.name} (buffered stream) failed: ${err.message}`);
-        continue;
-      }
-    }
-
-    try {
-      return await provider.generateStream(request, onChunk);
-    } catch (err: any) {
-      console.warn(`❌ Provider ${provider.name} stream failed: ${err.message}`);
-      continue;
-    }
+  const provider = providers[0];
+  if (!provider.generateStream) {
+    throw new Error(`Provider ${provider.name} does not support streaming`);
   }
 
-  throw new Error('All AI providers failed for streaming');
+  return await provider.generateStream(request, onChunk);
 }
 
 // ── Shadow Testing ─────────────────────────────────────────────────────

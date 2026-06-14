@@ -44,6 +44,9 @@ interface DashboardStats {
     totalUsers: number;
     totalMindmaps: number;
     totalChats: number;
+    totalNodes?: number;
+    totalNodesActive?: number;
+    totalImages?: number;
     activeUsers: number;
     healthScore: number;
     lastUpdated: number | null;
@@ -56,6 +59,9 @@ interface DashboardStats {
     cacheAge: number | null;
     source: string;
   };
+  totalMindmapsEver?: number;
+  newUsersToday?: number;
+  newMapsToday?: number;
   [key: string]: any;
 }
 

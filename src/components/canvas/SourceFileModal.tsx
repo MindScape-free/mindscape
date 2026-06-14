@@ -5,8 +5,7 @@ import { X, Globe, Youtube, FileText, Image as ImageIcon, ArrowRight } from 'luc
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { BlobPdfViewer } from './BlobPdfViewer';
 import { parseSourceContent } from './SourceParser';
-import { extractYoutubeId } from '@/lib/utils';
-import { formatText } from '@/lib/utils';
+import { cn, extractYoutubeId, formatText } from '@/lib/utils';
 import { MindMapData } from '@/types/mind-map';
 
 interface SourceFileModalProps {

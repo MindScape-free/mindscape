@@ -10,7 +10,6 @@ import {
   AIProviderCapability,
 } from './types';
 import { PollinationsAdapter } from './pollinations-adapter';
-import { OpenAICompatibleAdapter } from './openai-compatible-adapter';
 import { loadAIConfig } from './config';
 
 // ── Registry ───────────────────────────────────────────────────────────
@@ -74,25 +73,8 @@ export function getProviderRegistry(): ProviderRegistry {
   const config = loadAIConfig();
   const registry = new ProviderRegistry();
 
-  // Register Pollinations (always available)
+  // Register Pollinations (sole provider)
   registry.register(new PollinationsAdapter());
-
-  // Register secondary providers based on config
-  for (const [name, providerConfig] of Object.entries(config.providers)) {
-    if (name === 'pollinations') continue; // Already registered
-
-    if (providerConfig.baseUrl && providerConfig.apiKey) {
-      registry.register(new OpenAICompatibleAdapter(providerConfig));
-      console.log(`🔌 Registered AI provider: ${name} (${providerConfig.baseUrl})`);
-    }
-  }
-
-  // Set priority order from config
-  for (const name of config.providerPriorities) {
-    if (registry.get(name)) {
-      // Already in registry, just ensure priority order
-    }
-  }
 
   console.log(`🔌 AI Provider Registry: ${registry.size()} providers [${registry.getAllNames().join(', ')}]`);
 

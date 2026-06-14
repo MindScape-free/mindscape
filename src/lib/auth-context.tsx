@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { SupabaseClient, Session, AuthChangeEvent } from '@supabase/supabase-js';
+import { getSupabaseClient } from '@/lib/supabase-db';
 
 export interface User {
   id: string;
@@ -9,6 +10,7 @@ export interface User {
   email: string | null;
   displayName: string | null;
   photoURL: string | null;
+  user_metadata?: Record<string, any>;
 }
 
 interface AuthContextType {
@@ -59,8 +61,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     const initSupabase = () => {
-      // Use singleton from supabase-db to prevent multiple instances
-      const { getSupabaseClient } = require('@/lib/supabase-db');
       const client = getSupabaseClient();
       setSupabase(client);
       console.log('[Auth] Using singleton client');
@@ -77,7 +77,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           });
           setSession(session);
           
-          const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '765cd0a0-6201-41d2-ac8d-ff99b4941289').split(',').map(id => id.trim());
+          const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '03504efc-d50a-4e84-ba24-1d82ef41fd82').split(',').map(id => id.trim());
           setIsAdmin(adminIds.includes(userData.id));
         }
         setIsUserLoading(false);
@@ -95,7 +95,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           });
           setSession(session);
           
-          const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '765cd0a0-6201-41d2-ac8d-ff99b4941289').split(',').map(id => id.trim());
+          const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '03504efc-d50a-4e84-ba24-1d82ef41fd82').split(',').map(id => id.trim());
           setIsAdmin(adminIds.includes(userData.id));
         } else {
           setUser(null);
@@ -135,18 +135,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const signInWithGoogle = async () => {
     if (!supabase) return { error: new Error('Supabase not initialized') };
-    const redirectUrl = `${window.location.origin}/auth/callback`;
+    const origin = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
+    const redirectUrl = `${origin}/auth/callback`;
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: redirectUrl, skipBrowserRedirect: false },
+      options: { 
+        redirectTo: redirectUrl, 
+        skipBrowserRedirect: false,
+        queryParams: {
+          prompt: 'select_account',
+        },
+      },
     });
     return { error: error as Error | null };
   };
 
   const resetPassword = async (email: string) => {
     if (!supabase) return { error: new Error('Supabase not initialized') };
+    const origin = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/reset-password`,
+      redirectTo: `${origin}/auth/reset-password`,
     });
     return { error: error as Error | null };
   };

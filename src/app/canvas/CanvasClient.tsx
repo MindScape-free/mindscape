@@ -8,6 +8,7 @@ import { MindMap } from '@/components/mind-map';
 import { MindMapData, NestedExpansionItem, MindMapWithId } from '@/types/mind-map';
 import { PinnedMessage } from '@/types/chat';
 import { NeuralLoader } from '@/components/loading/neural-loader';
+import { ErrorBoundary } from '@/components/error-boundary';
 import { safeGetItem, safeRemoveItem } from '@/lib/storage';
 import { useXP } from '@/contexts/xp-context';
 import dynamic from 'next/dynamic';
@@ -21,7 +22,7 @@ import { SearchReferencesPanel, SourceFileModal } from '@/components/canvas';
 
 import { Button } from '@/components/ui/button';
 import {
-  RefreshCw, Sparkles, Loader2, ZapOff, List, Bot, UserRound, Zap as ZapIcon, Globe, Palette, Brain, FileText, Image as ImageIcon, X, Youtube, ArrowRight
+  Scale, RefreshCw, Sparkles, Loader2, ZapOff, List, Bot, UserRound, Zap as ZapIcon, Globe, Palette, Brain, FileText, Image as ImageIcon, X, Youtube, ArrowRight, Key
 } from 'lucide-react';
 import {
   Dialog,
@@ -58,10 +59,11 @@ import {
   summarizeTopicAction,
   summarizeChatAction,
   synthesizeNodesAction,
-  logAdminActivityAction
+  logAdminActivityAction,
+  mapToMindMapData,
 } from '@/app/actions';
 // shareMindMapAction removed - using client-side sharing
-import { formatText, extractYoutubeId, cn } from '@/lib/utils';
+import { formatText, extractYoutubeId, cn, depthFromServer } from '@/lib/utils';
 import { toPlainObject } from '@/lib/serialize';
 import { mindscapeMap } from '@/lib/mindscape-data';
 import { useMindMapStack } from '@/hooks/use-mind-map-stack';
@@ -144,7 +146,7 @@ function MindMapPageContent() {
         parentTopic,
         targetLang: params.lang,
         persona: params.persona || aiPersona,
-        depth: branchDepth || params.depth,
+        depth: depthFromServer(branchDepth || params.depth),
         useSearch: params.useSearch === 'true',
       }, aiOptions);
       
@@ -394,7 +396,7 @@ function MindMapPageContent() {
               parentTopic: params.parent || undefined,
               targetLang: params.lang,
               persona: params.persona || aiPersona,
-              depth: params.depth,
+              depth: depthFromServer(params.depth),
               useSearch: params.useSearch === 'true',
             }, aiOptions);
 
@@ -455,7 +457,7 @@ function MindMapPageContent() {
               parentTopic: params.parent || undefined,
               targetLang: params.lang,
               persona: params.persona || aiPersona,
-              depth: params.depth,
+              depth: depthFromServer(params.depth),
               useSearch: params.useSearch === 'true',
             }, {
               provider: config.provider,
@@ -467,6 +469,14 @@ function MindMapPageContent() {
  else if (params.sessionId) {
             const sessionType = safeGetItem<string>(`session-type-${params.sessionId}`);
             sessionContent = safeGetItem<{file?: string; text?: string; originalFile?: string}>(`session-content-${params.sessionId}`);
+
+            // Bug #14: surface expired/missing session immediately instead of hanging loader
+            if (!sessionContent || !sessionType) {
+              setError('Your session has expired. Please go back and try again.');
+              setIsLoading(false);
+              return;
+            }
+
             if (sessionContent) {
               let fileContent, additionalText, originalPdf;
               try {
@@ -611,6 +621,11 @@ function MindMapPageContent() {
                   model: config.pollinationsModel,
                   userId: user?.id,
                 });
+              } else {
+                // Bug #14: unknown sessionType — don't leave loader hanging
+                setError(`Unknown session type: "${sessionType}". Please go back and try again.`);
+                setIsLoading(false);
+                return;
               }
             }
           } else if (params.studioId) {
@@ -808,7 +823,7 @@ function MindMapPageContent() {
       const allSubMaps: NestedExpansionItem[] = [];
       const visitedIds = new Set<string>();
       const fetchDescendants = async (parentId: string, parentName: string, currentDepth: number) => {
-        const { data: children } = await supabase.from('mindmaps').select('id,topic,icon,created_at,content,parent_map_id').eq('user_id', user.id).eq('parent_map_id', parentId);
+        const { data: children } = await supabase.from('mindmaps').select('id,topic,icon,created_at,content,parent_map_id').eq('user_id', user.id).eq('parent_map_id', parentId).limit(50);
         if (!children) return;
         for (const child of children) {
           if (visitedIds.has(child.id)) continue;
@@ -837,6 +852,10 @@ function MindMapPageContent() {
     }
   }, [mindMap]);
 
+  // Bug #39: stable ref so awardXP changes never recreate the interval
+  const awardXPRef = useRef(awardXP);
+  useEffect(() => { awardXPRef.current = awardXP; }, [awardXP]);
+
   // Study time tracking — award XP every 10 min of active canvas time
   useEffect(() => {
     let seconds = 0;
@@ -847,7 +866,7 @@ function MindMapPageContent() {
       if (visible) {
         seconds += 10;
         if (seconds % 600 === 0) {
-          awardXP('STUDY_TIME_CANVAS').catch(() => {});
+          awardXPRef.current('STUDY_TIME_CANVAS').catch(() => {});
         }
       }
     }, 10000);
@@ -855,7 +874,7 @@ function MindMapPageContent() {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [awardXP]);
+  }, []); // empty — stable via awardXPRef
 
   const onMapUpdate = useCallback((updatedData: Partial<MindMapData> | ((prev: MindMapData) => Partial<MindMapData>)) => {
     const currentMap = mindMapRef.current;
@@ -866,7 +885,7 @@ function MindMapPageContent() {
 
     let hasActualChanges = false;
     for (const key in resolved) {
-      if (JSON.stringify((resolved as any)[key]) !== JSON.stringify((currentMap as any)[key])) {
+      if (resolved !== currentMap && JSON.stringify((resolved as any)[key]) !== JSON.stringify((currentMap as any)[key])) {
         hasActualChanges = true;
         break;
       }
@@ -1208,6 +1227,11 @@ function MindMapPageContent() {
           <Button onClick={() => window.location.reload()} size="lg" className="rounded-2xl bg-white text-black hover:bg-zinc-200 gap-2 font-bold px-8">
             <RefreshCw className="h-4 w-4" /> Try Again
           </Button>
+          {(isAuthError || error.toLowerCase().includes('pollen') || error.toLowerCase().includes('balance')) && (
+            <Button onClick={() => router.push('/profile?tab=lab')} size="lg" className="rounded-2xl bg-violet-600 hover:bg-violet-700 text-white gap-2 font-bold px-8 shadow-[0_0_20px_rgba(139,92,246,0.3)]">
+              <Key className="h-4 w-4" /> Manage API Key
+            </Button>
+          )}
           <Button variant="ghost" onClick={() => router.push('/')} size="lg" className="rounded-2xl bg-white/5 border border-white/10 text-zinc-300 hover:text-white hover:bg-white/10 gap-2 font-bold px-8">
             Go Home
           </Button>
@@ -1501,10 +1525,10 @@ function MindMapPageContent() {
  */
 export default function MindMapPage() {
   return (
-    <TooltipProvider delayDuration={300}>
-      <Suspense fallback={<NeuralLoader />}>
-        <MindMapPageContent />
-      </Suspense>
-    </TooltipProvider>
+    <ErrorBoundary sectionName="Canvas">
+      <TooltipProvider delayDuration={300}>
+          <MindMapPageContent />
+      </TooltipProvider>
+    </ErrorBoundary>
   );
 }

@@ -84,7 +84,7 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
           });
           setSession(session);
           
-          const adminIds = process.env.NEXT_PUBLIC_ADMIN_USER_IDS?.split(',') || [];
+          const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '03504efc-d50a-4e84-ba24-1d82ef41fd82').split(',').map(id => id.trim());
           setIsAdmin(adminIds.includes(userData.id));
         }
         setIsUserLoading(false);
@@ -102,7 +102,7 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
           });
           setSession(session);
           
-          const adminIds = process.env.NEXT_PUBLIC_ADMIN_USER_IDS?.split(',') || [];
+          const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '03504efc-d50a-4e84-ba24-1d82ef41fd82').split(',').map(id => id.trim());
           setIsAdmin(adminIds.includes(userData.id));
         } else {
           setUser(null);
@@ -158,6 +158,9 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
       provider: 'google',
       options: {
         redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback`,
+        queryParams: {
+          prompt: 'select_account',
+        },
       },
     });
     return { error: error as Error | null };

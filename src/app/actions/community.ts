@@ -76,6 +76,9 @@ export async function publishMindMapAction(mapId: string, publicData: any, userI
     // Update original map
     await supabase.from('mindmaps').update({ is_public: true, updated_at: new Date().toISOString() }).eq('id', mapId).eq('user_id', targetAuthorId);
 
+    // Fetch full map content from mindmaps table
+    const { data: fullMap } = await supabase.from('mindmaps').select('content').eq('id', mapId).single();
+
     // Save to public_mindmaps
     await supabase.from('public_mindmaps').upsert({
       id: mapId,
@@ -83,6 +86,7 @@ export async function publishMindMapAction(mapId: string, publicData: any, userI
       author_name: publicData.authorName || 'Anonymous',
       topic: publicData.topic,
       summary: publicData.summary,
+      content: fullMap?.content || {},
       public_categories: publicData.publicCategories || [],
       is_public: true,
       published_at: new Date().toISOString(),

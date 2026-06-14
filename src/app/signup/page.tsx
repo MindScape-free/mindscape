@@ -145,11 +145,9 @@ function SignupForm() {
 
 export default function SignupPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-purple-500" /></div>}>
-      <div className="min-h-screen bg-background relative overflow-hidden flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-black/90 backdrop-blur-[20px]" />
-        <div className="relative w-full max-w-md"><SignupForm /></div>
-      </div>
-    </Suspense>
+    <div className="min-h-screen bg-background relative overflow-hidden flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/90 backdrop-blur-[20px]" />
+      <div className="relative w-full max-w-md"><SignupForm /></div>
+    </div>
   );
 }

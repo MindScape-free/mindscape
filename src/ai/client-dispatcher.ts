@@ -16,7 +16,7 @@ import { orchestrate } from './providers/orchestrator';
 import { StructuredOutputError } from './providers/post-processor';
 
 export { StructuredOutputError };
-export type AIProvider = 'pollinations' | string;
+export type AIProvider = 'pollinations';
 
 interface GenerateContentOptions {
   provider?: AIProvider;

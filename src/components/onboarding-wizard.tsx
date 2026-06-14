@@ -110,7 +110,7 @@ export function OnboardingWizard() {
     const handleConnectPollinations = () => {
         const redirectUrl = encodeURIComponent(window.location.origin + '/');
         // Standardized BYOP URL with profile, balance, usage and our core rotating models
-        const authUrl = `https://enter.pollinations.ai/authorize?redirect_url=${redirectUrl}&permissions=profile,balance,usage&models=flux,openai,mistral,qwen,nova&expiry=30`;
+        const authUrl = `https://enter.pollinations.ai/authorize?redirect_url=${redirectUrl}&permissions=profile,balance,usage,keys,models&scope=profile,balance,usage,keys,models&budget=&expiry=`;
         window.location.href = authUrl;
     };
 

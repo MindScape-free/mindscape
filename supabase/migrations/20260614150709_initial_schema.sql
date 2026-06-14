@@ -1,0 +1,9 @@
+-- Initial schema for MindScape
+-- Generated from codebase analysis (2026-06-14)
+-- Tables known to exist in the remote database:
+--   users, mindmaps, chat_sessions, public_mindmaps,
+--   feedback, user_settings, admin_activity_log,
+--   admin_stats, ai_calls
+--
+-- Run `supabase db pull --linked` with Docker Desktop to
+-- get the authoritative schema dump.

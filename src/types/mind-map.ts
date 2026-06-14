@@ -211,7 +211,7 @@ export interface ExplainableNode {
 export type ExplanationMode = 'Beginner' | 'Intermediate' | 'Expert';
 
 export interface DepthSuggestion {
-  depth: 'quick' | 'balanced' | 'detailed';
+  depth: 'low' | 'medium' | 'deep';
   confidence: number;
   reasons: string[];
   suggestedItems: {

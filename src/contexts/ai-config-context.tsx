@@ -25,7 +25,7 @@ interface AIConfigContextType {
     resetConfig: () => void;
     pollenBalance: number | null;
     isBalanceLoading: boolean;
-    refreshBalance: () => Promise<void>;
+    refreshBalance: (apiKeyOverride?: string, force?: boolean) => Promise<void>;
 }
 
 const DEFAULT_CONFIG: AIConfig = {
@@ -42,7 +42,6 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
     const [storedConfig, setStoredConfig] = useLocalStorage<AIConfig>('mindscape-ai-config', DEFAULT_CONFIG);
     const [config, setConfig] = useState<AIConfig>(DEFAULT_CONFIG);
     const { user } = useUser();
-    const firestore = null;
 
     const [hydrated, setHydrated] = useState(false);
     const [pollenBalance, setPollenBalance] = useState<number | null>(null);

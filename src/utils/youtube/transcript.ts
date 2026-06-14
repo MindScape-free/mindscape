@@ -4,7 +4,7 @@ export interface VideoMetadata {
   title: string;
   author_name: string;
   thumbnail_url: string;
-  description?: string; // Added description for better fallback
+  description?: string;
 }
 
 /**
@@ -66,7 +66,7 @@ export async function fetchTranscriptParts(videoId: string): Promise<TranscriptP
     
     const msg = error.message || '';
     if (msg.includes('Could not find transcript') || msg.includes('TRANSCRIPT_EMPTY') || msg.includes('disabled')) {
-      throw new Error('Transcripts are disabled or unavailable for this video. Falling back to video metadata and description.');
+      throw new Error('Transcripts are disabled or unavailable for this video.');
     }
     
     if (msg.includes('Too Many Requests') || msg.includes('429')) {
@@ -149,17 +149,7 @@ export async function getVideoMetadata(videoId: string): Promise<VideoMetadata |
       return officialData as VideoMetadata;
     }
 
-    // 2. Fallback to oEmbed (limited data, but no key required)
-    const url = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
-    console.log('DEBUG: Falling back to oEmbed for metadata:', url);
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.warn('DEBUG: Metadata response NOT OK:', response.status);
-      return null;
-    }
-    const data = await response.json() as VideoMetadata;
-    console.log('DEBUG: Metadata fetched successfully via oEmbed:', data.title);
-    return data;
+    return null;
   } catch (error: any) {
     console.error('DEBUG: Error fetching YouTube metadata:', error.message || error);
     return null;

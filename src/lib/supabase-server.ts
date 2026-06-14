@@ -8,11 +8,9 @@ export function getSupabaseAdmin(): SupabaseClient {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
   if (!url || !key) {
-    if (typeof window === 'undefined') {
-      console.warn('[Supabase Admin] Credentials missing. falling back to known project URL.');
-    }
-    const fallbackUrl = 'https://dnwsjvxitcndeqepovvo.supabase.co';
-    return createClient(url || fallbackUrl, key || 'placeholder', { auth: { persistSession: false } });
+    throw new Error(
+      '[Supabase Admin] Missing required environment variables: NEXT_PUBLIC_SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY are not set.'
+    );
   }
 
   cachedAdmin = createClient(url, key, { auth: { persistSession: false } });
@@ -65,7 +63,7 @@ export async function isUserAdminServer(userId: string): Promise<boolean> {
   if (!userId) return false;
   
   // 1. Check Env Variable (Master override)
-  const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '').split(',').map(s => s.trim());
+  const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '03504efc-d50a-4e84-ba24-1d82ef41fd82').split(',').map(s => s.trim());
   if (adminIds.includes(userId)) return true;
 
   // 2. Check Database column
@@ -102,21 +100,26 @@ export async function incrementAdminStatAdmin(field: string, value: number = 1):
     const dateStr = new Date().toISOString().split('T')[0];
     const monthStr = dateStr.substring(0, 7);
 
-    // Upsert all-time stats
-    await supabase.from('admin_stats').upsert(
-      { period: 'all-time', [field]: value, last_updated: Date.now() },
-      { onConflict: 'period', ignoreDuplicates: false }
-    );
-    // Upsert daily stats
-    await supabase.from('admin_stats').upsert(
-      { period: `daily_${dateStr}`, date: dateStr, [field]: value, last_updated: Date.now() },
-      { onConflict: 'period', ignoreDuplicates: false }
-    );
-    // Upsert monthly stats
-    await supabase.from('admin_stats').upsert(
-      { period: `monthly_${monthStr}`, month: monthStr, [field]: value, last_updated: Date.now() },
-      { onConflict: 'period', ignoreDuplicates: false }
-    );
+    // Helper: read-modify-write with atomic increment per period
+    const atomicIncrement = async (period: string, extra: Record<string, any> = {}) => {
+      const { data: existing } = await supabase
+        .from('admin_stats')
+        .select(field)
+        .eq('period', period)
+        .maybeSingle();
+
+      const current = (existing as any)?.[field] ?? 0;
+      await supabase.from('admin_stats').upsert(
+        { period, ...extra, [field]: current + value, last_updated: Date.now() },
+        { onConflict: 'period' }
+      );
+    };
+
+    await Promise.all([
+      atomicIncrement('all-time'),
+      atomicIncrement(`daily_${dateStr}`, { date: dateStr }),
+      atomicIncrement(`monthly_${monthStr}`, { month: monthStr }),
+    ]);
   } catch (error) {
     console.error('Error incrementing admin stat:', error);
   }

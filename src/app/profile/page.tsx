@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -39,12 +39,11 @@ import { format } from 'date-fns';
 import { 
     syncUserStatisticsAction, 
     checkPollenBalanceAction,
-    trackStudyTime,
-    updateUserStatistics
 } from '@/app/actions';
+import { trackStudyTime, updateUserStatistics } from '@/lib/activity-tracker';
 import { ModelSelector } from '@/components/model-selector';
 import { Eye, EyeOff, Menu } from 'lucide-react';
-import { getUserImageSettings, saveUserApiKey } from '@/lib/supabase-db';
+import { getUserImageSettings, saveUserApiKey, deleteUserApiKey } from '@/lib/supabase-db';
 import { useAIConfig } from '@/contexts/ai-config-context';
 
 // Types
@@ -213,6 +212,19 @@ function ProfileContent() {
                         
                         setPreferredTextModel(settings.textModel || 'openai');
                         
+                        setProfile(prev => {
+                            if (!prev) return null;
+                            return {
+                                ...prev,
+                                apiSettings: {
+                                    provider: 'pollinations',
+                                    imageProvider: 'pollinations',
+                                    pollinationsApiKey: settings.pollinationsApiKey || '',
+                                    imageModel: prefModel,
+                                    textModel: settings.textModel || 'openai',
+                                }
+                            };
+                        });
                         console.log('✅ Loaded AI settings from user_settings');
                     }
                 });
@@ -368,7 +380,7 @@ function ProfileContent() {
         setIsLoadingBalance(true);
         setBalanceError(null);
         try {
-            await refreshBalance();
+            await refreshBalance(keyOverride);
             setLastBalanceCheck(new Date());
         } catch {
             setBalanceError('Network error. Try again.');
@@ -412,8 +424,20 @@ function ProfileContent() {
             await saveUserApiKey(supabase, user.id, apiKeyInput.trim(), preferredModel, preferredTextModel);
             
             // 3. Update global balance state immediately
-            await refreshBalance();
+            await refreshBalance(apiKeyInput.trim());
             setLastBalanceCheck(new Date());
+
+            // 4. Update local profile state
+            setProfile(prev => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    apiSettings: {
+                        ...prev.apiSettings,
+                        pollinationsApiKey: apiKeyInput.trim(),
+                    }
+                };
+            });
             
             toast({ 
                 title: 'Success', 
@@ -423,6 +447,39 @@ function ProfileContent() {
         } catch (error: any) {
             console.error('Error verifying/saving API key:', error);
             toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to process request.' });
+        } finally {
+            setIsSavingKey(false);
+        }
+    };
+
+    const handleDisconnectApiKey = async () => {
+        if (!user) return;
+        setIsSavingKey(true);
+        try {
+            await deleteUserApiKey(supabase, user.id);
+            setApiKeyInput('');
+            updateConfig({ pollinationsApiKey: '' });
+            await refreshBalance('');
+            setLastBalanceCheck(new Date());
+            
+            setProfile(prev => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    apiSettings: {
+                        ...prev.apiSettings,
+                        pollinationsApiKey: '',
+                    }
+                };
+            });
+            
+            toast({ 
+                title: 'Success', 
+                description: 'API Key disconnected. Falling back to default system key.' 
+            });
+        } catch (error: any) {
+            console.error('Error disconnecting API key:', error);
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to disconnect key.' });
         } finally {
             setIsSavingKey(false);
         }
@@ -1154,7 +1211,13 @@ function ProfileContent() {
                                         <div className="space-y-6 relative z-10">
                                             <button
                                                 onClick={() => {
-                                                    const params = new URLSearchParams({ redirect_url: window.location.href });
+                                                    const params = new URLSearchParams({ 
+                                                        redirect_url: window.location.href,
+                                                        permissions: 'profile,balance,usage,keys,models',
+                                                        scope: 'profile,balance,usage,keys,models',
+                                                        budget: '',
+                                                        expiry: ''
+                                                    });
                                                     window.location.href = `https://enter.pollinations.ai/authorize?${params}`;
                                                 }}
                                                 className="w-full flex items-center justify-center gap-3 h-14 rounded-2xl bg-gradient-to-r from-violet-600/10 to-pink-600/10 border border-violet-500/20 hover:border-violet-400/50 hover:bg-white/5 transition-all group shadow-xl"
@@ -1183,6 +1246,15 @@ function ProfileContent() {
                                                         >
                                                             {showApiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                                                         </button>
+                                                        {profile.apiSettings?.pollinationsApiKey && (
+                                                            <Button 
+                                                                onClick={handleDisconnectApiKey} 
+                                                                disabled={isSavingKey}
+                                                                className="h-8 px-4 rounded-lg bg-red-600/10 border border-red-500/20 text-red-400 text-[8px] uppercase font-black hover:bg-red-500 hover:text-white"
+                                                            >
+                                                                {isSavingKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Disconnect"}
+                                                            </Button>
+                                                        )}
                                                         <Button 
                                                             onClick={handleSaveApiKey} 
                                                             disabled={isSavingKey}
@@ -1987,16 +2059,7 @@ function SourceViewerDialog({ map: m, onClose }: { map: any; onClose: () => void
 
 export default function ProfilePage() {
     return (
-        <React.Suspense fallback={
-            <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
-                <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-                    <p className="text-zinc-400 animate-pulse">Loading profile...</p>
-                </div>
-            </div>
-        }>
             <ProfileContent />
-        </React.Suspense>
     );
 }
 

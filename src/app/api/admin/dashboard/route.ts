@@ -84,18 +84,13 @@ export async function GET(request: Request) {
     const { data: analyticsResult, error: analyticsError } = await supabase.rpc('refresh_platform_analytics');
     
     // 2. Fetch the persisted stats (Heatmap, etc.) from admin_stats
-    const { data: fallbackData } = await supabase.from('admin_stats').select('data').eq('id', 'global').single();
+    const { data: statsData } = await supabase.from('admin_stats').select('data').eq('id', 'global').single();
     
     // 3. Merge: Persistent data (heatmap) + Fresh data (RPC totals)
     let analytics = {
-      ...(fallbackData?.data || {}),
+      ...(statsData?.data || {}),
       ...(analyticsResult || {})
     };
-    
-    // If both failed, log warning
-    if (analyticsError && !fallbackData) {
-      console.error('❌ [DashboardAPI] Both RPC and Table-read failed');
-    }
 
     const { data: usersResult } = await supabase.from('users').select('*').order('created_at', { ascending: false });
     const { data: logsResult } = await supabase.from('admin_activity_log').select('*').order('timestamp', { ascending: false }).limit(50);
@@ -107,7 +102,6 @@ export async function GET(request: Request) {
       .order('created_at', { ascending: false })
       .limit(200);
 
-    // Map titles fallback logic
     const processedAiCalls = (aiCallsResult || []).map(call => ({
       ...call,
       mapTitle: call.prompt || 'Neural Stream'

@@ -20,7 +20,6 @@ export function toPlainObject<T>(obj: T): T {
         return JSON.parse(safeStringified);
     } catch (error) {
         console.error("Serialization failed:", error);
-        // Fallback: simpler deep clone if possible, or just return as is (risk of server action failure)
-        return JSON.parse(JSON.stringify(obj));
+        throw error;
     }
 }

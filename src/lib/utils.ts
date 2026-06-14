@@ -385,3 +385,8 @@ export function truncateText(text: string, maxLength: number): string {
   if (!text || text.length <= maxLength) return text;
   return text.slice(0, maxLength).trim() + '...';
 }
+
+export function depthFromServer(depth: 'low' | 'medium' | 'deep'): 'quick' | 'balanced' | 'detailed' {
+  const map: Record<string, 'quick' | 'balanced' | 'detailed'> = { low: 'quick', medium: 'balanced', deep: 'detailed' };
+  return map[depth];
+}

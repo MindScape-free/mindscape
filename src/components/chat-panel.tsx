@@ -3040,29 +3040,7 @@ export function ChatPanel({
                     </TooltipTrigger>
                     <TooltipContent side="bottom"><p>Pinned Messages</p></TooltipContent>
                   </Tooltip>
-                </TooltipProvider>
-
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className={cn(
-                          "h-9 w-9 rounded-xl transition-all",
-                          agentMode ? "text-primary bg-primary/10 border-primary/20" : "text-zinc-500 hover:text-zinc-200"
-                        )}
-                        onClick={() => setAgentMode(!agentMode)}
-                      >
-                        <BrainCircuit className={cn("h-5 w-5", agentMode && "animate-pulse")} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      <p>{agentMode ? 'Disable Agent Mode' : 'Enable Agent Mode'}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                    </TooltipProvider>
 
                 <Button type="button" variant="ghost" size="icon" onClick={() => setView('history')}>
                   <History className="h-5 w-5" />

@@ -19,7 +19,7 @@ import { useAIConfig } from '@/contexts/ai-config-context';
 import { useUser } from '@/lib/auth-context';
 import { useActivity } from '@/contexts/activity-context';
 import { useNotifications } from '@/contexts/notification-context';
-import { AIActionOptions } from '@/ai/client-dispatcher';
+
 
 interface CreateMindmapDialogProps {
   open: boolean;
@@ -27,7 +27,7 @@ interface CreateMindmapDialogProps {
   content: string;
   userMessage?: string;
   onMindmapCreated?: (mapData: MindMapData) => void;
-  options?: AIActionOptions;
+  options?: Record<string, any>;
 }
 
 const PERSONAS = [
@@ -152,7 +152,7 @@ export function CreateMindmapDialog({
 
       const result = await generateMindMapAction({
         topic: topic.trim(),
-        depth,
+        depth: depth as any,
         persona,
         capability: 'fast',
         context,
@@ -166,7 +166,7 @@ export function CreateMindmapDialog({
       
       let savedId = mapData.id;
       if (onMindmapCreated) {
-        const resultId = await onMindmapCreated(mapData);
+        const resultId = await onMindmapCreated(mapData) as string | undefined;
         if (resultId) savedId = resultId;
       }
 

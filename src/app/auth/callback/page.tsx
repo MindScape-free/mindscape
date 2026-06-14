@@ -57,23 +57,9 @@ export default function AuthCallbackPage() {
         setStatus('Welcome ' + data.session.user?.email + '!');
         setTimeout(() => router.push('/'), 1500);
       } else {
-        // Try to get from URL params as fallback
-        const code = url.searchParams.get('code');
-        if (code) {
-          setStatus('Exchanging code...');
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-          if (exchangeError) {
-            setStatus('Error: ' + exchangeError.message);
-            setTimeout(() => router.push('/?error=exchange_failed'), 2000);
-          } else {
-            setStatus('Welcome!');
-            setTimeout(() => router.push('/'), 1500);
-          }
-        } else {
-          console.log('[Auth Callback] No session and no code');
-          setStatus('No session established');
-          setTimeout(() => router.push('/?error=no_session'), 2000);
-        }
+        console.log('[Auth Callback] No session established');
+        setStatus('No session established');
+        setTimeout(() => router.push('/?error=no_session'), 2000);
       }
     }
     

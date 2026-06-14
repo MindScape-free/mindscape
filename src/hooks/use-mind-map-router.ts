@@ -9,25 +9,36 @@ export function useMindMapRouter() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
-    const params = useMemo(() => ({
-        topic: searchParams.get('topic'),
-        topic1: searchParams.get('topic1'),
-        topic2: searchParams.get('topic2'),
-        sessionId: searchParams.get('sessionId'),
-        mapId: searchParams.get('mapId'),
-        sharedMapId: searchParams.get('sharedMapId'),
-        publicMapId: searchParams.get('publicMapId'),
-        studioId: searchParams.get('studioId'),
-        lang: searchParams.get('lang') || 'en',
-        depth: (searchParams.get('depth') as 'quick' | 'balanced' | 'detailed') || 'quick',
-        persona: searchParams.get('persona') || 'teacher',
-        parent: searchParams.get('parent'),
-        isSelfReference: searchParams.get('selfReference') === 'true',
-        isRegenerating: !!searchParams.get('_r'),
-        useSearch: searchParams.get('useSearch') || 'false',
-        mode: searchParams.get('mode'),
-        ownerId: searchParams.get('ownerId'),
-    }), [searchParams]);
+    const params = useMemo(() => {
+        // Sanitize depth: normalize legacy 'quick'/'balanced'/'detailed' values
+        // (written by old builds) to the current 'low'/'medium'/'deep' vocabulary
+        const rawDepth = searchParams.get('depth');
+        const depthMap: Record<string, 'low' | 'medium' | 'deep'> = {
+            quick: 'low', balanced: 'medium', detailed: 'deep',
+            low: 'low', medium: 'medium', deep: 'deep',
+        };
+        const depth: 'low' | 'medium' | 'deep' = depthMap[rawDepth ?? ''] ?? 'low';
+
+        return {
+            topic: searchParams.get('topic'),
+            topic1: searchParams.get('topic1'),
+            topic2: searchParams.get('topic2'),
+            sessionId: searchParams.get('sessionId'),
+            mapId: searchParams.get('mapId'),
+            sharedMapId: searchParams.get('sharedMapId'),
+            publicMapId: searchParams.get('publicMapId'),
+            studioId: searchParams.get('studioId'),
+            lang: searchParams.get('lang') || 'en',
+            depth,
+            persona: searchParams.get('persona') || 'teacher',
+            parent: searchParams.get('parent'),
+            isSelfReference: searchParams.get('selfReference') === 'true',
+            isRegenerating: !!searchParams.get('_r'),
+            useSearch: searchParams.get('useSearch') || 'false',
+            mode: searchParams.get('mode'),
+            ownerId: searchParams.get('ownerId'),
+        };
+    }, [searchParams]);
 
     const navigateToMap = useCallback((id: string, topic?: string) => {
         const newParams = new URLSearchParams(searchParams.toString());

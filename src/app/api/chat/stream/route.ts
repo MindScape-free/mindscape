@@ -3,8 +3,6 @@ import { executeGoogleSearch } from '@/ai/search/google-search';
 import { normalizeSearchResults, filterAuthoritativeSources } from '@/ai/search/search-normalizer';
 import { SearchRequestSchema } from '@/ai/search/search-schema';
 import { z } from 'zod';
-import { createAgent } from '@/ai/agent';
-import { defaultTools } from '@/ai/tools';
 import { orchestrateStream } from '@/ai/providers/orchestrator';
 import { EventEmitter } from 'eventemitter3';
 
@@ -58,7 +56,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Ensure we have at least some API key to work with (user provided or system default)
-    if (!effectiveApiKey && !process.env.POLLINATIONS_API_KEY && !process.env.AI_FALLBACK_API_KEY) {
+    if (!effectiveApiKey && !process.env.POLLINATIONS_API_KEY) {
       return NextResponse.json({ error: 'API key required' }, { status: 401 });
     }
 
@@ -180,73 +178,7 @@ Provide your response as plain text (no JSON wrapper). Stream the response word 
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          if (agentMode) {
-            console.log('🤖 [ChatStream] Starting Agent mode...');
-            const agentApiKey = effectiveApiKey || process.env.AI_FALLBACK_API_KEY;
-            if (!agentApiKey) {
-              throw new Error("API key is required for Agent mode");
-            }
 
-            // Map UI-selected free models to OpenRouter free models
-            const getOpenRouterModel = (modelId?: string) => {
-              if (!modelId) return process.env.AI_FALLBACK_MODEL || 'google/gemini-2.5-flash-free';
-              if (modelId.includes('/')) return modelId; // Already an OpenRouter ID
-              
-              switch (modelId.toLowerCase()) {
-                case 'mistral':
-                case 'mistral-large':
-                  return 'mistralai/mistral-7b-instruct:free';
-                case 'deepseek':
-                case 'deepseek-coder':
-                case 'deepseek-reasoner':
-                  return 'deepseek/deepseek-r1:free';
-                case 'gemini-fast':
-                case 'gemini':
-                  return 'google/gemini-2.5-flash-free';
-                case 'llama':
-                case 'llama3':
-                  return 'meta-llama/llama-3-8b-instruct:free';
-                default:
-                  // For 'openai' or others, fallback to the default free model
-                  return process.env.AI_FALLBACK_MODEL || 'google/gemini-2.5-flash-free';
-              }
-            };
-
-            const agent = createAgent({
-              apiKey: agentApiKey,
-              model: getOpenRouterModel(requestedModel),
-              instructions: systemPrompt,
-              tools: defaultTools,
-            });
-
-            if (history) {
-              agent.setMessages(history as any);
-            }
-
-            // Hook into agent events and enqueue to stream
-            agent.on('stream:delta', (delta) => {
-              controller.enqueue(encoder.encode(`T:${delta}`));
-            });
-
-            agent.on('reasoning:update', (text) => {
-              // We only want the delta or the full text? 
-              // Agent class reasoning:update seems to give full text so far.
-              // Let's send it as R:full_text
-              controller.enqueue(encoder.encode(`R:${text}`));
-            });
-
-            agent.on('tool:call', (name, args) => {
-              controller.enqueue(encoder.encode(`C:${JSON.stringify({ name, args })}`));
-            });
-
-            agent.on('tool:result', (callId, result) => {
-              controller.enqueue(encoder.encode(`O:${JSON.stringify({ callId, result })}`));
-            });
-
-            await agent.send(question);
-            controller.close();
-            return;
-          }
 
           console.log('🌊 [ChatStream] Starting Orchestrator mode...');
 

@@ -95,6 +95,5 @@ function findNaturalBreak(text: string, start: number, end: number): number {
         return searchStart + lastSpace + 1;
     }
 
-    // Fallback: use the original end position
-    return end;
+    return searchStart;
 }

@@ -58,17 +58,9 @@ export async function generateYouTubeMindMap(
 
     let transcriptParts: TranscriptPart[] = [];
     let metadata = await getVideoMetadata(videoId);
-    let isFallback = false;
 
-    try {
-      transcriptParts = await fetchTranscriptParts(videoId);
-    } catch (err: any) {
-      console.warn('Transcript fetch failed, using metadata fallback:', err.message);
-      if (!metadata) throw err;
-      isFallback = true;
-    }
-
-    const fullTranscript = isFallback ? '' : normalizeTranscript(transcriptParts, 120);
+    transcriptParts = await fetchTranscriptParts(videoId);
+    const fullTranscript = normalizeTranscript(transcriptParts, 120);
     const truncatedTranscript = fullTranscript.length > 25000
       ? fullTranscript.substring(0, 25000) + '\n\n[transcript truncated]'
       : fullTranscript;
@@ -80,16 +72,7 @@ export async function generateYouTubeMindMap(
     };
     const density = densityMap[depth] || densityMap.medium;
 
-    const contextSource = isFallback
-      ? `VIDEO METADATA (no transcript available):
-Title: ${metadata?.title}
-Creator: ${metadata?.author_name}
-Description: ${metadata?.description || 'No description.'}
-
-FALLBACK RULE: No transcript available → use video title and description as primary source.
-If description is detailed → use it as factual basis.
-If description is sparse → use structured knowledge about this topic.`
-      : `VIDEO CONTENT:
+    const contextSource = `VIDEO CONTENT:
 Title: ${metadata?.title}
 Creator: ${metadata?.author_name}
 Description: ${metadata?.description ? metadata.description.substring(0, 500) : 'N/A'}
@@ -106,7 +89,6 @@ LANGUAGE: ${targetLang}
 DENSITY: ${density}
 
 TRANSCRIPT RULES:
-- If transcript is incomplete or missing → fallback to topic-based structured knowledge.
 - Use chapter markers in transcript as primary subTopic names if present.
 - Each leaf node (subCategory) MUST have a "description" and optionally a "timestamp" (seconds, integer).
 

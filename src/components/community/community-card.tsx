@@ -6,7 +6,7 @@ import { Clock, Eye, User, MoreVertical, Trash2 } from 'lucide-react';
 import { MindMapWithId } from '@/types/mind-map';
 import { formatShortDistanceToNow } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';

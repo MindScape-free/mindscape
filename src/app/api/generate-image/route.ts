@@ -2,20 +2,6 @@ import { NextResponse } from 'next/server';
 
 export const maxDuration = 60; // 60s timeout for serverless environments
 
-// Hardcoded Fallback Models (Verified Stable)
-const FALLBACK_MODELS = {
-  'flux': { cost: 0.001, quality: 'high', description: 'Flux Schnell - Fast high-quality', paid_only: false },
-  'zimage': { cost: 0.002, quality: 'high', description: 'Z-Image Turbo - Fast 6B Flux with 2x upscaling', paid_only: false },
-  'klein': { cost: 0.01, quality: 'high', description: 'FLUX.2 Klein 4B - Compact high-quality', paid_only: false },
-  'gptimage': { cost: 0.0105, quality: 'high', description: 'GPT Image 1 Mini', paid_only: false },
-  'qwen-image': { cost: 0.03, quality: 'high', description: 'Qwen Image Plus - High-fidelity', paid_only: false },
-  'nanobanana': { cost: 0.001, quality: 'rapid', description: 'NanoBanana - Ultra-fast generation', paid_only: false },
-  'nanobanana-2': { cost: 0.001, quality: 'rapid', description: 'NanoBanana 2 - Ultra-fast generation', paid_only: false },
-  'seedream': { cost: 0.005, quality: 'high', description: 'SeeDream - High quality image gen', paid_only: false },
-  'wan-image': { cost: 0.005, quality: 'high', description: 'Wan Image - Multi-style generation', paid_only: false },
-  'kontext': { cost: 0.02, quality: 'ultra', description: 'Kontext - Context-aware image editing', paid_only: false },
-} as const;
-
 // In-memory cache for dynamic models
 let cachedModels: any = null;
 let lastFetchTime = 0;
@@ -58,18 +44,17 @@ async function getDynamicModels() {
       };
     });
 
-    // Merge with fallback to ensure our core set always exists
-    cachedModels = { ...FALLBACK_MODELS, ...mapped };
+    cachedModels = mapped;
     lastFetchTime = now;
     console.log("✅ [DynamicModels] Successfully refreshed.");
     return cachedModels;
   } catch (err: any) {
-    console.error("❌ Failed to fetch dynamic models, using fallbacks:", err.message);
-    return FALLBACK_MODELS;
+    console.error("❌ Failed to fetch dynamic models:", err.message);
+    throw err;
   }
 }
 
-type ModelName = keyof typeof FALLBACK_MODELS | string;
+
 
 interface GenerateImageRequest {
   prompt: string;
@@ -207,12 +192,6 @@ function applyStyleToPrompt(prompt: string, style?: string, composition?: string
 }
 
 /**
- * Model registry for rotation
- */
-const DEFAULT_ROTATION = ['nanobanana-2', 'zimage', 'wan-image', 'klein', 'flux', 'seedream', 'gptimage'];
-
-
-/**
  * POST /api/generate-image
  * 
  * Generate images using Pollinations.ai API
@@ -304,8 +283,7 @@ export async function POST(req: Request) {
     // Implement model rotation for higher success rate
     let currentModel = model;
     
-    // For guest users (no API key), only use free models
-    const rotationPool = userApiKey ? Object.keys(POLLINATIONS_MODELS) : DEFAULT_ROTATION;
+    const rotationPool = Object.keys(POLLINATIONS_MODELS);
     
     let rotationIndex = rotationPool.indexOf(currentModel as any);
     if (rotationIndex === -1) {

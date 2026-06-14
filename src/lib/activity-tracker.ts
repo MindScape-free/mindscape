@@ -50,7 +50,7 @@ export async function updateUserStatistics(
       longestStreak = Math.max(currentStreak, longestStreak);
     }
 
-    const isSubMap = updates.mapMetadata?.isSubMap === true;
+    const isSubMap = (updates.mapMetadata as any)?.isSubMap === true;
     const mapsToIncrement = (updates.mapsCreated || 0) > 0 ? (isSubMap ? 0 : updates.mapsCreated || 0) : 0;
     const nestedToIncrement = (updates.nestedExpansions || 0) + ((updates.mapsCreated || 0) > 0 && isSubMap ? 1 : 0);
 

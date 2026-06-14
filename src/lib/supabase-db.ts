@@ -8,18 +8,9 @@ export function getSupabaseClient(): SupabaseClient {
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
   if (!url || !key) {
-    if (typeof window === 'undefined') {
-      console.warn('[Supabase] Environment variables NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are missing.');
-    } else {
-      console.error('[Supabase] Missing configuration! Google Login and database features will not work until NEXT_PUBLIC_SUPABASE_URL is set.');
-    }
-    
-    const fallbackUrl = 'https://dnwsjvxitcndeqepovvo.supabase.co';
-    const fallbackKey = key || 'placeholder'; 
-
-    return createClient(url || fallbackUrl, key || fallbackKey, { 
-      auth: { persistSession: true, autoRefreshToken: true } 
-    });
+    throw new Error(
+      '[Supabase] Missing required environment variables: NEXT_PUBLIC_SUPABASE_URL and/or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are not set.'
+    );
   }
 
   console.log('[Supabase] Initializing client with:', url);
@@ -39,10 +30,9 @@ export function getSupabaseClientWithOptions(options?: { persistSession?: boolea
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
   if (!url || !key) {
-    const fallbackUrl = 'https://dnwsjvxitcndeqepovvo.supabase.co';
-    return createClient(url || fallbackUrl, key || 'placeholder', { 
-      auth: { persistSession: true, autoRefreshToken: true } 
-    });
+    throw new Error(
+      '[Supabase] Missing required environment variables: NEXT_PUBLIC_SUPABASE_URL and/or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are not set.'
+    );
   }
 
   clientInstance = createClient(url, key, {

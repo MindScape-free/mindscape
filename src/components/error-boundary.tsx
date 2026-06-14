@@ -6,7 +6,6 @@ import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
-  fallback?: ReactNode;
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
   sectionName?: string;
 }
@@ -41,10 +40,6 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
-      if (this.props.fallback) {
-        return this.props.fallback;
-      }
-
       return (
         <div className="flex flex-col items-center justify-center min-h-[400px] p-8 text-center">
           <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-6">
@@ -79,7 +74,6 @@ export class ErrorBoundary extends Component<Props, State> {
 
 interface AsyncErrorProps {
   children: (handleError: (error: Error) => void) => ReactNode;
-  fallback?: ReactNode;
 }
 
 interface AsyncErrorState {
@@ -102,7 +96,7 @@ export class AsyncErrorBoundary extends Component<AsyncErrorProps, AsyncErrorSta
 
   render() {
     if (this.state.error) {
-      return this.props.fallback || (
+      return (
         <div className="flex flex-col items-center justify-center p-4 text-center">
           <AlertTriangle className="w-6 h-6 text-destructive mb-2" />
           <p className="text-sm text-muted-foreground">{this.state.error.message}</p>

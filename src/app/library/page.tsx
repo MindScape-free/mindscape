@@ -640,6 +640,7 @@ export default function DashboardPage() {
       if (fetchError || !fullData) throw new Error("Mind map data not found.");
 
       const publicData: any = {
+        id: map.id,
         topic: map.topic,
         summary: map.summary,
         content: fullData.content || {},
@@ -792,12 +793,16 @@ export default function DashboardPage() {
   const [isMindMapsLoading, setIsMindMapsLoading] = useState(true);
 
   useEffect(() => {
-    if (!user || !supabase) return;
+    const currentUser = user;
+    const currentSupabase = supabase;
+    if (!currentUser || !currentSupabase) return;
+    const sb = currentSupabase;
+    const u = currentUser;
     async function fetchMaps() {
-      const { data } = await supabase
+      const { data } = await sb
         .from('mindmaps')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', u.id)
         .order('updated_at', { ascending: false })
         .limit(50);
       // Normalize snake_case to camelCase for consistency

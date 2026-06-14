@@ -109,7 +109,7 @@ export function ModerationCards({ onViewMap }: ModerationCardsProps) {
                 <Clock className="h-3.5 w-3.5 text-zinc-500" />
               </div>
               <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                {map.created_at ? formatDistanceToNow(toDate(map.created_at), { addSuffix: true }) : 'Unknown'}
+                {formatDistanceToNow(toDate(map.createdAt), { addSuffix: true })}
               </span>
             </div>
           </div>

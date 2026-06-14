@@ -187,7 +187,7 @@ export function normalizeSearchResults(rawResults: any, query: string): SearchCo
             images.push({
                 url: imageUrl,
                 title: `${query} visualization`,
-                sourceUrl: sources[0]?.url // Link back to first source as fallback
+                sourceUrl: sources[0]?.url
             });
         }
 

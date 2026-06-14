@@ -9,8 +9,8 @@ import { format } from 'date-fns';
 import { formatDistanceToNow } from 'date-fns';
 import { 
   Avatar, 
-  AvatarFallback, 
-  AvatarImage 
+  AvatarImage,
+  AvatarFallback 
 } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

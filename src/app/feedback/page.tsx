@@ -3,7 +3,7 @@
 import React from 'react';
 import { FeedbackForm } from '@/components/feedback/FeedbackForm';
 import { FeedbackCards } from '@/components/feedback/FeedbackCards';
-import { useUser } from '@/lib/auth-context';
+import { useAuth } from '@/lib/auth-context';
 import { MessageSquare, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +11,7 @@ import { useState, useEffect } from 'react';
 import { Feedback } from '@/types/feedback';
 
 export default function FeedbackPage() {
-    const { user, supabase } = useUser();
+    const { user, supabase, isUserLoading } = useAuth();
     const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 

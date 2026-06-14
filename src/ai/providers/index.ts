@@ -17,7 +17,6 @@ export type {
 } from './types';
 
 export { PollinationsAdapter } from './pollinations-adapter';
-export { OpenAICompatibleAdapter } from './openai-compatible-adapter';
 export { getProviderRegistry } from './registry';
 export { loadAIConfig } from './config';
 export { orchestrate, orchestrateStream } from './orchestrator';

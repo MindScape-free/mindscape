@@ -127,53 +127,9 @@ Identify and provide direct image URLs (jpg, png, webp) for visual reference.`
         // Log response structure for debugging
         console.log('📦 Search response content:', (message?.content || 'EMPTY').substring(0, 500));
 
-        // --- FALLBACK LOGIC ---
-        // If content is empty or looks like a failure message, try next fallback
-        const isEmpty = !message || !message.content || message.content.length < 50;
-
-        if (isEmpty) {
-            console.warn('⚠️ Search model returned empty or minimal results. Triggering internal research fallback...');
-            // Manually trigger the "catch" block behavior by throwing an error
-            throw new Error('All search models returned empty results');
-        }
-
         return data;
     } catch (error: any) {
         console.error('❌ Google Search Execution Failed:', error);
-
-        // Final fallback: Use a standard model for "internal knowledge" research if search fails
-        const isSearchModel = !params.model || params.model === 'perplexity-fast';
-        if (isSearchModel) {
-            console.warn('🔄 All search-specific models failed or errored. Attempting internal research with mistral...');
-            try {
-                // We use a simpler fetch here to avoid circular dependencies with dispatcher
-                const body = {
-                    messages: [
-                        { role: 'system', content: 'You are a research assistant. Provide a brief, factual summary of the given topic based on your internal knowledge. Prefer specific facts over general statements.' },
-                        { role: 'user', content: `Summarize key facts and specific concepts for: "${query}"` }
-                    ],
-                    model: 'mistral',
-                    stream: false
-                };
-
-                const response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${effectiveApiKey}`
-                    },
-                    body: JSON.stringify(body),
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    console.log('✅ Internal research fallback successful');
-                    return data;
-                }
-            } catch (innerError) {
-                console.error('❌ Internal research fallback failed:', innerError);
-            }
-        }
 
         throw new Error(`Google Search failed: ${error.message}`);
     }

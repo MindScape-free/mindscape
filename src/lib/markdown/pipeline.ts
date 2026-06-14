@@ -45,8 +45,8 @@ export function remarkEntityLink() {
       }
 
       if (nodes.length > 0) {
-        parent.children.splice(index, 1, ...nodes);
-        return index + nodes.length;
+        parent.children.splice(index!, 1, ...nodes);
+        return index! + nodes.length;
       }
     });
   };

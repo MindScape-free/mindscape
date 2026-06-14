@@ -414,8 +414,7 @@ export default function AdminDashboard() {
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
           >
-            <Suspense fallback={<div className="flex h-64 items-center justify-center"><Loader2 className="animate-spin h-8 w-8 text-violet-500" /></div>}>
-              {activeTab === 'dashboard' && (
+            {activeTab === 'dashboard' && (
                 <DashboardTab 
                   stats={stats}
                   metrics={metrics}
@@ -463,7 +462,6 @@ export default function AdminDashboard() {
               {activeTab === 'ai_telemetry' && (
                 <AITelemetryTab aiCalls={bundle.aiCalls} isLoading={isDashboardLoading} />
               )}
-            </Suspense>
           </motion.div>
         </AnimatePresence>
       </main>

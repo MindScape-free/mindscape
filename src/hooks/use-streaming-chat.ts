@@ -65,7 +65,6 @@ export function useStreamingChat(options: StreamingChatOptions = {}): StreamingC
     if (input.token) {
       headers['Authorization'] = `Bearer ${input.token}`;
     } else if (input.apiKey) {
-      // Fallback for cases where apiKey is used for auth (less common now)
       headers['Authorization'] = `Bearer ${input.apiKey}`;
     }
 
@@ -135,7 +134,6 @@ export function useStreamingChat(options: StreamingChatOptions = {}): StreamingC
               });
             } catch (e) { console.error('Failed to parse tool result', e); }
           } else if (!event.includes(':')) {
-            // Fallback for raw text without prefix (legacy or other providers)
             accumulatedText += event;
             fullTextRef.current = accumulatedText;
             setText(accumulatedText);

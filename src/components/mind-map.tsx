@@ -563,11 +563,20 @@ export const MindMap = ({
   }, [data.savedImages, data.nestedExpansions, data.explanations, propNestedExpansions]);
 
   // AUTO-SUMMARIZE when canvas content is fully loaded/generated
+  const hasAutoSummarizedRef = useRef(false);
+
+  // Reset the auto-summarize lock when the map changes
+  useEffect(() => {
+    hasAutoSummarizedRef.current = false;
+    setSummaryContent(data.summary || '');
+  }, [data.id]);
+
   useEffect(() => {
     const isReady = status === 'idle' && data && data.mode === 'single' && (data.subTopics?.length || 0) > 0;
     const isNewMap = !data.summary && !summaryContent && !isSummarizing;
 
-    if (isReady && isNewMap) {
+    if (isReady && isNewMap && !hasAutoSummarizedRef.current) {
+      hasAutoSummarizedRef.current = true;
       console.log('✨ Auto-summarizing new topic canvas...');
       const triggerAutoSummary = async () => {
         setIsSummarizing(true);
@@ -578,11 +587,11 @@ export const MindMap = ({
 
           if (summary && !error) {
             setSummaryContent(summary);
-            // Persist the summary back to Firestore
             if (onUpdate) onUpdate({ summary });
           }
         } catch (err) {
           console.error('Silent auto-summarization failed:', err);
+          hasAutoSummarizedRef.current = false; // allow retry on next idle
         } finally {
           setIsSummarizing(false);
         }
@@ -590,7 +599,7 @@ export const MindMap = ({
 
       triggerAutoSummary();
     }
-  }, [status, data, summaryContent, isSummarizing, providerOptions, onUpdate]);
+  }, [status, data.id, summaryContent, isSummarizing]);
 
   const handleSaveMap = async () => {
     if (onSaveMap) onSaveMap();
@@ -692,39 +701,27 @@ export const MindMap = ({
   // Notify parent of updates
   const lastNotifiedRef = useRef<string>('');
   useEffect(() => {
-    if (onUpdate) {
-      const sanitizedExpansions = nestedExpansions.map(item => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { fullData, ...rest } = item;
-        return rest;
-      });
+    if (!onUpdate) return;
+    const sanitizedExpansions = nestedExpansions.map(item => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { fullData, ...rest } = item;
+      return rest;
+    });
 
-      const dataToNotify = toPlainObject({
-        nestedExpansions: sanitizedExpansions,
-        savedImages: generatedImages,
-        explanations: explanations,
-        enrichments: enrichments,
-        confidenceRatings: confidenceRatings,
-        quizAnswers: quizAnswers,
-      });
+    const dataToNotify = toPlainObject({
+      nestedExpansions: sanitizedExpansions,
+      savedImages: generatedImages,
+      explanations: explanations,
+      enrichments: enrichments,
+      confidenceRatings: confidenceRatings,
+      quizAnswers: quizAnswers,
+    });
 
-      const hasMeaningfulChanges =
-        JSON.stringify(nestedExpansions) !== JSON.stringify(propNestedExpansions || data.nestedExpansions || []) ||
-        JSON.stringify(generatedImages) !== JSON.stringify(data.savedImages || []) ||
-        JSON.stringify(explanations) !== JSON.stringify(data.explanations || {}) ||
-        JSON.stringify(enrichments) !== JSON.stringify(data.enrichments || {}) ||
-        JSON.stringify(confidenceRatings) !== JSON.stringify(data.confidenceRatings || {}) ||
-        JSON.stringify(quizAnswers) !== JSON.stringify(data.quizAnswers || {});
-
-      if (!hasMeaningfulChanges) return;
-
-      const stringified = JSON.stringify(dataToNotify);
-      if (stringified !== lastNotifiedRef.current) {
-        lastNotifiedRef.current = stringified;
-        onUpdate(dataToNotify);
-      }
-    }
-  }, [generatedImages, nestedExpansions, explanations, enrichments, confidenceRatings, quizAnswers, onUpdate, data.nestedExpansions, data.savedImages, data.explanations, data.enrichments, data.confidenceRatings, data.quizAnswers, propNestedExpansions]);
+    const stringified = JSON.stringify(dataToNotify);
+    if (stringified === lastNotifiedRef.current) return;
+    lastNotifiedRef.current = stringified;
+    onUpdate(dataToNotify);
+  }, [generatedImages, nestedExpansions, explanations, enrichments, confidenceRatings, quizAnswers, onUpdate]);
 
 
 
@@ -1282,39 +1279,41 @@ export const MindMap = ({
     setIsDuplicating(true);
 
     try {
-      if (!user) {
+      if (!user || !supabase) {
         throw new Error("You must be logged in to duplicate a mind map.");
       }
 
-      // Create a new map object, excluding fields that shouldn't be copied
-      const { id, parentMapId, isSubMap, createdAt: oldCreatedAt, updatedAt: oldUpdatedAt, ...cleanData } = data as any;
-
-      const newMapData = {
-        ...cleanData,
-        userId: user.id,
-        nestedExpansions: [], // Start fresh
-        savedImages: [], // Start fresh
-      };
-
-      // We essentially just "create new map" flow
-      // But simpler: just tell parent we want to save this as a new map?
-      // Actually, since this is "Duplicate", we should probably just save it directly to the user's collection
-
-      const { data: newMap, error: insertError } = await supabase!.from('mindmaps').insert({
-        ...newMapData,
+      const singleData = data as any;
+      // Build a properly snake_case row matching the mindmaps table schema
+      const { data: newMap, error: insertError } = await supabase.from('mindmaps').insert({
+        topic: data.topic,
+        summary: data.summary || '',
+        user_id: user.id,
+        mode: data.mode || 'single',
+        depth: data.depth || 'medium',
+        ai_persona: data.aiPersona || 'Teacher',
+        node_count: data.nodeCount || 0,
+        is_public: false,
+        is_sub_map: false,
+        parent_map_id: null,
+        content: {
+          subTopics: singleData.subTopics || [],
+          compareData: singleData.compareData || null,
+          explanations: {},
+          shortTitle: data.shortTitle || null,
+        },
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      }).select().single();
+      }).select('id').single();
 
       if (insertError) throw insertError;
 
       toast({
         title: "Mind Map Duplicated",
-        description: "A copy has been saved to your dashboard.",
+        description: "A copy has been saved to your library.",
       });
 
-      // Redirect to the new map?
-      router.push(`/data?id=${newMap.id}`);
+      router.push(`/canvas?mapId=${newMap.id}`);
 
     } catch (error: any) {
       toast({
@@ -1488,8 +1487,13 @@ export const MindMap = ({
         views: 0,
       };
 
-      // 4. Save via Server Action
-      const { success, error: publishError } = await publishMindMapAction(data.id!, publicData, user.id);
+    // 4. Save via Server Action
+      if (!data.id) {
+        update({ id: toastId, title: 'Save Required', description: 'Please save your mind map before publishing.', variant: 'destructive', duration: 5000 });
+        setIsPublishing(false);
+        return;
+      }
+      const { success, error: publishError } = await publishMindMapAction(data.id, publicData, user.id);
 
       if (!success) {
         throw new Error(publishError || 'Failed to publish mind map.');

@@ -115,7 +115,7 @@ export async function awardPoints(
     
     // Map point events to statistical updates
     const statUpdates: any = {};
-    if (['MAP_CREATED', 'MAP_COMPARE', 'MAP_MULTI_SOURCE'].includes(eventType)) {
+    if (['MAP_CREATED', 'MAP_COMPARE', 'MAP_MULTI_SOURCE', 'MAP_PUBLISHED', 'MAP_TRANSLATED'].includes(eventType)) {
       statUpdates.mapsCreated = 1;
     } else if (eventType === 'SUB_MAP_CREATED') {
       statUpdates.nestedExpansions = 1;
