@@ -36,7 +36,6 @@
     "@supabase/supabase-js": "^2.104.0",
     "@testing-library/dom": "^10.4.1",
     "@types/mozilla-readability": "^0.2.1",
-    "@welldone-software/why-did-you-render": "^10.0.1",
     "cheerio": "^1.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

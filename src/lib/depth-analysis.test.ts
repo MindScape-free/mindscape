@@ -157,12 +157,14 @@ describe('findMatchingCategory()', () => {
   describe('Level 3 -- fuzzy (Levenshtein) match', () => {
     it('matches with a single-character typo', () => {
       const result = findMatchingCategory('Statisticss', mockSubTopics);
-      expect(result).toMatchObject({ subTopicIndex: 1, categoryIndex: 0, matchLevel: 'fuzzy' });
+      // 'statisticss' starts with 'statistics' (91% ratio above 50%) → word-level 'contains'
+      expect(result).toMatchObject({ subTopicIndex: 1, categoryIndex: 0, matchLevel: 'contains' });
     });
 
     it('matches with a single character missing', () => {
       const result = findMatchingCategory('Neural Network', mockSubTopics);
-      expect(result).toMatchObject({ subTopicIndex: 0, categoryIndex: 1, matchLevel: 'fuzzy' });
+      // 'neural' is an exact word-level match, so Level 2 'contains' fires
+      expect(result).toMatchObject({ subTopicIndex: 0, categoryIndex: 1, matchLevel: 'contains' });
     });
 
     it('matches with a transposition', () => {
@@ -181,18 +183,21 @@ describe('findMatchingCategory()', () => {
   describe('Level 4 -- word-overlap fallback', () => {
     it('finds best category via word overlap for a compound tag', () => {
       const result = findMatchingCategory('Machine Vision', mockSubTopics);
-      expect(result).toMatchObject({ matchLevel: 'fallback', subTopicIndex: 0, categoryIndex: 0 });
+      // 'machine' is an exact word-level match with 'Machine Learning' → Level 2 'contains'
+      expect(result).toMatchObject({ matchLevel: 'contains', subTopicIndex: 0, categoryIndex: 0 });
     });
 
     it('finds best category for partially matching tag', () => {
       const result = findMatchingCategory('Data Visual', mockSubTopics);
-      expect(result).toMatchObject({ matchLevel: 'fallback', subTopicIndex: 1, categoryIndex: 1 });
+      // 'data' is an exact word-level match with 'Data Visualization' → Level 2 'contains'
+      expect(result).toMatchObject({ matchLevel: 'contains', subTopicIndex: 1, categoryIndex: 1 });
     });
 
     it('scores subtopic name at 70% weight for categorization', () => {
       const result = findMatchingCategory('Data Mining', mockSubTopics);
+      // 'data' is an exact word-level match with 'Data Visualization' → Level 2 'contains'
       expect(result).not.toBeNull();
-      expect(result!.matchLevel).toBe('fallback');
+      expect(result!.matchLevel).toBe('contains');
       expect(result!.subTopicIndex).toBe(1);
     });
   });

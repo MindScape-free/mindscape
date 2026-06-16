@@ -1,8 +1,5 @@
 'use client';
 
-// ── WDYR must be imported before any React imports ──
-import '@/lib/wdyr';
-
 import React from 'react';
 import { logRenderStats } from '@/hooks/use-render-timing';
 import { logProfilerStats } from '@/components/debug/profiler';
@@ -10,7 +7,6 @@ import { logProfilerStats } from '@/components/debug/profiler';
 /**
  * Dev-only performance monitor.
  *
- * - Imports why-did-you-render (tracks unnecessary re-renders)
  * - Adds a global keyboard shortcut (Ctrl+Shift+R) to log render stats
  * - Adds a global keyboard shortcut (Ctrl+Shift+P) to log Profiler stats
  *

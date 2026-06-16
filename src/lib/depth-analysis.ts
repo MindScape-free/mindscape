@@ -265,6 +265,27 @@ function tokenize(s: string): string[] {
   return s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
 }
 
+/**
+ * Check if tokens from A share a word-level containment with tokens from B.
+ * Uses exact match + prefix/suffix match with a 50% length ratio guard.
+ * The ratio guard prevents short prefixes (e.g. 'stat' in 'statistics', 4/10=40%)
+ * from triggering a 'contains' match, while allowing meaningful ones
+ * (e.g. 'learn' in 'learning', 5/8=63%).
+ */
+function tokensContain(a: string[], b: string[]): boolean {
+  for (const ta of a) {
+    for (const tb of b) {
+      if (ta === tb) return true;
+      const shorter = ta.length <= tb.length ? ta : tb;
+      const longer = ta.length <= tb.length ? tb : ta;
+      if (longer.startsWith(shorter) || longer.endsWith(shorter)) {
+        if (shorter.length >= longer.length * 0.5) return true;
+      }
+    }
+  }
+  return false;
+}
+
 function wordOverlapScore(tag: string, target: string): number {
   const tagTokens = tokenize(tag);
   const targetTokens = tokenize(target);
@@ -306,15 +327,16 @@ export function findMatchingCategory(
       return { subTopicIndex: si, categoryIndex: 0, matchLevel: 'exact' };
   }
 
-  // Level 2: one contains the other
+  // Level 2: word-level overlap (token prefix/suffix/exact match)
+  const tagTokens = tokenize(tag);
   for (let si = 0; si < subTopics.length; si++) {
     for (let ci = 0; ci < subTopics[si].categories.length; ci++) {
-      const catN = norm(subTopics[si].categories[ci].name);
-      if (catN.includes(tagN) || tagN.includes(catN))
+      const catTokens = tokenize(subTopics[si].categories[ci].name);
+      if (tokensContain(tagTokens, catTokens))
         return { subTopicIndex: si, categoryIndex: ci, matchLevel: 'contains' };
     }
-    const stN = norm(subTopics[si].name);
-    if (stN.includes(tagN) || tagN.includes(stN))
+    const stTokens = tokenize(subTopics[si].name);
+    if (tokensContain(tagTokens, stTokens))
       return { subTopicIndex: si, categoryIndex: 0, matchLevel: 'contains' };
   }
 
