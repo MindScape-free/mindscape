@@ -91,7 +91,7 @@ export function useAdminStats(options?: {
   }, [getToken]);
 
   const { data, error, isLoading, isValidating, mutate: revalidate } = useSWR<StatsResponse>(
-    [API_BASE, user?.uid],
+    [API_BASE, user?.id],
     () => fetcher(),
     {
       refreshInterval,
@@ -107,8 +107,8 @@ export function useAdminStats(options?: {
   const refresh = useCallback(async (forceRefresh = false) => {
     const url = forceRefresh ? `${API_BASE}?refresh=true` : API_BASE;
     const token = await getToken();
-    await mutate([API_BASE, user?.uid], fetchWithAuth(url, token), { revalidate: true });
-  }, [getToken, user?.uid, revalidate]);
+    await mutate([API_BASE, user?.id], fetchWithAuth(url, token), { revalidate: true });
+  }, [getToken, user?.id, revalidate]);
 
   return {
     stats: data?.data || null,

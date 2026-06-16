@@ -4,11 +4,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { MindMapData } from '@/types/mind-map';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation';
 import { trackMapCreated, trackStudyTime, trackNodesAdded, trackNestedExpansion } from '@/lib/activity-tracker';
 import { Achievement } from '@/lib/achievements';
-import { awardPointsAction } from '@/app/actions/award-points';
-import { getSupabaseClient, saveMindMap, updateMindMapField, getUserProfile, updateUserField } from '@/lib/supabase-db';
+import { saveMindMap, updateMindMapField, getUserProfile, updateUserField } from '@/lib/supabase-db';
 
 interface PersistenceOptions {
   onRemoteUpdate?: (data: MindMapData) => void;
@@ -19,7 +17,6 @@ interface PersistenceOptions {
 export function useMindMapPersistence(options: PersistenceOptions = {}) {
   const { user, supabase } = useAuth();
   const { toast } = useToast();
-  const router = useRouter();
   const isSavingRef = useRef(false);
   const generatingThumbnailsRef = useRef<Set<string>>(new Set());
   const [aiPersona, setAiPersona] = useState<string>('Teacher');
@@ -97,12 +94,12 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
         sourceFileContent, originalPdfFileContent, id, 
         aiPersona: mapAiPersona, nodeCount: mapNodeCount, isSubMap: mapIsSubMap, 
         sourceFileType: mapSourceFileType, isPublic: mapIsPublic, thumbnailUrl: mapThumbnailUrl,
-        shortTitle, thumbnailPrompt, summaryAudioUrl, isShared, publicCategories,
+        shortTitle, thumbnailPrompt,        summaryAudioUrl, isShared, publicCategories,
         publicViews, originalAuthorId, authorName, authorAvatar, searchSources,
         searchImages, searchTimestamp, pdfContext, videoId, sourceType,
         categoriesCount, sourcesCount, pinnedMessages, enrichments,
         confidenceRatings, quizAnswers, createdAt, updatedAt,
-        ...metadata 
+        ...metadata // eslint-disable-line @typescript-eslint/no-unused-vars  
       } = mapToSave as any;
 
       // Calculate node count
@@ -158,7 +155,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
       const finalId = await saveMindMap(supabase, user.id, targetId, metadataToSave, contentToSave);
 
       // Background thumbnail generation - Only if missing, not already generating, and not a temporary synthesis state
-      const isSynthesizing = mapToSave.subTopics?.some((st: any) => st.name === "Synthesizing...");
+      const isSynthesizing = (mapToSave as any).subTopics?.some((st: any) => st.name === "Synthesizing...");
       if (!mapToSave.thumbnailUrl && !generatingThumbnailsRef.current.has(finalId) && !isSynthesizing) {
         generatingThumbnailsRef.current.add(finalId);
         (async () => {

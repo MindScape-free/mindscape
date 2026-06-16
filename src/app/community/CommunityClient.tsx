@@ -64,7 +64,7 @@ export default function CommunityPage() {
     const categories = useMemo(() => {
         const cats = new Set<string>(['All']);
         publicMaps?.forEach(map => {
-            map.publicCategories?.forEach(cat => cats.add(cat));
+            map.publicCategories?.forEach((cat: string) => cats.add(cat));
         });
         return Array.from(cats);
     }, [publicMaps]);

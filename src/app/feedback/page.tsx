@@ -73,7 +73,7 @@ export default function FeedbackPage() {
                         <section id="feedback-form" className="relative">
                             <div className="absolute inset-0 bg-primary/5 blur-[120px] rounded-full pointer-events-none" />
                             <FeedbackForm
-                                userId={user?.uid}
+                                userId={user?.id}
                                 userName={user?.displayName || undefined}
                                 userEmail={user?.email || undefined}
                             />
@@ -87,7 +87,7 @@ export default function FeedbackPage() {
                             <FeedbackCards 
                                 data={feedbacks} 
                                 onRefresh={fetchFeedback} 
-                                adminUserId={user?.uid || ''} 
+                                adminUserId={user?.id || ''} 
                                 isLoading={isLoading} 
                             />
                         </section>

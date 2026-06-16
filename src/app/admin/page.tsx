@@ -259,7 +259,7 @@ export default function AdminDashboard() {
         type: 'FULL_REFRESH',
         targetType: 'system',
         details: 'Manual full re-sync triggered',
-        performedBy: user?.uid,
+        performedBy: user?.id,
       });
       await refreshBundle(true);
     } catch (e: any) {
@@ -457,7 +457,7 @@ export default function AdminDashboard() {
                 />
               )}
               {activeTab === 'feedback' && (
-                <FeedbackCards data={feedbackData} adminUserId={user?.uid || ''} onRefresh={refreshBundle} isLoading={isDashboardLoading && feedbackData.length === 0} />
+                <FeedbackCards data={feedbackData} adminUserId={user?.id || ''} onRefresh={refreshBundle} isLoading={isDashboardLoading && feedbackData.length === 0} />
               )}
               {activeTab === 'ai_telemetry' && (
                 <AITelemetryTab aiCalls={bundle.aiCalls} isLoading={isDashboardLoading} />

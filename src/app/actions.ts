@@ -109,12 +109,17 @@ function stableId(id: string | undefined, prefix: string, name: string): string 
 
 export async function mapToMindMapData(raw: any, depth: 'low' | 'medium' | 'deep' = 'low'): Promise<MindMapData> {
   if (raw.mode === 'compare' || raw.compareData) {
+    const unityNexusLength = raw.compareData?.unityNexus?.length || raw.similarities?.length || 0;
+    const dimensionsLength = raw.compareData?.dimensions?.length || 0;
+    const nodeCount = 1 + unityNexusLength + dimensionsLength;
+
     // If the data is already in the new nested compareData format, pass it through
     if (raw.compareData) {
       return {
         ...raw,
         mode: 'compare',
         depth,
+        nodeCount,
         createdAt: raw.createdAt || raw.created_at || Date.now(),
         updatedAt: raw.updatedAt || raw.updated_at || Date.now(),
         shortTitle: raw.short_title || raw.shortTitle || raw.content?.shortTitle,
@@ -135,6 +140,7 @@ export async function mapToMindMapData(raw: any, depth: 'low' | 'medium' | 'deep
       ...raw,
       mode: 'compare',
       depth,
+      nodeCount,
       compareData: {
         root: raw.root || { title: raw.topic || 'Comparison' },
         unityNexus: (raw.similarities || []).map((n: any) => ({ ...n, id: stableId(n.id, 'nexus', n.title || n.name || '') })),
@@ -146,10 +152,56 @@ export async function mapToMindMapData(raw: any, depth: 'low' | 'medium' | 'deep
   }
 
   // Handle single mode
+  const mappedSubTopics = (raw.subTopics || []).map((st: any): SubTopic => {
+    const normalizedName = (st.name || '').trim().replace(/[:.!?]$/, '');
+    return {
+      name: normalizedName,
+      icon: st.icon || 'flag',
+      insight: st.insight || '',
+      id: stableId(st.id, 'topic', normalizedName),
+      categories: (st.categories || []).map((cat: any): Category => {
+        const catName = (cat.name || '').trim().replace(/[:.!?]$/, '');
+        return {
+          name: catName,
+          icon: cat.icon || 'folder',
+          insight: cat.insight || '',
+          id: stableId(cat.id, 'cat', catName),
+          subCategories: (cat.subCategories || [])
+            .map((sub: any) => {
+              if (typeof sub === 'string') {
+                const subContent = sub.trim().replace(/[:.!?]$/, '');
+                return { name: subContent, description: `Details about ${subContent}`, icon: 'book-open', tags: [] };
+              }
+              return sub;
+            })
+            .filter((sub: any) => sub && typeof sub.name === 'string' && sub.name.trim() !== '')
+            .map((sub: any): SubCategory => ({
+              name: (sub.name || '').trim().replace(/[:.!?]$/, ''),
+              description: sub.description || '',
+              icon: sub.icon || 'book-open',
+              tags: Array.isArray(sub.tags) ? sub.tags : [],
+              id: stableId(sub.id, 'sub', sub.name || ''),
+              isExpanded: false
+            }))
+        };
+      })
+    };
+  });
+
+  let nodeCount = 1; // start with root
+  mappedSubTopics.forEach((st: any) => {
+    nodeCount++; // add subtopic
+    st.categories?.forEach((cat: any) => {
+      nodeCount++; // add category
+      nodeCount += cat.subCategories?.length || 0; // add subcategories
+    });
+  });
+
   return {
     ...raw,
     mode: 'single',
     depth,
+    nodeCount,
     createdAt: raw.createdAt || raw.created_at || Date.now(),
     updatedAt: raw.updatedAt || raw.updated_at || Date.now(),
     shortTitle: raw.short_title || raw.shortTitle || raw.content?.shortTitle,
@@ -160,41 +212,7 @@ export async function mapToMindMapData(raw: any, depth: 'low' | 'medium' | 'deep
         tags: Array.isArray(sub.tags) ? sub.tags : []
       }))
     })),
-    subTopics: (raw.subTopics || []).map((st: any): SubTopic => {
-      const normalizedName = (st.name || '').trim().replace(/[:.!?]$/, '');
-      return {
-        name: normalizedName,
-        icon: st.icon || 'flag',
-        insight: st.insight || '',
-        id: stableId(st.id, 'topic', normalizedName),
-        categories: (st.categories || []).map((cat: any): Category => {
-          const catName = (cat.name || '').trim().replace(/[:.!?]$/, '');
-          return {
-            name: catName,
-            icon: cat.icon || 'folder',
-            insight: cat.insight || '',
-            id: stableId(cat.id, 'cat', catName),
-            subCategories: (cat.subCategories || [])
-              .map((sub: any) => {
-                if (typeof sub === 'string') {
-                  const subContent = sub.trim().replace(/[:.!?]$/, '');
-                  return { name: subContent, description: `Details about ${subContent}`, icon: 'book-open', tags: [] };
-                }
-                return sub;
-              })
-              .filter((sub: any) => sub && typeof sub.name === 'string' && sub.name.trim() !== '')
-              .map((sub: any): SubCategory => ({
-                name: (sub.name || '').trim().replace(/[:.!?]$/, ''),
-                description: sub.description || '',
-                icon: sub.icon || 'book-open',
-                tags: Array.isArray(sub.tags) ? sub.tags : [],
-                id: stableId(sub.id, 'sub', sub.name || ''),
-                isExpanded: false
-              }))
-          };
-        })
-      };
-    })
+    subTopics: mappedSubTopics
   } as SingleMindMapData;
 }
 
@@ -505,6 +523,14 @@ export async function resolveDepthWithConfidence(topic: string): Promise<DepthSu
 }
 
 
+function normalizeDepth(d: string | undefined): 'low' | 'medium' | 'deep' {
+  if (!d) return 'medium';
+  const clean = d.toLowerCase().trim();
+  if (clean === 'low' || clean === 'quick') return 'low';
+  if (clean === 'deep' || clean === 'detailed') return 'deep';
+  return 'medium';
+}
+
 export async function generateMindMapAction(
   input: GenerateMindMapInput & { useSearch?: boolean },
   options: AIActionOptions = {}
@@ -516,9 +542,13 @@ export async function generateMindMapAction(
     }
 
     const effectiveApiKey = await resolveApiKey(options);
-    const depth = (input.depth === ('auto' as any) || !input.depth)
-      ? await resolveDepthFast(topic)
-      : input.depth as 'low' | 'medium' | 'deep';
+    const rawDepth = input.depth || 'auto';
+    let normalizedDepth: 'low' | 'medium' | 'deep';
+    if (rawDepth === ('auto' as any)) {
+      normalizedDepth = await resolveDepthFast(topic);
+    } else {
+      normalizedDepth = normalizeDepth(String(rawDepth));
+    }
 
     if (input.context) {
       console.log(`📝 [Action] Context provided (${input.context.length} chars) for topic: "${topic}"`);
@@ -530,7 +560,7 @@ export async function generateMindMapAction(
         console.log(`🔍 [Action] Waiting for search context for: "${topic}"`);
         const searchResult = await generateSearchContext({
           query: topic,
-          depth: depth === 'deep' ? 'deep' : 'basic',
+          depth: normalizedDepth === 'deep' ? 'deep' : 'basic',
           apiKey: effectiveApiKey,
           provider: options.provider,
         });
@@ -546,16 +576,16 @@ export async function generateMindMapAction(
     const generationResult = await generateMindMap({
       ...input,
       topic,
-      depth: ({ low: 'quick' as const, medium: 'balanced' as const, deep: 'detailed' as const })[depth] ?? 'balanced',
+      depth: normalizedDepth === 'low' ? 'quick' as const : (normalizedDepth === 'deep' ? 'detailed' as const : 'balanced' as const),
       searchContext, 
       ...options,
       apiKey: effectiveApiKey,
-      capability: depth === 'deep' ? 'fast' : 'fast' 
+      capability: normalizedDepth === 'deep' ? 'reasoning' : (normalizedDepth === 'medium' ? 'creative' : 'fast') 
     });
 
     if (!generationResult) return { data: null, error: 'AI failed to generate content.' };
 
-    const sanitized = await mapToMindMapData(generationResult, depth);
+    const sanitized = await mapToMindMapData(generationResult, normalizedDepth);
     sanitized.aiPersona = input.persona as string || 'Teacher';
 
     if (searchContext && searchContext.sources.length > 0) {
@@ -668,9 +698,10 @@ export async function generateMindMapFromPdfAction(
 
   try {
     const effectiveApiKey = await resolveApiKey(options);
-    const depth = (input.depth === 'auto' || !input.depth)
+    const rawDepth = input.depth || 'auto';
+    const depth = (rawDepth === 'auto')
       ? await resolveDepthFast(input.text.substring(0, 200))
-      : input.depth as 'low' | 'medium' | 'deep';
+      : normalizeDepth(String(rawDepth));
     const result = await generateMindMapFromPdf({ ...input, depth, ...options, apiKey: effectiveApiKey });
     if (!result) return { data: null, error: 'AI failed to process PDF.' };
 
@@ -703,9 +734,10 @@ export async function generateMindMapFromTextAction(
 
   try {
     const effectiveApiKey = await resolveApiKey(options);
-    const depth = (input.depth === 'auto' || !input.depth)
+    const rawDepth = input.depth || 'auto';
+    const depth = (rawDepth === 'auto')
       ? await resolveDepthFast(input.text.substring(0, 300))
-      : input.depth as 'low' | 'medium' | 'deep';
+      : normalizeDepth(String(rawDepth));
     const result = await generateMindMapFromText({ ...input, depth, ...options, apiKey: effectiveApiKey });
     if (!result) return { data: null, error: 'AI failed to process text.' };
     const sanitized = await mapToMindMapData(result, depth);
@@ -804,9 +836,10 @@ export async function generateMindMapFromWebsiteAction(
     }
 
     const effectiveApiKey = await resolveApiKey(options);
-    const depth = (input.depth === ('auto' as any) || !input.depth)
+    const rawDepth = input.depth || 'auto';
+    const depth = (rawDepth === 'auto')
       ? await resolveDepthFast(extractionResult.title || input.url)
-      : input.depth as 'low' | 'medium' | 'deep';
+      : normalizeDepth(String(rawDepth));
 
     // 3. Generate the mind map using the AI flow
     const result = await generateMindMapFromWebsite({
@@ -1441,7 +1474,15 @@ export async function synthesizeNodesAction(
 ): Promise<{ data: any | null; error: string | null }> {
   try {
     const effectiveApiKey = await resolveApiKey(options);
-    const result = await synthesizeNodes({ ...input, ...options, apiKey: effectiveApiKey });
+    const effectivePersona = (input.persona === 'Teacher' || input.persona === 'Concise' || input.persona === 'Creative' || input.persona === 'Sage')
+      ? input.persona
+      : 'Teacher';
+    const result = await synthesizeNodes({
+      ...input,
+      ...options,
+      persona: effectivePersona,
+      apiKey: effectiveApiKey
+    });
     
     return { data: result, error: null };
   } catch (error) {

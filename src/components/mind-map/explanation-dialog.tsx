@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Sparkles,
     ChevronDown,
@@ -723,6 +723,10 @@ export function ExplanationDialog({
 }: ExplanationDialogProps) {
     const isBusy = isLoading || isGlobalBusy;
     const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+
+    const handleModeSelect = useCallback((mode: ExplanationMode) => {
+      onExplanationModeChange(mode);
+    }, [onExplanationModeChange]);
     const [openSections, setOpenSections] = useState<Record<string, boolean>>({
         learningPath: false,
         related: false,
@@ -800,7 +804,7 @@ export function ExplanationDialog({
                                     {['Beginner', 'Intermediate', 'Expert'].map((mode) => (
                                         <DropdownMenuItem
                                             key={mode}
-                                            onSelect={() => onExplanationModeChange(mode as ExplanationMode)}
+                                            onSelect={() => handleModeSelect(mode as ExplanationMode)}
                                             className={cn(
                                                 "rounded-lg px-3 py-2.5 text-[11px] font-medium uppercase tracking-wider transition-all cursor-pointer",
                                                 explanationMode === mode ? "bg-primary/20 text-primary" : "text-zinc-400 hover:bg-white/5 hover:text-white"
@@ -863,7 +867,7 @@ export function ExplanationDialog({
                                             key={item.mode}
                                             initial={{ opacity: 0, y: 10 }}
                                             animate={{ opacity: 1, y: 0 }}
-                                            onClick={() => onExplanationModeChange(item.mode)}
+                                            onClick={() => handleModeSelect(item.mode)}
                                             className={cn(
                                                 "group flex flex-col items-center gap-3 p-5 rounded-xl border border-white/5 transition-all duration-300",
                                                 "bg-white/[0.03] hover:bg-white/[0.06] hover:border-primary/40 relative"

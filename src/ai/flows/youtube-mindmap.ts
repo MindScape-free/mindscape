@@ -136,7 +136,7 @@ VALIDATION:
       systemPrompt,
       userPrompt,
       schema: AIGeneratedMindMapSchema,
-      options: { model: options.model || 'openai', capability: depth === 'deep' ? 'fast' : 'creative' },
+      options: { model: options.model || undefined, capability: depth === 'deep' ? 'reasoning' : (depth === 'medium' ? 'creative' : 'fast') },
     });
 
     if (!result) return { data: null, error: 'AI returned empty result.' };

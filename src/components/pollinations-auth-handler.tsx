@@ -41,7 +41,13 @@ export function PollinationsAuthHandler() {
 
                     window.history.replaceState(null, '', window.location.pathname + window.location.search);
 
-                    await saveUserApiKey(supabase, user.id, apiKey, config.pollinationsModel || 'flux');
+                    await saveUserApiKey(
+                        supabase, 
+                        user.id, 
+                        apiKey, 
+                        config.imageModel || config.pollinationsModel || 'flux',
+                        config.textModel || config.pollinationsModel || 'openai'
+                    );
 
                     // Show success toast
                     toast({

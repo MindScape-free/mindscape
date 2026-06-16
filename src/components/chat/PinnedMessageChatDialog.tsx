@@ -78,8 +78,8 @@ export function PinnedMessageChatDialog({ pin, onClose, currentMap, onMindMapGen
     const providerOptions = {
       provider: config.provider,
       apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-      model: config.pollinationsModel,
-      userId: user?.uid,
+      model: config.textModel || config.pollinationsModel,
+      userId: user?.id,
     };
 
     const { response, error } = await chatAction(

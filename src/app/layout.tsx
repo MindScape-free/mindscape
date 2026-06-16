@@ -18,6 +18,7 @@ import { PollinationsAuthHandler } from '@/components/pollinations-auth-handler'
 import { AuthProvider } from '@/lib/auth-context';
 import { OnboardingWizard } from '@/components/onboarding-wizard';
 import { ChangelogDialog } from '@/components/changelog-dialog';
+import { PerformanceMonitor } from '@/components/debug/performance-monitor';
 
 const spaceGrotesk = localFont({
   src: [
@@ -149,11 +150,13 @@ export default function RootLayout({
                 <ActivityProvider>
                   <XPProvider>
                   <TooltipProvider delayDuration={400}>
-                    <BackgroundGlow />
-                    <Navbar />
-                    <main className="h-full">{children}</main>
-                    <Toaster />
-                    <ChangelogDialog />
+                    <PerformanceMonitor>
+                      <BackgroundGlow />
+                      <Navbar />
+                      <main className="h-full">{children}</main>
+                      <Toaster />
+                      <ChangelogDialog />
+                    </PerformanceMonitor>
                   </TooltipProvider>
                   </XPProvider>
                 </ActivityProvider>

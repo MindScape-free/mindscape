@@ -9,7 +9,6 @@ import mermaid from 'mermaid';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Copy, Play, Check, Code, ExternalLink, Image as ImageIcon, Maximize2, Download, X, Quote } from 'lucide-react';
-import { QuizRenderer } from './quiz-renderer';
 import { RecallChallenge } from './recall-challenge';
 import { toPascalCase } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';

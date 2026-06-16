@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     HelpCircle,
@@ -45,6 +45,10 @@ export function PracticeQuestionsDialog({
     onRegenerate
 }: PracticeQuestionsDialogProps) {
     const questions = rawQuestions || [];
+
+    const handleQuestionClick = useCallback((q: string) => {
+      onQuestionClick(cleanCitations(q));
+    }, [onQuestionClick]);
 
     const containerVariants = {
         hidden: { opacity: 0 },
@@ -143,7 +147,7 @@ export function PracticeQuestionsDialog({
                                     <motion.button
                                         key={idx}
                                         variants={itemVariants}
-                                        onClick={() => onQuestionClick(cleanCitations(q))}
+                                        onClick={() => handleQuestionClick(q)}
                                         className="w-full group relative text-left p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-amber-500/30 transition-all duration-300 overflow-hidden"
                                     >
                                         <div className="absolute inset-0 bg-gradient-to-r from-amber-500/0 via-amber-500/0 to-amber-500/0 group-hover:via-amber-500/5 group-hover:to-amber-500/10 transition-all duration-500" />

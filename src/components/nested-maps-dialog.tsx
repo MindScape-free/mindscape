@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import * as LucideIcons from 'lucide-react';
 import {
     ChevronRight,
@@ -120,12 +120,20 @@ export function NestedMapsDialog({
     const hasSubMaps = expansions.length > 0;
     const totalExpansions = expansions.filter((e, i, self) => self.findIndex(t => t.id === e.id) === i).length;
 
-    const handleOpenMap = (expansion: NestedExpansionItem) => {
+    const handleExpandAllToggle = useCallback(() => {
+      setIsExpandAll(prev => !prev);
+    }, []);
+
+    const handleClose = useCallback(() => {
+      onClose();
+    }, [onClose]);
+
+    const handleOpenMap = useCallback((expansion: NestedExpansionItem) => {
         if (!isGlobalBusy && (expansion.fullData || expansion.id)) {
             onOpenMap(expansion.fullData, expansion.id);
             onClose();
         }
-    };
+    }, [isGlobalBusy, onOpenMap, onClose]);
 
     const handleSelect = (item: NestedExpansionItem, levelIndex: number) => {
         let didExpand = false;
@@ -269,7 +277,7 @@ export function NestedMapsDialog({
                                     id="expand-toggle"
                                     role="switch"
                                     aria-checked={isExpandAll}
-                                    onClick={() => setIsExpandAll(!isExpandAll)}
+                                    onClick={handleExpandAllToggle}
                                     className={cn(
                                         "relative inline-flex h-[22px] w-[42px] shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-zinc-950 shadow-inner",
                                         isExpandAll ? "bg-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.4)] border-purple-400/50" : "bg-black/50 border-white/10"
@@ -627,7 +635,7 @@ export function NestedMapsDialog({
                     <Button
                         variant="ghost"
                         className="w-full text-zinc-400 hover:bg-white/5 hover:text-white font-bold tracking-[0.2em] h-12 rounded-2xl uppercase text-xs"
-                        onClick={onClose}
+                        onClick={handleClose}
                     >
                         Close Navigator
                     </Button>

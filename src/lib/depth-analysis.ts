@@ -291,7 +291,8 @@ function wordOverlapScore(tag: string, target: string): number {
 export function findMatchingCategory(
   tag: string,
   subTopics: SubTopic[]
-): QuizMatchResult {
+): QuizMatchResult | null {
+  if (!subTopics || subTopics.length === 0) return null;
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
   const tagN = norm(tag);
 

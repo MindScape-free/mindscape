@@ -145,6 +145,7 @@ interface ChatPanelProps {
   initialView?: 'chat' | 'history' | 'pins' | 'canvas-pins';
   rememberLastView?: boolean;
   onTopicClick?: (topic: string) => void;
+  onLatestResponse?: (answer: string) => void;
 }
 
 const allSuggestionPrompts = [
@@ -196,6 +197,7 @@ export function ChatPanel({
   initialView,
   onQuizDeepen,
   onTopicClick,
+  onLatestResponse,
 }: ChatPanelProps) {
   const { toast } = useToast();
   const { user, session } = useAuth();
@@ -204,9 +206,9 @@ export function ChatPanel({
   const providerOptions = useMemo(() => ({
     provider: providerOptionsConfig.provider,
     apiKey: providerOptionsConfig.provider === 'pollinations' ? providerOptionsConfig.pollinationsApiKey : providerOptionsConfig.apiKey,
-    model: providerOptionsConfig.pollinationsModel,
+    model: providerOptionsConfig.textModel || providerOptionsConfig.pollinationsModel,
     userId: user?.id,
-  }), [providerOptionsConfig.provider, providerOptionsConfig.apiKey, providerOptionsConfig.pollinationsApiKey, providerOptionsConfig.pollinationsModel, user?.id]);
+  }), [providerOptionsConfig.provider, providerOptionsConfig.apiKey, providerOptionsConfig.pollinationsApiKey, providerOptionsConfig.textModel, providerOptionsConfig.pollinationsModel, user?.id]);
 
   // 1. MIGRATION & PERSISTENCE
   const { 
@@ -350,6 +352,11 @@ export function ChatPanel({
         }
       }
       
+      // Trigger callback with latest response
+      if (onLatestResponse) {
+        onLatestResponse(streamText);
+      }
+      
       // Generate related questions after a short delay
       setTimeout(() => {
         if (!streamingCompletedRef.current) {
@@ -398,7 +405,7 @@ export function ChatPanel({
         streamingCompletedRef.current = false;
       }, 1000);
     }
-  }, [isStreaming, streamText, streamingIds, activeSessionId, sessions, topic, mindMapData, usePdfContext, providerOptions, updateSession]);
+  }, [isStreaming, streamText, streamingIds, activeSessionId, sessions, topic, mindMapData, usePdfContext, providerOptions, updateSession, onLatestResponse]);
 
   // Effect to handle stream errors
   useEffect(() => {
@@ -576,7 +583,7 @@ export function ChatPanel({
       attachments: combinedAttachments as any,
       apiKey: providerOptions.apiKey,
       token: session?.access_token,
-      model: providerOptionsConfig.pollinationsModel || 'openai',
+      model: providerOptionsConfig.textModel || providerOptionsConfig.pollinationsModel || 'openai',
       agentMode,
     });
 
@@ -1427,7 +1434,7 @@ export function ChatPanel({
       sessionId: sessionId || activeSessionId,
       attachments: combinedAttachments as any,
       apiKey: providerOptions.apiKey,
-      model: providerOptionsConfig.pollinationsModel || 'openai',
+      model: providerOptionsConfig.textModel || providerOptionsConfig.pollinationsModel || 'openai',
     });
   };
 

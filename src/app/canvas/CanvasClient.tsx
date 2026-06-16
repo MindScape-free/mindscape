@@ -1,15 +1,13 @@
 
 'use client';
 
-import { Suspense, useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { MindMap } from '@/components/mind-map';
 import { MindMapData, NestedExpansionItem, MindMapWithId } from '@/types/mind-map';
-import { PinnedMessage } from '@/types/chat';
 import { NeuralLoader } from '@/components/loading/neural-loader';
 import { ErrorBoundary } from '@/components/error-boundary';
-import { safeGetItem, safeRemoveItem } from '@/lib/storage';
+import { safeGetItem } from '@/lib/storage';
 import { useXP } from '@/contexts/xp-context';
 import dynamic from 'next/dynamic';
 
@@ -22,7 +20,7 @@ import { SearchReferencesPanel, SourceFileModal } from '@/components/canvas';
 
 import { Button } from '@/components/ui/button';
 import {
-  Scale, RefreshCw, Sparkles, Loader2, ZapOff, List, Bot, UserRound, Zap as ZapIcon, Globe, Palette, Brain, FileText, Image as ImageIcon, X, Youtube, ArrowRight, Key
+  Scale, RefreshCw, Sparkles, Loader2, ZapOff, List, UserRound, Zap as ZapIcon, Globe, Palette, Brain, FileText, Image as ImageIcon, Youtube, Key
 } from 'lucide-react';
 import {
   Dialog,
@@ -42,28 +40,22 @@ import {
 import {
   TooltipProvider,
 } from '@/components/ui/tooltip';
-import type { GenerateMindMapOutput } from '@/ai/flows/generate-mind-map';
+
 import { useUser } from '@/lib/auth-context';
 import { getSupabaseClient } from '@/lib/supabase-db';
 import {
   generateMindMapAction,
   generateMindMapFromImageAction,
   generateMindMapFromPdfAction,
-  generateMindMapFromPdfAction as _unused_pdf_action,
   generateMindMapFromTextAction,
   generateYouTubeMindMapAction,
   generateMindMapFromWebsiteAction,
   generateComparisonMapAction,
-  translateMindMapAction,
-  explainWithExampleAction,
-  summarizeTopicAction,
-  summarizeChatAction,
   synthesizeNodesAction,
-  logAdminActivityAction,
   mapToMindMapData,
 } from '@/app/actions';
 // shareMindMapAction removed - using client-side sharing
-import { formatText, extractYoutubeId, cn, depthFromServer } from '@/lib/utils';
+import { cn, depthFromServer } from '@/lib/utils';
 import { toPlainObject } from '@/lib/serialize';
 import { mindscapeMap } from '@/lib/mindscape-data';
 import { useMindMapStack } from '@/hooks/use-mind-map-stack';
@@ -71,17 +63,16 @@ import { useAIConfig } from '@/contexts/ai-config-context';
 import { useMindMapRouter } from '@/hooks/use-mind-map-router';
 import { useMindMapPersistence } from '@/hooks/use-mind-map-persistence';
 import { useMindMapPinnedMessages } from '@/hooks/use-mind-map-pinned-messages';
+import { Profiler } from '@/components/debug/profiler';
 import { useAIHealth } from '@/hooks/use-ai-health';
 import { useActivity } from '@/contexts/activity-context';
-import { resolveDepthWithConfidence, getDepthLabel, getDepthColor, analyzeTopicComplexity } from '@/lib/depth-analysis';
+import { resolveDepthWithConfidence, analyzeTopicComplexity } from '@/lib/depth-analysis';
 import { useAITracking } from '@/hooks/use-ai-tracking';
 import { useSessionTracking } from '@/hooks/use-session-tracking';
 import { useMapTracking } from '@/hooks/use-map-tracking';
 
-const EMPTY_ARRAY: never[] = [];
-
 function MindMapPageContent() {
-  const { params, navigateToMap, changeLanguage, regenerate, clearRegenFlag, getParamKey, router } = useMindMapRouter();
+  const { params, navigateToMap, changeLanguage, clearRegenFlag, getParamKey, router } = useMindMapRouter();
   const { toast } = useToast();
   const { user, isUserLoading } = useUser();
   const supabase = getSupabaseClient();
@@ -99,7 +90,7 @@ function MindMapPageContent() {
   const [tempPersona, setTempPersona] = useState<string>('Teacher');
   const [tempDepth, setTempDepth] = useState<'low' | 'medium' | 'deep'>('low');
   const [dynamicItemRange, setDynamicItemRange] = useState<{ min: number; max: number }>({ min: 24, max: 40 });
-  const [showReferences, setShowReferences] = useState(false);
+
   const [useFileAwareContext, setUseFileAwareContext] = useState(false);
   const [pinnedMessagesCount, setPinnedMessagesCount] = useState(0);
 
@@ -155,7 +146,7 @@ function MindMapPageContent() {
       
       return result;
     }
-  }), [params.persona, aiPersona, params.lang, params.depth, config.provider, config.apiKey, config.pollinationsModel]);
+  }), [params.persona, aiPersona, params.lang, params.depth, params.useSearch, config.provider, config.apiKey, config.pollinationsApiKey, config.textModel, config.pollinationsModel, user?.id, refreshBalance]);
   // Keep a ref of the current source context for the persistence adapter closure
   const sourceContextRefs = useRef({ content: null as string | null, type: null as string | null, originalPdf: null as string | null });
 
@@ -192,12 +183,12 @@ function MindMapPageContent() {
     }
   });
 
-  const { trackGenerationStart, trackGenerationComplete, trackGenerationFailed } = useAITracking();
-  const { trackPageView } = useSessionTracking(user?.uid);
+  const { trackGenerationComplete, trackGenerationFailed } = useAITracking();
+  const { trackPageView } = useSessionTracking(user?.id);
   const mapTracker = useMapTracking({
     mapId: mindMap?.id || params.mapId || 'pending',
-    userId: user?.uid,
-    title: mindMap?.topic || params.topic,
+    userId: user?.id,
+    title: mindMap?.topic || params.topic || undefined,
     isPublic: !!params.publicMapId,
   });
 
@@ -215,7 +206,7 @@ function MindMapPageContent() {
   }, [handleUpdateCurrentMap]);
 
   // PINNED MESSAGES
-  const { pinnedMessages, addPinnedMessage, addSoloPinnedMessage, removePinnedMessage, getPinnedMessagesCount } = useMindMapPinnedMessages({
+  const { pinnedMessages, addPinnedMessage, removePinnedMessage } = useMindMapPinnedMessages({
     mindMapId: mindMap?.id,
     pinnedMessages: mindMap?.pinnedMessages || [],
     onPinsUpdate: (updatedPins) => {
@@ -234,8 +225,6 @@ function MindMapPageContent() {
   const [initialError, setInitialError] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const [localGeneratingNodeId, setLocalGeneratingNodeId] = useState<string | null>(null);
-  const [studioData, setStudioData] = useState<any>(null);
-  const [studioType, setStudioType] = useState<string | null>(null);
 
   // Source File Data State
   const [sourceFileContent, setSourceFileContent] = useState<string | null>(null);
@@ -247,6 +236,10 @@ function MindMapPageContent() {
   const [isSourceFileModalOpen, setIsSourceFileModalOpen] = useState(false);
 
   // Toolbar pin button → open chat panel at canvas-pins view
+  const handleToggleFileAware = useCallback(() => {
+    setUseFileAwareContext(prev => !prev);
+  }, []);
+
   const handleOpenPinnedMessages = useCallback(() => {
     setChatInitialView('canvas-pins');
     setIsChatOpen(true);
@@ -345,7 +338,7 @@ function MindMapPageContent() {
           mode: mode as any,
           depth: params.depth as any,
           persona: params.persona || aiPersona,
-          userId: user?.uid
+          userId: user?.id
         }, {
           nodeCount,
           mapId: mapId
@@ -358,7 +351,7 @@ function MindMapPageContent() {
           mode: mode as any,
           depth: params.depth as any,
           persona: params.persona || aiPersona,
-          userId: user?.uid
+          userId: user?.id
         }, {
           type: errorType,
           message: message
@@ -420,7 +413,7 @@ function MindMapPageContent() {
                 await supabase.from('public_mindmaps').update({ public_views: (row.public_views || 0) + 1 }).eq('id', pubId);
               }
             } else if ((user || params.ownerId) && params.mapId) {
-              const targetUid = params.ownerId || user?.uid;
+              const targetUid = params.ownerId || user?.id;
               if (targetUid) {
                 const { data: row } = await supabase.from('mindmaps').select('*').eq('id', params.mapId).eq('user_id', targetUid).single();
                 if (row) result.data = { ...row, ...(row.content || {}), id: row.id } as any;
@@ -447,8 +440,8 @@ function MindMapPageContent() {
             }, {
               provider: config.provider,
               apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-              model: config.pollinationsModel,
-              userId: user?.uid,
+              model: config.textModel || config.pollinationsModel,
+              userId: user?.id,
             });
           } else if (params.topic) {
             currentMode = 'standard';
@@ -462,8 +455,8 @@ function MindMapPageContent() {
             }, {
               provider: config.provider,
               apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-              model: config.pollinationsModel,
-              userId: user?.uid,
+              model: config.textModel || config.pollinationsModel,
+              userId: user?.id,
             });
           }
  else if (params.sessionId) {
@@ -512,8 +505,8 @@ function MindMapPageContent() {
                 }, {
                   provider: config.provider,
                   apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-                  model: config.pollinationsModel,
-                  userId: user?.uid,
+                  model: config.textModel || config.pollinationsModel,
+                  userId: user?.id,
                 });
               } else if (sessionType === 'youtube') {
                 currentMode = 'youtube';
@@ -526,7 +519,7 @@ function MindMapPageContent() {
                 }, {
                   provider: config.provider,
                   apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-                  model: config.pollinationsModel,
+                  model: config.textModel || config.pollinationsModel,
                   userId: user?.id,
                 });
               } else if (sessionType === 'pdf') {
@@ -541,7 +534,7 @@ function MindMapPageContent() {
                 }, {
                   provider: config.provider,
                   apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-                  model: config.pollinationsModel,
+                  model: config.textModel || config.pollinationsModel,
                   userId: user?.id,
                 });
               } else if (sessionType === 'text') {
@@ -556,7 +549,7 @@ function MindMapPageContent() {
                 }, {
                   provider: config.provider,
                   apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-                  model: config.pollinationsModel,
+                  model: config.textModel || config.pollinationsModel,
                   userId: user?.id,
                 });
               } else if (sessionType === 'website') {
@@ -570,7 +563,7 @@ function MindMapPageContent() {
                 }, {
                   provider: config.provider,
                   apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-                  model: config.pollinationsModel,
+                  model: config.textModel || config.pollinationsModel,
                   userId: user?.id,
                 });
               } else if (sessionType === 'compare') {
@@ -603,8 +596,8 @@ function MindMapPageContent() {
                 }, {
                   provider: config.provider,
                   apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-                  model: config.pollinationsModel,
-                  userId: user?.uid,
+                  model: config.textModel || config.pollinationsModel,
+                  userId: user?.id,
                 });
               } else if (sessionType === 'multi') {
                 currentMode = 'multi-source';
@@ -618,7 +611,7 @@ function MindMapPageContent() {
                 }, {
                   provider: config.provider,
                   apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-                  model: config.pollinationsModel,
+                  model: config.textModel || config.pollinationsModel,
                   userId: user?.id,
                 });
               } else {
@@ -633,8 +626,6 @@ function MindMapPageContent() {
             if (rawStudioData) {
               try {
                 const parsed = JSON.parse(rawStudioData);
-                setStudioData(parsed);
-                setStudioType(parsed.type);
                 if (parsed.type === 'mindmap' || parsed.type === 'roadmap') {
                   if (parsed.data) {
                     result.data = await mapToMindMapData(parsed.data, params.depth as any || 'low') as MindMapWithId;
@@ -664,7 +655,7 @@ function MindMapPageContent() {
         }
 
         // track completion for all modes that result in a new map
-        trackCompletion(result.data.id || params.mapId || 'pending', result.data.nodes?.length || 0, pendingSourceFileType || 'text', currentMode);
+        trackCompletion(result.data.id || params.mapId || 'pending', result.data.nodeCount || 0, pendingSourceFileType || 'text', currentMode);
 
         if (result.data) {
           // Refresh balance after any successful AI generation
@@ -800,40 +791,71 @@ function MindMapPageContent() {
   const mindMapRef = useRef(mindMap);
   useEffect(() => { mindMapRef.current = mindMap; }, [mindMap]);
 
-  // Fetch complete map hierarchy (root + all sub-maps)
+  // Fetch complete map hierarchy (root + all sub-maps) — single query
   const fetchMapHierarchy = useCallback(async (currentMapData: MindMapData) => {
     if (!user) return;
     try {
       const currentMapId = (currentMapData as any).id;
       if (!currentMapId) return;
+
+      // Single query: fetch all user maps at once instead of N sequential round trips
+      const { data: allMaps } = await supabase
+        .from('mindmaps')
+        .select('id,topic,icon,created_at,content,parent_map_id')
+        .eq('user_id', user.id)
+        .limit(500);
+      if (!allMaps) return;
+
+      // Build a local lookup map for O(1) parent traversal
+      const mapById = new Map(allMaps.map(m => [m.id, m]));
+
+      // Walk up to find the root map (now O(1) per hop via mapById, no DB calls)
       let rootMapId = currentMapId;
       let rootMapData: { id: string; topic: string; icon?: string } | null = null;
+
       if ((currentMapData as any).parentMapId) {
-        let parentId = (currentMapData as any).parentMapId;
+        let currentId = (currentMapData as any).parentMapId;
         let iterations = 0;
-        while (parentId && iterations < 10) {
-          const { data: p } = await supabase.from('mindmaps').select('id,topic,icon,parent_map_id').eq('id', parentId).eq('user_id', user.id).single();
-          if (p) { rootMapId = parentId; rootMapData = { id: parentId, topic: p.topic || 'Untitled', icon: p.icon }; parentId = p.parent_map_id; }
-          else break;
+        while (currentId && iterations < 10) {
+          const parent = mapById.get(currentId);
+          if (parent) {
+            rootMapId = currentId;
+            rootMapData = { id: currentId, topic: parent.topic || 'Untitled', icon: parent.icon };
+            currentId = parent.parent_map_id as string | null;
+          } else { break; }
           iterations++;
         }
       } else {
         rootMapData = { id: currentMapId, topic: currentMapData.topic, icon: currentMapData.icon };
       }
+
+      // Build descendant tree in memory (no recursive DB queries)
       const allSubMaps: NestedExpansionItem[] = [];
       const visitedIds = new Set<string>();
-      const fetchDescendants = async (parentId: string, parentName: string, currentDepth: number) => {
-        const { data: children } = await supabase.from('mindmaps').select('id,topic,icon,created_at,content,parent_map_id').eq('user_id', user.id).eq('parent_map_id', parentId).limit(50);
-        if (!children) return;
+
+      const buildDescendants = (parentId: string, parentName: string, currentDepth: number) => {
+        // Find all direct children from our local map dictionary
+        const children = allMaps.filter(m => m.parent_map_id === parentId);
         for (const child of children) {
           if (visitedIds.has(child.id)) continue;
           visitedIds.add(child.id);
           const subMapData = { ...child, ...(child.content || {}), id: child.id } as MindMapWithId;
-          allSubMaps.push({ id: child.id, topic: child.topic, parentName, icon: child.icon || 'file-text', subCategories: [], createdAt: new Date(child.created_at).getTime(), depth: currentDepth, fullData: subMapData, status: 'completed' });
-          await fetchDescendants(child.id, child.topic, currentDepth + 1);
+          allSubMaps.push({
+            id: child.id,
+            topic: child.topic,
+            parentName,
+            icon: child.icon || 'file-text',
+            subCategories: [],
+            createdAt: new Date(child.created_at).getTime(),
+            depth: currentDepth,
+            fullData: subMapData,
+            status: 'completed',
+          });
+          buildDescendants(child.id, child.topic, currentDepth + 1);
         }
       };
-      if (rootMapId) await fetchDescendants(rootMapId, rootMapData?.topic || 'Parent', 1);
+
+      if (rootMapId) buildDescendants(rootMapId, rootMapData?.topic || 'Parent', 1);
       setMapHierarchy({ rootMap: rootMapData, allSubMaps });
     } catch (error) { console.error('Error fetching map hierarchy:', error); }
   }, [user]);
@@ -931,16 +953,15 @@ function MindMapPageContent() {
     setIsChatOpen(true);
   }, []);
 
-  const handleRegenerateClick = useCallback(() => {
+  const handleRegenerateClick = useCallback(async () => {
     // Ensure we match the Title Case values in our SelectItems
     const currentPersona = aiPersona || 'Teacher';
     const normalizedPersona = currentPersona.charAt(0).toUpperCase() + currentPersona.slice(1).toLowerCase();
     setTempPersona(normalizedPersona);
     const depth = params.depth || 'low';
     setTempDepth(depth as 'low' | 'medium' | 'deep');
-    const analysis = analyzeTopicComplexity(params.topic || '');
-    const itemCount = resolveDepthWithConfidence(params.topic || '').suggestedItems;
-    setDynamicItemRange({ min: itemCount.min, max: itemCount.max });
+    const depthSuggestion = await resolveDepthWithConfidence(params.topic || '');
+    setDynamicItemRange({ min: depthSuggestion.suggestedItems.min, max: depthSuggestion.suggestedItems.max });
     setIsRegenDialogOpen(true);
   }, [aiPersona, params.depth, params.topic]);
 
@@ -959,7 +980,7 @@ function MindMapPageContent() {
 
 
 
-  const handleGenerateAndOpenSubMap = useCallback(async (subTopic: string, nodeId?: string, contextPath?: string, mode: 'foreground' | 'background' = 'background', branchDepth?: 'low' | 'medium' | 'deep') => {
+  const handleGenerateAndOpenSubMap = useCallback(async (subTopic: string, nodeId?: string, _contextPath?: string, mode: 'foreground' | 'background' = 'background', branchDepth?: 'low' | 'medium' | 'deep') => {
     try {
       // First check if it already exists locally in the parent map to avoid duplicate generations
       const existingExpansion = mindMap?.nestedExpansions?.find(e => e.topic === subTopic);
@@ -985,7 +1006,8 @@ function MindMapPageContent() {
         toast({ title: "🧠 Creating Sub-Map", description: `Generating "${subTopic}" in the background — it will appear in your Nested Maps shortly.` });
       }
 
-      const { newId, parentId } = await expandNode(subTopic, nodeId || `sub-${Date.now()}`, { mode, parentDepth: parentAbsoluteDepth, branchDepth });
+      const expansionResult = await expandNode(subTopic, nodeId || `sub-${Date.now()}`, { mode, parentDepth: parentAbsoluteDepth, branchDepth });
+      const parentId = expansionResult?.parentId;
       refreshBalance();
       awardXP('SUB_MAP_CREATED', { topic: subTopic }).catch(() => {});
 
@@ -1121,8 +1143,8 @@ function MindMapPageContent() {
     const currentMap = mindMapRef.current;
     if (nodeLabels.length !== 2 || !currentMap) return;
     
-    setGlobalStatus(`Synthesizing ${nodeLabels[0]} and ${nodeLabels[1]}...`);
-    setActiveTaskName('Knowledge Alchemy');
+    setGlobalStatus('generating');
+    setActiveTaskName(`Synthesizing ${nodeLabels[0]} and ${nodeLabels[1]}...`);
     
     const dummyId = `alchemy-loading-${Date.now()}`;
     const dummyNode = {
@@ -1133,8 +1155,8 @@ function MindMapPageContent() {
     };
 
     // Add dummy loading node using functional update
-    onMapUpdate((prev) => ({
-      subTopics: [...(prev.subTopics || []), dummyNode as any]
+    onMapUpdate((prev: any) => ({
+      subTopics: [...(prev.subTopics || []), dummyNode]
     }));
     setGeneratingNodeId("Synthesizing...");
     
@@ -1147,7 +1169,7 @@ function MindMapPageContent() {
       }, {
         apiKey: config.pollinationsApiKey,
         provider: config.provider,
-        userId: user?.uid
+        userId: user?.id
       });
 
       if (error || !data) throw new Error(error || 'Synthesis failed');
@@ -1174,8 +1196,8 @@ function MindMapPageContent() {
       };
 
       // Replace dummy node with actual result using functional update
-      onMapUpdate((prev) => ({
-        subTopics: [...(prev.subTopics || []).filter(st => st.id !== dummyId), newNode as any]
+      onMapUpdate((prev: any) => ({
+        subTopics: [...(prev.subTopics || []).filter((st: any) => st.id !== dummyId), newNode]
       }));
       
       toast({
@@ -1188,8 +1210,8 @@ function MindMapPageContent() {
     } catch (e: any) {
       console.error("Synthesis failed:", e);
       // Remove dummy node on failure
-      onMapUpdate((prev) => ({
-        subTopics: (prev.subTopics || []).filter(st => st.id !== dummyId)
+      onMapUpdate((prev: any) => ({
+        subTopics: (prev.subTopics || []).filter((st: any) => st.id !== dummyId)
       }));
       toast({
         variant: 'destructive',
@@ -1201,7 +1223,7 @@ function MindMapPageContent() {
       setGlobalStatus('idle');
       setActiveTaskName(null);
     }
-  }, [aiPersona, config, user?.uid, setGlobalStatus, setActiveTaskName, toast, awardXP, onMapUpdate, setGeneratingNodeId]);
+  }, [aiPersona, config, user?.id, setGlobalStatus, setActiveTaskName, toast, awardXP, onMapUpdate, setGeneratingNodeId]);
 
   if (isLoading) return <NeuralLoader sourceType={sourceFileType || undefined} />;
 
@@ -1256,6 +1278,7 @@ function MindMapPageContent() {
           "w-full mx-auto",
           mindMap.mode === 'compare' ? "max-w-[1600px]" : "max-w-6xl"
         )}>
+          <Profiler id="MindMap" threshold={1}>
           <MindMap
             key={activeMindMapIndex}
             data={mindMap}
@@ -1285,7 +1308,7 @@ function MindMapPageContent() {
             onRegenerateNestedMap={handleRegenerateNestedMap}
             onPracticeQuestionClick={handleExplainInChat}
             useFileAware={useFileAwareContext}
-            onToggleFileAware={() => setUseFileAwareContext(!useFileAwareContext)}
+            onToggleFileAware={handleToggleFileAware}
             onViewSource={() => setIsSourceFileModalOpen(true)}
             rootMap={mapHierarchy.rootMap}
             allSubMaps={mapHierarchy.allSubMaps}
@@ -1298,6 +1321,7 @@ function MindMapPageContent() {
             resonanceNodes={resonanceNodes}
             onSynthesize={handleSynthesize}
           />
+          </Profiler>
 
           {/* Search References Panel */}
           {mindMap.searchSources && mindMap.searchSources.length > 0 && (
@@ -1361,10 +1385,10 @@ function MindMapPageContent() {
 
             <div className="space-y-3">
               <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1 font-orbitron">Structural Depth</label>
-              <Select value={tempDepth} onValueChange={(val: any) => {
+              <Select value={tempDepth}              onValueChange={async (val: any) => {
                 setTempDepth(val);
-                const analysis = analyzeTopicComplexity(params.topic || '');
-                const suggestion = resolveDepthWithConfidence(params.topic || '');
+                const analysis = await analyzeTopicComplexity(params.topic || '');
+                const suggestion = await resolveDepthWithConfidence(params.topic || '');
                 const depthRanges = {
                   low: { min: 24, max: 40 },
                   medium: { min: 60, max: 90 },
@@ -1532,3 +1556,6 @@ export default function MindMapPage() {
     </ErrorBoundary>
   );
 }
+
+// ── Performance Monitoring ───────────────────────────────────────────────
+// Key components are wrapped with Profiler inside the render section below

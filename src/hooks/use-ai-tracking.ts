@@ -12,16 +12,39 @@ interface AIGenerationMeta {
   userId?: string;
 }
 
+const fallbackStartMap = new Map<string, number>();
+
+const getStartTime = (id: string): number | undefined => {
+  if (typeof window !== 'undefined') {
+    const val = sessionStorage.getItem(`ai-start-${id}`);
+    if (val) return parseInt(val, 10);
+  }
+  return fallbackStartMap.get(id);
+};
+
+const setStartTime = (id: string, time: number) => {
+  if (typeof window !== 'undefined') {
+    sessionStorage.setItem(`ai-start-${id}`, time.toString());
+  }
+  fallbackStartMap.set(id, time);
+};
+
+const deleteStartTime = (id: string) => {
+  if (typeof window !== 'undefined') {
+    sessionStorage.removeItem(`ai-start-${id}`);
+  }
+  fallbackStartMap.delete(id);
+};
+
 export function useAITracking() {
   const { logAdminActivity } = useAdminActivityLog();
-  const generationStartRef = useRef<Map<string, number>>(new Map());
 
   const trackGenerationStart = useCallback(async (
     generationId: string,
     meta: AIGenerationMeta
   ) => {
     const startTime = Date.now();
-    generationStartRef.current.set(generationId, startTime);
+    setStartTime(generationId, startTime);
 
     analytics.trackAIStart(meta.sourceType, meta.mode, meta.depth, meta.persona);
 
@@ -48,9 +71,9 @@ export function useAITracking() {
       mapId?: string;
     }
   ) => {
-    const startTime = generationStartRef.current.get(generationId);
+    const startTime = getStartTime(generationId);
     const duration = startTime ? Date.now() - startTime : undefined;
-    generationStartRef.current.delete(generationId);
+    deleteStartTime(generationId);
 
     analytics.trackAIComplete(
       meta.sourceType,
@@ -86,9 +109,9 @@ export function useAITracking() {
       message: string;
     }
   ) => {
-    const startTime = generationStartRef.current.get(generationId);
+    const startTime = getStartTime(generationId);
     const duration = startTime ? Date.now() - startTime : undefined;
-    generationStartRef.current.delete(generationId);
+    deleteStartTime(generationId);
 
     analytics.trackAIFailed(meta.sourceType, error.type, error.message);
 

@@ -4,7 +4,6 @@ import { normalizeSearchResults, filterAuthoritativeSources } from '@/ai/search/
 import { SearchRequestSchema } from '@/ai/search/search-schema';
 import { z } from 'zod';
 import { orchestrateStream } from '@/ai/providers/orchestrator';
-import { EventEmitter } from 'eventemitter3';
 
 const ChatStreamInputSchema = z.object({
   question: z.string(),
@@ -221,7 +220,7 @@ Provide your response as plain text (no JSON wrapper). Stream the response word 
     console.log(`✨ [ChatStream] Stream response ready (init took ${Date.now() - startTime}ms)`);
     return new NextResponse(stream, {
       headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
       },

@@ -159,7 +159,7 @@ function Hero({
     topic: string,
     fileInfo?: { name: string; type: string; content: string; originalContent?: string }
   ) => void;
-  onCompare: (topic1: string, topic2: string) => void;
+  onCompare: (topic1: string, topic2: string, file1?: any, file2?: any) => void;
   onMultiGenerate: (mergedContent: string, topic: string) => void;
   lang: string;
   setLang: (lang: string) => void;
@@ -207,7 +207,7 @@ function Hero({
 
   const { sources, addSource, addFile, removeSource, buildPayload, contextUsage, canGenerate, clearSources } = useMultiSource({
     apiKey: config.pollinationsApiKey,
-    userId: user?.uid
+    userId: user?.id
   });
 
   const handleModeChange = (mode: 'single' | 'compare' | 'multi') => {
@@ -497,7 +497,7 @@ export default function Home() {
   const languageSelectRef = useRef<HTMLButtonElement>(null);
 
   const { trackGenerationStart } = useAITracking();
-  const { trackPageView } = useSessionTracking(user?.uid);
+  const { trackPageView } = useSessionTracking(user?.id);
 
   useEffect(() => {
     trackPageView('Home');
@@ -546,7 +546,7 @@ export default function Home() {
         mode: 'single',
         depth: resolvedDepth as any,
         persona,
-        userId: user?.uid
+        userId: user?.id
       });
 
       safeSetItem(`session-type-${sessionId}`, fileInfo.type);
@@ -561,7 +561,7 @@ export default function Home() {
       mode: 'single',
       depth: resolvedDepth as any,
       persona,
-      userId: user?.uid
+      userId: user?.id
     });
 
     router.push(`/canvas?topic=${encodeURIComponent(topic)}&lang=${lang}&depth=${resolvedDepth}&persona=${persona}`);
@@ -576,7 +576,7 @@ export default function Home() {
       mode: 'compare',
       depth: 'medium',
       persona,
-      userId: user?.uid
+      userId: user?.id
     });
 
     if (f1 || f2) {
@@ -604,7 +604,7 @@ export default function Home() {
       mode: 'multi',
       depth: 'deep',
       persona,
-      userId: user?.uid
+      userId: user?.id
     });
     safeSetItem(`session-type-${sessionId}`, 'multi');
     safeSetItem(`session-content-${sessionId}`, { file: merged, text: t });

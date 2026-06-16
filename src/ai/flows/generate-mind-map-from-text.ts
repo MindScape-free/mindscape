@@ -139,8 +139,10 @@ RULES:
 
   const userPrompt = `Text to analyze:\n---\n${text}\n---`;
 
+  const capability = depth === 'deep' ? 'reasoning' : (depth === 'medium' ? 'creative' : 'fast');
+
   try {
-    return await generateContent({ provider, apiKey, systemPrompt, userPrompt, schema: GenerateMindMapFromTextOutputSchema, strict });
+    return await generateContent({ provider, apiKey, systemPrompt, userPrompt, schema: GenerateMindMapFromTextOutputSchema, strict, capability });
   } catch (e: any) {
     console.error(`❌ Text-to-map failed:`, e.message);
     throw e;

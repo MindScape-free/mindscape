@@ -131,6 +131,8 @@ RULES:
 
   const userPrompt = `Website Content:\n---\nTitle: ${content.title}\nContent:\n${content.textContent.substring(0, 15000)}\n---`;
 
+  const capability = depth === 'deep' ? 'reasoning' : (depth === 'medium' ? 'creative' : 'fast');
+
   try {
     return await generateContent({ 
       provider, 
@@ -139,6 +141,7 @@ RULES:
       userPrompt, 
       schema: GenerateMindMapFromWebsiteOutputSchema, 
       strict,
+      capability,
       taskType: 'generate-mindmap-website'
     });
   } catch (e: any) {

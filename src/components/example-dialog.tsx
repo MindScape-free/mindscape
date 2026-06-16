@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -65,16 +65,20 @@ export function ExampleDialog({
   const { toast } = useToast();
   const [isCopied, setIsCopied] = useState(false);
 
-  const handleCopy = () => {
+  const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(example);
     setIsCopied(true);
     toast({ title: 'Copied to clipboard!' });
     setTimeout(() => setIsCopied(false), 2000);
-  };
+  }, [example, toast]);
 
-  const handleRegenerate = () => {
+  const handleRegenerate = useCallback(() => {
     onRegenerate();
-  };
+  }, [onRegenerate]);
+
+  const handleModeSelect = useCallback((mode: 'Beginner' | 'Intermediate' | 'Expert') => {
+    onExplanationModeChange(mode);
+  }, [onExplanationModeChange]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -101,13 +105,13 @@ export function ExampleDialog({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="center" className="glassmorphism">
-                <DropdownMenuItem onSelect={() => onExplanationModeChange('Beginner')}>
+                <DropdownMenuItem onSelect={() => handleModeSelect('Beginner')}>
                   Beginner
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onExplanationModeChange('Intermediate')}>
+                <DropdownMenuItem onSelect={() => handleModeSelect('Intermediate')}>
                   Intermediate
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onExplanationModeChange('Expert')}>
+                <DropdownMenuItem onSelect={() => handleModeSelect('Expert')}>
                   Expert
                 </DropdownMenuItem>
               </DropdownMenuContent>

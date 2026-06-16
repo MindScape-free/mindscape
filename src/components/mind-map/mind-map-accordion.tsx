@@ -32,14 +32,18 @@ import { toPascalCase } from '@/lib/utils';
 
 interface MindMapAccordionProps {
     mindMap: any;
-    onGenerateNewMap: (topic: string, parentId: string, contextPath: string, mode?: 'focus' | 'background') => void;
+    mainTopic?: string;
+    onGenerateNewMap: (topic: string, parentId: string, contextPath: string, mode?: 'foreground' | 'background') => void;
     onExplainInChat: (text: string) => void;
     onStartQuiz: (topic: string) => void;
-    onOpenNestedMap: (data: any, id: string) => void;
+    onOpenNestedMap?: (data: any, id: string) => void;
     generatingNode: string | null;
     nestedExpansions: any[];
     isGlobalBusy?: boolean;
     onPracticeClick: (topic: string) => void;
+    onExplainWithExample?: (node: any) => void;
+    deepeningTags?: any;
+    status?: any;
     isSynthesisMode?: boolean;
     synthesisSelection?: string[];
     onToggleNodeSelection?: (nodeName: string) => void;

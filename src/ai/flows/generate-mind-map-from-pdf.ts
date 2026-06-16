@@ -166,11 +166,12 @@ RULES:
     for (let attempt = 0; attempt < MAX_GENERATION_RETRIES; attempt++) {
         try {
             console.log(`📄 PMG Pipeline: Generation attempt ${attempt + 1}/${MAX_GENERATION_RETRIES}...`);
+            const capability = depth === 'deep' ? 'reasoning' : (depth === 'medium' ? 'creative' : 'fast');
             const result = await generateContent({
                 provider, apiKey, systemPrompt, userPrompt,
                 schema: GenerateMindMapFromTextOutputSchema,
                 strict,
-                options: { capability: 'fast' },
+                options: { capability },
             });
 
             let finalResult = result;

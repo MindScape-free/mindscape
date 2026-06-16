@@ -52,6 +52,128 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 
+const colorThemeMap: Record<string, {
+  text400: string;
+  text400Muted: string;
+  bg500_5: string;
+  bg500_10: string;
+  bg500_20: string;
+  border500_15: string;
+  border500_20: string;
+  hoverBg500_10: string;
+  hoverBorder500_30: string;
+  groupHoverText: string;
+}> = {
+  violet: {
+    text400: 'text-violet-400',
+    text400Muted: 'text-violet-400/70',
+    bg500_5: 'bg-violet-500/5',
+    bg500_10: 'bg-violet-500/10',
+    bg500_20: 'bg-violet-500/20',
+    border500_15: 'border-violet-500/15',
+    border500_20: 'border-violet-500/20',
+    hoverBg500_10: 'hover:bg-violet-500/10',
+    hoverBorder500_30: 'hover:border-violet-500/30',
+    groupHoverText: 'group-hover/source:text-violet-400',
+  },
+  indigo: {
+    text400: 'text-indigo-400',
+    text400Muted: 'text-indigo-400/70',
+    bg500_5: 'bg-indigo-500/5',
+    bg500_10: 'bg-indigo-500/10',
+    bg500_20: 'bg-indigo-500/20',
+    border500_15: 'border-indigo-500/15',
+    border500_20: 'border-indigo-500/20',
+    hoverBg500_10: 'hover:bg-indigo-500/10',
+    hoverBorder500_30: 'hover:border-indigo-500/30',
+    groupHoverText: 'group-hover/source:text-indigo-400',
+  },
+  blue: {
+    text400: 'text-blue-400',
+    text400Muted: 'text-blue-400/70',
+    bg500_5: 'bg-blue-500/5',
+    bg500_10: 'bg-blue-500/10',
+    bg500_20: 'bg-blue-500/20',
+    border500_15: 'border-blue-500/15',
+    border500_20: 'border-blue-500/20',
+    hoverBg500_10: 'hover:bg-blue-500/10',
+    hoverBorder500_30: 'hover:border-blue-500/30',
+    groupHoverText: 'group-hover/source:text-blue-400',
+  },
+  emerald: {
+    text400: 'text-emerald-400',
+    text400Muted: 'text-emerald-400/70',
+    bg500_5: 'bg-emerald-500/5',
+    bg500_10: 'bg-emerald-500/10',
+    bg500_20: 'bg-emerald-500/20',
+    border500_15: 'border-emerald-500/15',
+    border500_20: 'border-emerald-500/20',
+    hoverBg500_10: 'hover:bg-emerald-500/10',
+    hoverBorder500_30: 'hover:border-emerald-500/30',
+    groupHoverText: 'group-hover/source:text-emerald-400',
+  },
+  yellow: {
+    text400: 'text-amber-400',
+    text400Muted: 'text-amber-400/70',
+    bg500_5: 'bg-amber-500/5',
+    bg500_10: 'bg-amber-500/10',
+    bg500_20: 'bg-amber-500/20',
+    border500_15: 'border-amber-500/15',
+    border500_20: 'border-amber-500/20',
+    hoverBg500_10: 'hover:bg-amber-500/10',
+    hoverBorder500_30: 'hover:border-amber-500/30',
+    groupHoverText: 'group-hover/source:text-amber-400',
+  },
+  orange: {
+    text400: 'text-orange-400',
+    text400Muted: 'text-orange-400/70',
+    bg500_5: 'bg-orange-500/5',
+    bg500_10: 'bg-orange-500/10',
+    bg500_20: 'bg-orange-500/20',
+    border500_15: 'border-orange-500/15',
+    border500_20: 'border-orange-500/20',
+    hoverBg500_10: 'hover:bg-orange-500/10',
+    hoverBorder500_30: 'hover:border-orange-500/30',
+    groupHoverText: 'group-hover/source:text-orange-400',
+  },
+  pink: {
+    text400: 'text-pink-400',
+    text400Muted: 'text-pink-400/70',
+    bg500_5: 'bg-pink-500/5',
+    bg500_10: 'bg-pink-500/10',
+    bg500_20: 'bg-pink-500/20',
+    border500_15: 'border-pink-500/15',
+    border500_20: 'border-pink-500/20',
+    hoverBg500_10: 'hover:bg-pink-500/10',
+    hoverBorder500_30: 'hover:border-pink-500/30',
+    groupHoverText: 'group-hover/source:text-pink-400',
+  },
+  sky: {
+    text400: 'text-sky-400',
+    text400Muted: 'text-sky-400/70',
+    bg500_5: 'bg-sky-500/5',
+    bg500_10: 'bg-sky-500/10',
+    bg500_20: 'bg-sky-500/20',
+    border500_15: 'border-sky-500/15',
+    border500_20: 'border-sky-500/20',
+    hoverBg500_10: 'hover:bg-sky-500/10',
+    hoverBorder500_30: 'hover:border-sky-500/30',
+    groupHoverText: 'group-hover/source:text-sky-400',
+  },
+  cyan: {
+    text400: 'text-cyan-400',
+    text400Muted: 'text-cyan-400/70',
+    bg500_5: 'bg-cyan-500/5',
+    bg500_10: 'bg-cyan-500/10',
+    bg500_20: 'bg-cyan-500/20',
+    border500_15: 'border-cyan-500/15',
+    border500_20: 'border-cyan-500/20',
+    hoverBg500_10: 'hover:bg-cyan-500/10',
+    hoverBorder500_30: 'hover:border-cyan-500/30',
+    groupHoverText: 'group-hover/source:text-cyan-400',
+  },
+};
+
 interface UserDetailDialogProps {
   user: any;
   isOpen: boolean;
@@ -179,20 +301,20 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-center justify-center p-4 lg:p-10"
+      className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-md flex items-center justify-center p-4 lg:p-10"
       onClick={onClose}
     >
       <motion.div 
         initial={{ scale: 0.9, opacity: 0, y: 30 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
-        className="relative bg-[#09090b]/80 max-w-6xl w-full h-full max-h-[900px] rounded-[3.5rem] overflow-hidden text-white flex flex-col shadow-[0_0_100px_rgba(0,0,0,0.5)] border border-white/10 backdrop-blur-3xl"
+        className="relative bg-[#09090b]/90 max-w-6xl w-full h-[85vh] rounded-[2.5rem] overflow-hidden text-white flex flex-col shadow-[0_0_100px_rgba(0,0,0,0.6)] border border-white/10 backdrop-blur-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-violet-600/10 rounded-full blur-[120px] -mr-64 -mt-64 pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px] -ml-64 -mb-64 pointer-events-none" />
 
         {/* Header */}
-        <div className="relative flex items-center justify-between p-6 border-b border-white/5 shrink-0 z-10">
+        <div className="relative flex flex-col sm:flex-row sm:items-center justify-between p-8 border-b border-white/5 gap-6 shrink-0 z-10">
           <div className="flex items-center gap-6">
             <div className="relative group/avatar">
               <motion.div 
@@ -301,7 +423,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8 relative z-10">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-8 relative z-10">
           {/* Stats Grid - Premium Refinement */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
             {[
@@ -317,37 +439,99 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
               { label: 'Last Active', value: stats.lastActiveDate 
                 ? format(new Date(stats.lastActiveDate), 'dd MMM')
                 : '-', icon: Globe, color: 'indigo' },
-            ].map((stat, idx) => (
-              <motion.div 
-                key={stat.label}
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.03 }}
-                className="relative overflow-hidden p-4 rounded-[1.75rem] bg-white/[0.03] border border-white/5 hover:border-white/20 transition-all group shadow-[inset_0_0_20px_rgba(255,255,255,0.02)] hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
-              >
-                <div className={`absolute top-0 right-0 w-20 h-20 bg-${stat.color}-500/[0.03] rounded-full blur-2xl group-hover:bg-${stat.color}-500/[0.07] transition-all duration-500 pointer-events-none`} />
-                <div className="relative flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className={`p-2 rounded-xl bg-${stat.color}-500/10 border border-${stat.color}-500/20 group-hover:scale-110 group-hover:bg-${stat.color}-500/20 transition-all duration-500`}>
-                        <stat.icon className={`h-4 w-4 text-${stat.color}-400`} />
+            ].map((stat, idx) => {
+              const themeMap: Record<string, { bg: string; border: string; text: string; glow: string; bgHover: string }> = {
+                violet: {
+                  bg: 'bg-violet-500/10',
+                  border: 'border-violet-500/20',
+                  text: 'text-violet-400',
+                  glow: 'bg-violet-500/[0.03]',
+                  bgHover: 'group-hover:bg-violet-500/20',
+                },
+                indigo: {
+                  bg: 'bg-indigo-500/10',
+                  border: 'border-indigo-500/20',
+                  text: 'text-indigo-400',
+                  glow: 'bg-indigo-500/[0.03]',
+                  bgHover: 'group-hover:bg-indigo-500/20',
+                },
+                blue: {
+                  bg: 'bg-blue-500/10',
+                  border: 'border-blue-500/20',
+                  text: 'text-blue-400',
+                  glow: 'bg-blue-500/[0.03]',
+                  bgHover: 'group-hover:bg-blue-500/20',
+                },
+                emerald: {
+                  bg: 'bg-emerald-500/10',
+                  border: 'border-emerald-500/20',
+                  text: 'text-emerald-400',
+                  glow: 'bg-emerald-500/[0.03]',
+                  bgHover: 'group-hover:bg-emerald-500/20',
+                },
+                pink: {
+                  bg: 'bg-pink-500/10',
+                  border: 'border-pink-500/20',
+                  text: 'text-pink-400',
+                  glow: 'bg-pink-500/[0.03]',
+                  bgHover: 'group-hover:bg-pink-500/20',
+                },
+                yellow: {
+                  bg: 'bg-amber-500/10',
+                  border: 'border-amber-500/20',
+                  text: 'text-amber-400',
+                  glow: 'bg-amber-500/[0.03]',
+                  bgHover: 'group-hover:bg-amber-500/20',
+                },
+                orange: {
+                  bg: 'bg-orange-500/10',
+                  border: 'border-orange-500/20',
+                  text: 'text-orange-400',
+                  glow: 'bg-orange-500/[0.03]',
+                  bgHover: 'group-hover:bg-orange-500/20',
+                },
+                sky: {
+                  bg: 'bg-sky-500/10',
+                  border: 'border-sky-500/20',
+                  text: 'text-sky-400',
+                  glow: 'bg-sky-500/[0.03]',
+                  bgHover: 'group-hover:bg-sky-500/20',
+                },
+              };
+              
+              const theme = themeMap[stat.color] || themeMap.violet;
+              return (
+                <motion.div 
+                  key={stat.label}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.03 }}
+                  className="relative overflow-hidden p-4 rounded-[1.75rem] bg-white/[0.03] border border-white/5 hover:border-white/20 transition-all group shadow-[inset_0_0_20px_rgba(255,255,255,0.02)] hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
+                >
+                  <div className={`absolute top-0 right-0 w-20 h-20 ${theme.glow} rounded-full blur-2xl group-hover:bg-opacity-20 transition-all duration-500 pointer-events-none`} />
+                  <div className="relative flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`p-2 rounded-xl ${theme.bg} border ${theme.border} group-hover:scale-110 ${theme.bgHover} transition-all duration-500`}>
+                          <stat.icon className={`h-4 w-4 ${theme.text}`} />
+                        </div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-500 group-hover:text-zinc-400 transition-colors">{stat.label}</p>
                       </div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-500 group-hover:text-zinc-400 transition-colors">{stat.label}</p>
+                    </div>
+                    <div className="flex items-end justify-between gap-2">
+                      <p className="text-2xl font-black text-white tracking-tighter leading-none group-hover:scale-[1.02] origin-left transition-transform">
+                        {stat.value}
+                      </p>
+                      {stat.trend && (
+                        <span className="text-[8px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 mb-0.5">
+                          {stat.trend}
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-end justify-between gap-2">
-                    <p className="text-2xl font-black text-white tracking-tighter leading-none group-hover:scale-[1.02] origin-left transition-transform">
-                      {stat.value}
-                    </p>
-                    {stat.trend && (
-                      <span className="text-[8px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 mb-0.5">
-                        {stat.trend}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
           </div>
 
           {/* Activity Insight */}
@@ -731,15 +915,16 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
                 { key: 'multi', label: 'Networked', value: modeCounts.multi, color: 'blue' as const, icon: Layers },
               ] as const).map(({ key, label, value, color, icon: Icon }) => {
                 const percentage = Math.round((value / total) * 100);
+                const theme = colorThemeMap[color] || colorThemeMap.violet;
                 return (
                   <div key={key} className="rounded-[1.5rem] bg-white/[0.03] border border-white/5 p-5 transition-all hover:bg-white/[0.06] hover:border-white/20 group/item shadow-[inset_0_0_20px_rgba(255,255,255,0.01)] hover:shadow-[0_10px_25px_rgba(0,0,0,0.3)]">
                     <div className="flex items-center gap-2 mb-3">
-                      <Icon className={`h-4 w-4 text-${color}-400`} />
+                      <Icon className={`h-4 w-4 ${theme.text400}`} />
                       <span className="text-[10px] font-black uppercase tracking-tighter text-zinc-500 group-hover/item:text-zinc-400 transition-colors">{label}</span>
                     </div>
                     <div className="flex items-end justify-between">
                       <p className="text-3xl font-black text-white tracking-tighter group-hover/item:scale-105 origin-left transition-transform">{value}</p>
-                      <span className={`text-[10px] font-black text-${color}-400 bg-${color}-500/10 px-1.5 py-0.5 rounded-lg border border-${color}-500/20`}>{percentage}%</span>
+                      <span className={`text-[10px] font-black ${theme.text400} ${theme.bg500_10} px-1.5 py-0.5 rounded-lg border ${theme.border500_20}`}>{percentage}%</span>
                     </div>
                   </div>
                 );
@@ -765,17 +950,18 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
                 { key: 'deep', label: 'Detailed', value: depthCounts.deep, color: 'orange' as const, icon: Layers },
               ] as const).map(({ key, label, value, color, icon: Icon }) => {
                 const percentage = Math.round((value / total) * 100);
+                const theme = colorThemeMap[color] || colorThemeMap.violet;
                 return (
-                  <div key={key} className={`rounded-[1.5rem] bg-${color}-500/5 border border-${color}-500/15 p-5 transition-all hover:bg-${color}-500/10 hover:border-${color}-500/30 group/depth shadow-[inset_0_0_20px_rgba(255,255,255,0.01)]`}>
+                  <div key={key} className={`rounded-[1.5rem] ${theme.bg500_5} border ${theme.border500_15} p-5 transition-all ${theme.hoverBg500_10} ${theme.hoverBorder500_30} group/depth shadow-[inset_0_0_20px_rgba(255,255,255,0.01)]`}>
                     <div className="flex items-center gap-2.5 mb-3">
-                      <div className={`p-2 bg-${color}-500/10 rounded-xl border border-${color}-500/20 group-hover/depth:scale-110 transition-transform duration-500`}>
-                        <Icon className={`h-4 w-4 text-${color}-400`} />
+                      <div className={`p-2 ${theme.bg500_10} rounded-xl border ${theme.border500_20} group-hover/depth:scale-110 transition-transform duration-500`}>
+                        <Icon className={`h-4 w-4 ${theme.text400}`} />
                       </div>
-                      <span className={`text-[10px] font-black uppercase tracking-widest text-${color}-400/70`}>{label}</span>
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${theme.text400Muted}`}>{label}</span>
                     </div>
                     <div className="flex items-end justify-between">
                       <p className="text-3xl font-black text-white tracking-tighter group-hover/depth:scale-105 origin-left transition-transform">{value}</p>
-                      <span className={`px-2 py-0.5 rounded-lg bg-${color}-500/10 text-[10px] font-black text-${color}-400 border border-${color}-500/20`}>{percentage}%</span>
+                      <span className={`px-2 py-0.5 rounded-lg ${theme.bg500_10} text-[10px] font-black ${theme.text400} border ${theme.border500_20}`}>{percentage}%</span>
                     </div>
                   </div>
                 );
@@ -809,17 +995,18 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
             ].map(({ type, icon: Icon, color, label }) => {
               const count = sourceCounts[type] || 0;
               const percentage = Math.round((count / total) * 100);
+              const theme = colorThemeMap[color] || colorThemeMap.violet;
               return (
-                <div key={type} className={`rounded-[1.25rem] bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10 hover:border-${color}-500/30 group/source shadow-[inset_0_0_15px_rgba(255,255,255,0.01)] ${count === 0 ? 'opacity-20' : ''}`}>
+                <div key={type} className={`rounded-[1.25rem] ${theme.bg500_5} border ${theme.border500_15} p-4 transition-all ${theme.hoverBg500_10} ${theme.hoverBorder500_30} group/source shadow-[inset_0_0_15px_rgba(255,255,255,0.01)] ${count === 0 ? 'opacity-20' : ''}`}>
                   <div className="flex items-center gap-2.5 mb-3">
-                    <div className={`p-2 bg-${color}-500/10 rounded-xl border border-${color}-500/20 group-hover/source:scale-110 transition-transform duration-500`}>
-                      <Icon className={`h-4 w-4 text-${color}-400`} />
+                    <div className={`p-2 ${theme.bg500_10} rounded-xl border ${theme.border500_20} group-hover/source:scale-110 transition-transform duration-500`}>
+                      <Icon className={`h-4 w-4 ${theme.text400}`} />
                     </div>
-                    <span className={`text-[9px] font-black uppercase tracking-wider text-${color}-400/70 group-hover/source:text-${color}-400 transition-colors`}>{label}</span>
+                    <span className={`text-[9px] font-black uppercase tracking-wider ${theme.text400Muted} ${theme.groupHoverText} transition-colors`}>{label}</span>
                   </div>
                   <div className="flex items-end justify-between">
                     <p className="text-2xl font-black text-white tracking-tighter group-hover/source:scale-105 origin-left transition-transform">{count}</p>
-                    <span className={`px-1.5 py-0.5 rounded-lg bg-${color}-500/10 text-[10px] font-black text-${color}-400 border border-${color}-500/20`}>{percentage}%</span>
+                    <span className={`px-1.5 py-0.5 rounded-lg ${theme.bg500_10} text-[10px] font-black ${theme.text400} border ${theme.border500_20}`}>{percentage}%</span>
                   </div>
                 </div>
               );
@@ -845,17 +1032,20 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
                 { label: 'Sub-Maps', value: totalSubMaps, color: 'violet' as const, icon: Layers },
                 { label: 'Parents', value: parentMapIds.size, color: 'indigo' as const, icon: MapIcon },
                 { label: 'Avg/Parent', value: parentMapIds.size > 0 ? (totalSubMaps / parentMapIds.size).toFixed(1) : '0', color: 'blue' as const, icon: TrendingUp },
-              ].map(({ label, value, color, icon: Icon }) => (
-                <div key={label} className={`rounded-[1.25rem] bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10 hover:border-${color}-500/30 group/item shadow-[inset_0_0_15px_rgba(255,255,255,0.01)]`}>
-                  <div className="flex items-center gap-2 mb-2.5">
-                    <div className={`p-1.5 bg-${color}-500/10 rounded-lg group-hover/item:scale-110 transition-transform`}>
-                      <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
+              ].map(({ label, value, color, icon: Icon }) => {
+                const theme = colorThemeMap[color] || colorThemeMap.violet;
+                return (
+                  <div key={label} className={`rounded-[1.25rem] ${theme.bg500_5} border ${theme.border500_15} p-4 transition-all ${theme.hoverBg500_10} ${theme.hoverBorder500_30} group/item shadow-[inset_0_0_15px_rgba(255,255,255,0.01)]`}>
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <div className={`p-1.5 ${theme.bg500_10} rounded-lg group-hover/item:scale-110 transition-transform`}>
+                        <Icon className={`h-3.5 w-3.5 ${theme.text400}`} />
+                      </div>
+                      <span className={`text-[8px] font-black uppercase tracking-wider ${theme.text400Muted}`}>{label}</span>
                     </div>
-                    <span className={`text-[8px] font-black uppercase tracking-wider text-${color}-400/70`}>{label}</span>
+                    <p className="text-2xl font-black text-white tracking-tighter group-hover/item:translate-x-1 transition-transform">{value}</p>
                   </div>
-                  <p className="text-2xl font-black text-white tracking-tighter group-hover/item:translate-x-1 transition-transform">{value}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -875,17 +1065,20 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
                 { label: 'Public', value: publicPrivate.public, color: 'emerald' as const, icon: Unlock },
                 { label: 'Private', value: publicPrivate.private, color: 'yellow' as const, icon: Lock },
                 { label: 'Rate', value: total > 0 ? Math.round((publicPrivate.public / total) * 100) : 0, color: 'orange' as const, icon: TrendingUp, isPercent: true },
-              ].map(({ label, value, color, icon: Icon, isPercent }) => (
-                <div key={label} className={`rounded-[1.25rem] bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10 hover:border-${color}-500/30 group/item shadow-[inset_0_0_15px_rgba(255,255,255,0.01)]`}>
-                  <div className="flex items-center gap-2 mb-2.5">
-                    <div className={`p-1.5 bg-${color}-500/10 rounded-lg group-hover/item:scale-110 transition-transform`}>
-                      <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
+              ].map(({ label, value, color, icon: Icon, isPercent }) => {
+                const theme = colorThemeMap[color] || colorThemeMap.violet;
+                return (
+                  <div key={label} className={`rounded-[1.25rem] ${theme.bg500_5} border ${theme.border500_15} p-4 transition-all ${theme.hoverBg500_10} ${theme.hoverBorder500_30} group/item shadow-[inset_0_0_15px_rgba(255,255,255,0.01)]`}>
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <div className={`p-1.5 ${theme.bg500_10} rounded-lg group-hover/item:scale-110 transition-transform`}>
+                        <Icon className={`h-3.5 w-3.5 ${theme.text400}`} />
+                      </div>
+                      <span className={`text-[8px] font-black uppercase tracking-wider ${theme.text400Muted}`}>{label}</span>
                     </div>
-                    <span className={`text-[8px] font-black uppercase tracking-wider text-${color}-400/70`}>{label}</span>
+                    <p className="text-2xl font-black text-white tracking-tighter group-hover/item:translate-x-1 transition-transform">{isPercent ? `${value}%` : value}</p>
                   </div>
-                  <p className="text-2xl font-black text-white tracking-tighter group-hover/item:translate-x-1 transition-transform">{isPercent ? `${value}%` : value}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -910,17 +1103,18 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
             ] as const).map(({ key, label, color, icon: Icon }) => {
               const count = personaCounts[key] || 0;
               const percentage = Math.round((count / total) * 100);
+              const theme = colorThemeMap[color] || colorThemeMap.violet;
               return (
-                <div key={key} className={`rounded-[1.25rem] bg-${color}-500/5 border border-${color}-500/15 p-5 transition-all hover:bg-${color}-500/10 hover:border-${color}-500/30 group/item shadow-[inset_0_0_15px_rgba(255,255,255,0.01)]`}>
+                <div key={key} className={`rounded-[1.25rem] ${theme.bg500_5} border ${theme.border500_15} p-5 transition-all ${theme.hoverBg500_10} ${theme.hoverBorder500_30} group/item shadow-[inset_0_0_15px_rgba(255,255,255,0.01)]`}>
                   <div className="flex items-center gap-2.5 mb-3">
-                    <div className={`p-2 bg-${color}-500/10 rounded-xl border border-${color}-500/20 group-hover/item:scale-110 transition-transform duration-500`}>
-                      <Icon className={`h-4 w-4 text-${color}-400`} />
+                    <div className={`p-2 ${theme.bg500_10} rounded-xl border ${theme.border500_20} group-hover/item:scale-110 transition-transform duration-500`}>
+                      <Icon className={`h-4 w-4 ${theme.text400}`} />
                     </div>
-                    <span className={`text-[10px] font-black uppercase tracking-widest text-${color}-400/70`}>{label}</span>
+                    <span className={`text-[10px] font-black uppercase tracking-widest ${theme.text400Muted}`}>{label}</span>
                   </div>
                   <div className="flex items-end justify-between">
                     <p className="text-3xl font-black text-white tracking-tighter group-hover/item:translate-x-1 transition-transform">{count}</p>
-                    <span className={`px-2 py-0.5 rounded-lg bg-${color}-500/10 text-[10px] font-black text-${color}-400 border border-${color}-500/20`}>{percentage}%</span>
+                    <span className={`px-2 py-0.5 rounded-lg ${theme.bg500_10} text-[10px] font-black ${theme.text400} border ${theme.border500_20}`}>{percentage}%</span>
                   </div>
                 </div>
               );
@@ -1032,20 +1226,23 @@ function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
                 { key: 'single', label: 'Single', value: modeCounts.single || 0, color: 'violet' as const, icon: FileText },
                 { key: 'compare', label: 'Compare', value: modeCounts.compare || 0, color: 'indigo' as const, icon: Copy },
                 { key: 'multi', label: 'Multi', value: modeCounts.multi || 0, color: 'blue' as const, icon: Layers },
-              ] as const).map(({ key, label, value, color, icon: Icon }) => (
-                <div key={key} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10`}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className={`p-1.5 bg-${color}-500/10 rounded-lg`}>
-                      <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
+              ] as const).map(({ key, label, value, color, icon: Icon }) => {
+                const theme = colorThemeMap[color] || colorThemeMap.violet;
+                return (
+                  <div key={key} className={`rounded-xl ${theme.bg500_5} border ${theme.border500_15} p-4 transition-all ${theme.hoverBg500_10}`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className={`p-1.5 ${theme.bg500_10} rounded-lg`}>
+                        <Icon className={`h-3.5 w-3.5 ${theme.text400}`} />
+                      </div>
+                      <span className={`text-[8px] font-bold uppercase tracking-wider ${theme.text400Muted}`}>{label}</span>
                     </div>
-                    <span className={`text-[8px] font-bold uppercase tracking-wider text-${color}-400/70`}>{label}</span>
+                    <div className="flex items-end justify-between">
+                      <p className="text-2xl font-black text-white tracking-tight">{value}</p>
+                      <span className={`px-1.5 py-0.5 rounded-lg ${theme.bg500_10} text-[9px] font-bold ${theme.text400}`}>{getPercentage(value)}%</span>
+                    </div>
                   </div>
-                  <div className="flex items-end justify-between">
-                    <p className="text-2xl font-black text-white tracking-tight">{value}</p>
-                    <span className={`px-1.5 py-0.5 rounded-lg bg-${color}-500/10 text-[9px] font-bold text-${color}-400`}>{getPercentage(value)}%</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1064,20 +1261,23 @@ function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
                 { key: 'low', label: 'Quick', value: depthCounts.low || 0, color: 'emerald' as const, icon: Zap },
                 { key: 'medium', label: 'Balanced', value: depthCounts.medium || 0, color: 'yellow' as const, icon: Layers },
                 { key: 'deep', label: 'Detailed', value: depthCounts.deep || 0, color: 'orange' as const, icon: Layers },
-              ] as const).map(({ key, label, value, color, icon: Icon }) => (
-                <div key={key} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10`}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className={`p-1.5 bg-${color}-500/10 rounded-lg`}>
-                      <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
+              ] as const).map(({ key, label, value, color, icon: Icon }) => {
+                const theme = colorThemeMap[color] || colorThemeMap.violet;
+                return (
+                  <div key={key} className={`rounded-xl ${theme.bg500_5} border ${theme.border500_15} p-4 transition-all ${theme.hoverBg500_10}`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className={`p-1.5 ${theme.bg500_10} rounded-lg`}>
+                        <Icon className={`h-3.5 w-3.5 ${theme.text400}`} />
+                      </div>
+                      <span className={`text-[8px] font-bold uppercase tracking-wider ${theme.text400Muted}`}>{label}</span>
                     </div>
-                    <span className={`text-[8px] font-bold uppercase tracking-wider text-${color}-400/70`}>{label}</span>
+                    <div className="flex items-end justify-between">
+                      <p className="text-2xl font-black text-white tracking-tight">{value}</p>
+                      <span className={`px-1.5 py-0.5 rounded-lg ${theme.bg500_10} text-[9px] font-black ${theme.text400}`}>{getPercentage(value)}%</span>
+                    </div>
                   </div>
-                  <div className="flex items-end justify-between">
-                    <p className="text-2xl font-black text-white tracking-tight">{value}</p>
-                    <span className={`px-1.5 py-0.5 rounded-lg bg-${color}-500/10 text-[9px] font-black text-${color}-400`}>{getPercentage(value)}%</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1106,17 +1306,18 @@ function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
               { type: 'multi', icon: Library, color: 'orange' as const, label: 'Multi' }
             ].map(({ type, icon: Icon, color, label }) => {
               const count = sourceCounts[type] || 0;
+              const theme = colorThemeMap[color] || colorThemeMap.violet;
               return (
-                <div key={type} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10 ${count === 0 ? 'opacity-20' : ''}`}>
+                <div key={type} className={`rounded-xl ${theme.bg500_5} border ${theme.border500_15} p-4 transition-all ${theme.hoverBg500_10} ${count === 0 ? 'opacity-20' : ''}`}>
                   <div className="flex items-center gap-2 mb-2">
-                    <div className={`p-1.5 bg-${color}-500/10 rounded-lg`}>
-                      <Icon className={`h-3.5 w-3.5 text-${color}-400`} />
+                    <div className={`p-1.5 ${theme.bg500_10} rounded-lg`}>
+                      <Icon className={`h-3.5 w-3.5 ${theme.text400}`} />
                     </div>
-                    <span className={`text-[8px] font-bold uppercase tracking-wider text-${color}-400/70`}>{label}</span>
+                    <span className={`text-[8px] font-bold uppercase tracking-wider ${theme.text400Muted}`}>{label}</span>
                   </div>
                   <div className="flex items-end justify-between">
                     <p className="text-2xl font-black text-white tracking-tight">{count}</p>
-                    <span className={`px-1.5 py-0.5 rounded-lg bg-${color}-500/10 text-[9px] font-bold text-${color}-400`}>{getPercentage(count)}%</span>
+                    <span className={`px-1.5 py-0.5 rounded-lg ${theme.bg500_10} text-[9px] font-bold ${theme.text400}`}>{getPercentage(count)}%</span>
                   </div>
                 </div>
               );
@@ -1144,11 +1345,12 @@ function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
                 { key: 'Sage', label: 'Cognitive Sage', color: 'emerald' },
               ] as const).map(({ key, label, color }) => {
                 const count = personaCounts[key] || 0;
+                const theme = colorThemeMap[color] || colorThemeMap.violet;
                 return (
-                  <div key={key} className={`rounded-xl bg-${color}-500/5 border border-${color}-500/15 p-4 transition-all hover:bg-${color}-500/10`}>
+                  <div key={key} className={`rounded-xl ${theme.bg500_5} border ${theme.border500_15} p-4 transition-all ${theme.hoverBg500_10}`}>
                     <div className="flex items-center justify-between mb-2">
-                      <span className={`text-[8px] font-bold uppercase tracking-wider text-${color}-400/70`}>{label}</span>
-                      <span className={`px-1.5 py-0.5 rounded-lg bg-${color}-500/10 text-[9px] font-bold text-${color}-400`}>{getPercentage(count)}%</span>
+                      <span className={`text-[8px] font-bold uppercase tracking-wider ${theme.text400Muted}`}>{label}</span>
+                      <span className={`px-1.5 py-0.5 rounded-lg ${theme.bg500_10} text-[9px] font-bold ${theme.text400}`}>{getPercentage(count)}%</span>
                     </div>
                     <p className="text-2xl font-black text-white tracking-tight">{count}</p>
                   </div>

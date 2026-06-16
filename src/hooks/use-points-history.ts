@@ -86,7 +86,7 @@ export function usePointsHistory(): UsePointsHistoryReturn {
 
   useEffect(() => {
     if (!isUserLoading) fetchTransactions(true);
-  }, [user?.uid, isUserLoading]);
+  }, [user?.id, isUserLoading]);
 
   return {
     history: groupTransactionsByDate(transactions),

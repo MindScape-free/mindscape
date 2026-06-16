@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import {
   Dialog,
@@ -92,31 +92,31 @@ export function ImageGalleryDialog({
     return columns;
   }, [images, numColumns]);
 
-  const handleDownloadClick = (
-    e: React.MouseEvent,
-    image: GeneratedImage
-  ) => {
-    e.stopPropagation();
-    if (image.status === 'completed') {
-      onDownload(image.url, image.name);
-    }
-  };
+  const handleDownloadClick = useCallback(
+    (e: React.MouseEvent, image: GeneratedImage) => {
+      e.stopPropagation();
+      if (image.status === 'completed') {
+        onDownload(image.url, image.name);
+      }
+    },
+    [onDownload]
+  );
 
-  const handleRegenerateClick = (
-    e: React.MouseEvent,
-    image: GeneratedImage
-  ) => {
-    e.stopPropagation();
-    onRegenerate({ name: image.name, description: image.description });
-  };
+  const handleRegenerateClick = useCallback(
+    (e: React.MouseEvent, image: GeneratedImage) => {
+      e.stopPropagation();
+      onRegenerate({ name: image.name, description: image.description });
+    },
+    [onRegenerate]
+  );
 
-  const handleDeleteClick = (
-    e: React.MouseEvent,
-    image: GeneratedImage
-  ) => {
-    e.stopPropagation();
-    onDelete(image.id);
-  };
+  const handleDeleteClick = useCallback(
+    (e: React.MouseEvent, image: GeneratedImage) => {
+      e.stopPropagation();
+      onDelete(image.id);
+    },
+    [onDelete]
+  );
 
   const GalleryItem = ({ image }: { image: GeneratedImage }) => {
     const aspectRatio = image.settings?.aspectRatio || '1:1';
@@ -283,6 +283,10 @@ export function ImageGalleryDialog({
   };
 
 
+  const handlePreviewClose = useCallback((open: boolean) => {
+    if (!open) setPreviewImage(null);
+  }, []);
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -338,7 +342,7 @@ export function ImageGalleryDialog({
 
       <Dialog
         open={!!previewImage}
-        onOpenChange={(open) => !open && setPreviewImage(null)}
+        onOpenChange={handlePreviewClose}
       >
         <DialogContent className="max-w-5xl w-[90vw] h-[90vh] p-0 border-0 glassmorphism">
           {previewImage && (

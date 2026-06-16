@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, memo, useRef, useMemo } from 'react';
+import React, { useState, useEffect, memo, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 
 import {
@@ -150,6 +150,7 @@ import {
 import { categorizeMindMapAction, publishMindMapAction } from '@/app/actions/community';
 import { MindMapStatus } from '@/hooks/use-mind-map-stack';
 import { LeafNodeCard } from './mind-map/leaf-node-card';
+import { useRenderTiming } from '@/hooks/use-render-timing';
 import { useAIConfig } from '@/contexts/ai-config-context';
 import { ExplanationDialog } from './mind-map/explanation-dialog';
 import { SummaryDialog } from './summary-dialog';
@@ -267,7 +268,7 @@ interface ExplanationDialogProps {
 /**
  * The main component for displaying and interacting with a mind map.
  */
-export const MindMap = ({
+export const MindMap = React.memo(({
   data,
   isSaved,
   onSaveMap,
@@ -312,7 +313,14 @@ export const MindMap = ({
   const [isSynthesisMode, setIsSynthesisMode] = useState(false);
   const [synthesisSelection, setSynthesisSelection] = useState<string[]>([]);
 
-  const handleToggleNodeSelection = (label: string) => {
+  const mindMapRef = React.useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const { toast } = useToast();
+  const { user, supabase } = useAuth();
+  const { config, refreshBalance } = useAIConfig();
+  const { awardXP } = useXP();
+
+  const handleToggleNodeSelection = useCallback((label: string) => {
     setSynthesisSelection(prev => {
       if (prev.includes(label)) {
         return prev.filter(l => l !== label);
@@ -322,9 +330,9 @@ export const MindMap = ({
       }
       return [...prev, label];
     });
-  };
+  }, []);
 
-  const handleSynthesizeClick = () => {
+  const handleSynthesizeClick = useCallback(() => {
     if (synthesisSelection.length === 2 && onSynthesize) {
       onSynthesize(synthesisSelection);
       setIsSynthesisMode(false);
@@ -334,7 +342,7 @@ export const MindMap = ({
         description: "Your knowledge fusion is being prepared. Scroll to the bottom of the map to witness the birth of your new concept.",
       });
     }
-  };
+  }, [synthesisSelection, onSynthesize, toast]);
 
   // Wire zoomToNode to the ref
   useEffect(() => {
@@ -352,29 +360,22 @@ export const MindMap = ({
   useEffect(() => {
     setMountNode(document.body);
   }, []);
-
-  const mindMapRef = React.useRef<HTMLDivElement>(null);
-  const router = useRouter();
-  const { toast } = useToast();
-  const { user, supabase } = useAuth();
-  const { config, refreshBalance } = useAIConfig();
-  const { awardXP } = useXP();
   const [activeTab, setActiveTab] = useState<'visual' | 'radial' | 'accordion' | 'compare'>('visual');
   const useSearch = true; // Always ON in background
 
   const providerOptions = useMemo(() => ({
     provider: config.provider,
     apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-    model: useSearch ? 'pollinations/gemini-search' : config.pollinationsModel,
+    model: useSearch ? 'pollinations/gemini-search' : (config.textModel || config.pollinationsModel),
     userId: user?.id,
-  }), [config.provider, config.apiKey, config.pollinationsApiKey, config.pollinationsModel, user?.id, useSearch]);
+  }), [config.provider, config.apiKey, config.pollinationsApiKey, config.textModel, config.pollinationsModel, user?.id, useSearch]);
 
   const imageProviderOptions = useMemo(() => ({
     provider: config.provider as 'pollinations',
     apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-    model: config.pollinationsModel,
+    model: config.imageModel || config.pollinationsModel,
     userId: user?.id,
-  }), [config.provider, config.apiKey, config.pollinationsApiKey, config.pollinationsModel, user?.id]);
+  }), [config.provider, config.apiKey, config.pollinationsApiKey, config.imageModel, config.pollinationsModel, user?.id]);
 
 
 
@@ -452,6 +453,8 @@ export const MindMap = ({
   const [summaryContent, setSummaryContent] = useState(data.summary || '');
   const [isSummarizing, setIsSummarizing] = useState(false);
 
+  useRenderTiming('MindMap');
+
   const [mounted, setMounted] = useState(false);
   const [languageUI, setLanguageUI] = useState(selectedLanguage);
   const [personaUI, setPersonaUI] = useState(aiPersona);
@@ -465,20 +468,24 @@ export const MindMap = ({
     setPersonaUI(aiPersona);
   }, [aiPersona, data]);
 
+  // Forward ref so handleLanguageChangeInternal can call handleLanguageChange
+  // without a TDZ issue (handleLanguageChange is defined much later in the file).
+  const handleLanguageChangeRef = useRef<(langCode: string) => Promise<void>>(async () => {});
+
   // Handle user-initiated changes (only trigger parent callback, don't create loop)
-  const handleLanguageChangeInternal = (newLang: string) => {
+  const handleLanguageChangeInternal = useCallback((newLang: string) => {
     setLanguageUI(newLang);
     if (mounted) {
-      handleLanguageChange(newLang);
+      handleLanguageChangeRef.current(newLang);
     }
-  };
+  }, [mounted]);
 
-  const handlePersonaChangeInternal = (newPersona: string) => {
+  const handlePersonaChangeInternal = useCallback((newPersona: string) => {
     setPersonaUI(newPersona);
     if (mounted) {
       onAIPersonaChange(newPersona);
     }
-  };
+  }, [mounted, onAIPersonaChange]);
 
   useEffect(() => {
     setMounted(true);
@@ -599,22 +606,22 @@ export const MindMap = ({
 
       triggerAutoSummary();
     }
-  }, [status, data.id, summaryContent, isSummarizing]);
+  }, [status, data.id, summaryContent, isSummarizing, providerOptions, onUpdate]);
 
-  const handleSaveMap = async () => {
+  const handleSaveMap = useCallback(async () => {
     if (onSaveMap) onSaveMap();
-  };
+  }, [onSaveMap]);
 
-  const handleStartDebate = (topicA: string, topicB: string) => {
+  const handleStartDebate = useCallback((topicA: string, topicB: string) => {
     const debatePrompt = `Let's have an "Intelligence Clash". Act as both ${topicA} and ${topicB}. Start a deep, analytical debate about your core philosophies, fundamental trade-offs, and real-world advantages. Challenge each other to prove which one offers a more optimal solution or superior experience in your respective domains.`;
     onExplainInChat(debatePrompt);
     toast({
       title: "Clash Arena Initiated",
       description: "Opening the debate floor in the chat panel...",
     });
-  };
+  }, [onExplainInChat, toast]);
 
-  const handleGenerateHybrid = () => {
+  const handleGenerateHybrid = useCallback(() => {
     if (data.mode !== 'compare') return;
     const parts = data.topic.split(/\s+(?:vs\.?|versus)\s+/i);
     if (parts.length < 2) return;
@@ -625,18 +632,18 @@ export const MindMap = ({
       title: "Synthetic Hybrid Generation",
       description: "Designing a new species of technology...",
     });
-  };
+  }, [data, onGenerateNewMap, toast]);
 
-  const handleStartContrastQuiz = () => {
+  const handleStartContrastQuiz = useCallback(() => {
     // Trigger the standard interactive quiz flow for the comparison topic
     onStartQuiz(data.topic);
     toast({
       title: "Contrast Quiz Ready",
       description: "Launching interactive 'Clash of Minds' quiz...",
     });
-  };
+  }, [onStartQuiz, data.topic, toast]);
 
-  const handleDimensionDrillDown = (dimensionName: string) => {
+  const handleDimensionDrillDown = useCallback((dimensionName: string) => {
     const detailTopic = `${dimensionName} in depth: ${data.topic.replace(/\s+(?:vs\.?|versus)\s+/i, ' and ')}`;
     // Open a new map for this dimension
     onGenerateNewMap(detailTopic, `drill-${dimensionName}`, `dimension-context`, 'background');
@@ -644,9 +651,9 @@ export const MindMap = ({
       title: "Drilling Into Dimension",
       description: `Generating a deep-dive map for "${dimensionName}" in the background.`,
     });
-  };
+  }, [data.topic, onGenerateNewMap, toast]);
 
-  const handleShowTimeline = () => {
+  const handleShowTimeline = useCallback(() => {
     const parts = data.topic.split(/\s+(?:vs\.?|versus)\s+/i);
     const names = parts.length >= 2 ? `${parts[0]} vs ${parts[1]}` : data.topic;
     const timelineTopic = `Historical Timeline and Evolution of ${names}`;
@@ -655,10 +662,10 @@ export const MindMap = ({
       title: "Evolution Timeline Triggered",
       description: "Tracing the path through time...",
     });
-  };
+  }, [data.topic, onGenerateNewMap, toast]);
 
 
-  const handleReloadSummary = async () => {
+  const handleReloadSummary = useCallback(async () => {
     if (isSummarizing) return;
     setIsSummarizing(true);
     setSummaryContent('');
@@ -686,7 +693,7 @@ export const MindMap = ({
     } finally {
       setIsSummarizing(false);
     }
-  };
+  }, [isSummarizing, data, providerOptions, onUpdate, toast]);
 
   useEffect(() => {
     if (propNestedExpansions) {
@@ -698,30 +705,32 @@ export const MindMap = ({
     }
   }, [propNestedExpansions]);
 
-  // Notify parent of updates
+  // Notify parent of updates — memoized to avoid recomputing on every render
   const lastNotifiedRef = useRef<string>('');
-  useEffect(() => {
-    if (!onUpdate) return;
+  const dataToNotify = useMemo(() => {
+    if (!onUpdate) return null;
     const sanitizedExpansions = nestedExpansions.map(item => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { fullData, ...rest } = item;
       return rest;
     });
-
-    const dataToNotify = toPlainObject({
+    return toPlainObject({
       nestedExpansions: sanitizedExpansions,
       savedImages: generatedImages,
-      explanations: explanations,
-      enrichments: enrichments,
-      confidenceRatings: confidenceRatings,
-      quizAnswers: quizAnswers,
+      explanations,
+      enrichments,
+      confidenceRatings,
+      quizAnswers,
     });
+  }, [nestedExpansions, generatedImages, explanations, enrichments, confidenceRatings, quizAnswers, onUpdate]);
 
+  useEffect(() => {
+    if (!onUpdate || !dataToNotify) return;
     const stringified = JSON.stringify(dataToNotify);
     if (stringified === lastNotifiedRef.current) return;
     lastNotifiedRef.current = stringified;
     onUpdate(dataToNotify);
-  }, [generatedImages, nestedExpansions, explanations, enrichments, confidenceRatings, quizAnswers, onUpdate]);
+  }, [dataToNotify, onUpdate]);
 
 
 
@@ -729,7 +738,7 @@ export const MindMap = ({
   // All persistence is now handled by the parent component via onUpdate and its debounced auto-save.
 
 
-  const handleDownloadImage = (url: string, name: string) => {
+  const handleDownloadImage = useCallback((url: string, name: string) => {
     try {
       const link = document.createElement('a');
       link.href = url;
@@ -747,10 +756,10 @@ export const MindMap = ({
         description: 'Could not download the image. Please try saving it directly.',
       });
     }
-  };
+  }, [toast]);
 
 
-  const handleLanguageChange = async (langCode: string) => {
+  const handleLanguageChange = useCallback(async (langCode: string) => {
     if (isTranslating) return;
     setIsTranslating(true);
 
@@ -782,7 +791,13 @@ export const MindMap = ({
     } finally {
       setIsTranslating(false);
     }
-  };
+  }, [isTranslating, data, providerOptions, toast, onUpdate, onLanguageChange, awardXP, selectedLanguage]);
+
+  // Keep the forward ref in sync so handleLanguageChangeInternal (defined above near mounted)
+  // can call handleLanguageChange without a TDZ issue.
+  useEffect(() => {
+    handleLanguageChangeRef.current = handleLanguageChange;
+  }, [handleLanguageChange]);
 
   const fetchExplanation = async () => {
     if (!activeSubCategory) return;
@@ -890,7 +905,7 @@ export const MindMap = ({
   }, [activeExplainableNode, explanationMode, isExampleDialogOpen]);
 
 
-  const handleGeneratePracticeQuestions = async (topic: string) => {
+  const handleGeneratePracticeQuestions = useCallback(async (topic: string) => {
     setPracticeTopic(topic);
     setIsPracticeDialogOpen(true);
     // Clear previous if different topic? Or just always clear
@@ -919,7 +934,7 @@ export const MindMap = ({
     } finally {
       setIsPracticeLoading(false);
     }
-  };
+  }, [data, providerOptions, refreshBalance, toast, useFileAware]);
 
 
 
@@ -978,6 +993,10 @@ export const MindMap = ({
       // If quizTopic maps to a specific node, use that anchor.
       // Otherwise fall back to concept-tag fuzzy matching.
       const match = nodeAnchor ?? findMatchingCategory(section.tag, currentSubTopics);
+      if (!match) {
+        console.warn(`Quiz deepen: No matching category found for "${section.tag}", skipping.`);
+        continue;
+      }
       const targetCat = currentSubTopics[match.subTopicIndex]?.categories[match.categoryIndex];
       const existingNodes = targetCat?.subCategories.map((sc: any) => sc.name) ?? [];
 
@@ -1049,7 +1068,7 @@ export const MindMap = ({
     }
   }, [handleQuizDeepen, onQuizDeepenRef]);
 
-  const handleSubCategoryClick = (subCategory: SubCategoryInfo) => {
+  const handleSubCategoryClick = useCallback((subCategory: SubCategoryInfo) => {
     setActiveSubCategory(subCategory);
     setExplanationDialogContent([]);
     setCurrentMicroQuiz(null);
@@ -1100,27 +1119,27 @@ export const MindMap = ({
         });
       });
     }
-  };
+  }, [explanations, explanationMode, enrichments, data.topic, providerOptions, awardXP]);
 
-  const handleInitialLevelSelect = (mode: ExplanationMode) => {
+  const handleInitialLevelSelect = useCallback((mode: ExplanationMode) => {
     setExplanationMode(mode);
     setIsExplanationInitialSelection(false);
     // The useEffect will catch the state change and trigger fetchExplanation()
-  };
+  }, []);
 
-  const handleExplainWithExample = (node: ExplainableNode) => {
+  const handleExplainWithExample = useCallback((node: ExplainableNode) => {
     setExampleContent('');
     setActiveExplainableNode(node);
     setIsExampleDialogOpen(true);
-  };
+  }, []);
 
-  const handleGenerateImageClick = (subCategory: SubCategoryInfo) => {
+  const handleGenerateImageClick = useCallback((subCategory: SubCategoryInfo) => {
     // Instead of immediately generating, open the "Visual Insight Lab"
     setLabNode(subCategory);
     setIsImageLabOpen(true);
-  };
+  }, []);
 
-  const handleEnhancePrompt = async (prompt: string, style?: string, composition?: string, mood?: string, colorPalette?: string, lighting?: string) => {
+  const handleEnhancePrompt = useCallback(async (prompt: string, style?: string, composition?: string, mood?: string, colorPalette?: string, lighting?: string) => {
     setIsEnhancing(true);
     try {
       const { enhancedPrompt, error } = await enhanceImagePromptAction({
@@ -1147,7 +1166,7 @@ export const MindMap = ({
     } finally {
       setIsEnhancing(false);
     }
-  };
+  }, [providerOptions, refreshBalance, toast]);
 
   const handleGenerateImageWithSettings = async (settings: ImageSettings) => {
     if (!labNode) return;
@@ -1189,7 +1208,7 @@ export const MindMap = ({
           lighting: settings.lighting,
           width: settings.width,
           height: settings.height,
-          userId: user?.uid,
+          userId: user?.id,
           userApiKey: config.pollinationsApiKey
         })
       });
@@ -1263,18 +1282,18 @@ export const MindMap = ({
     }
   };
 
-  const handleDeleteImage = (id: string) => {
+  const handleDeleteImage = useCallback((id: string) => {
     setGeneratedImages(prev => prev.filter(img => img.id !== id));
     toast({
       description: "Image removed from gallery.",
     });
-  };
+  }, [toast]);
 
 
 
 
 
-  const handleDuplicate = async () => {
+  const handleDuplicate = useCallback(async () => {
     if (!data || isDuplicating) return;
     setIsDuplicating(true);
 
@@ -1324,9 +1343,9 @@ export const MindMap = ({
     } finally {
       setIsDuplicating(false);
     }
-  };
+  }, [data, isDuplicating, user, supabase, toast, router]);
 
-  const copyLinkToClipboard = (id: string, isPublicOrShared: boolean) => {
+  const copyLinkToClipboard = useCallback((id: string, isPublicOrShared: boolean) => {
     let url = window.location.href;
     if (id) {
       const baseUrl = `${window.location.origin}${window.location.pathname}`;
@@ -1358,10 +1377,10 @@ export const MindMap = ({
         ? "Link copied to clipboard. Anyone with this link can view."
         : "Private link copied. Only you can view this.",
     });
-  };
+  }, [selectedLanguage, data, toast]);
 
 
-  const handleShareLink = async () => {
+  const handleShareLink = useCallback(async () => {
     const sParams = new URLSearchParams(window.location.search);
     const effectiveId = data.id || sParams.get('mapId');
 
@@ -1416,9 +1435,9 @@ export const MindMap = ({
     } finally {
       setIsSharing(false);
     }
-  };
+  }, [data, user, supabase, onUpdate, toast, copyLinkToClipboard]);
 
-  const expandAll = () => {
+  const expandAll = useCallback(() => {
     if (data.mode === 'compare') {
       setIsAllExpanded(true);
     } else {
@@ -1431,15 +1450,15 @@ export const MindMap = ({
       setOpenCategories(allCategoryIds);
     }
     setIsAllExpanded(true);
-  };
+  }, [data]);
 
-  const collapseAll = () => {
+  const collapseAll = useCallback(() => {
     setOpenSubTopics([]);
     setOpenCategories([]);
     setIsAllExpanded(false);
-  };
+  }, []);
 
-  const handlePublish = async () => {
+  const handlePublish = useCallback(async () => {
     if (!user || !supabase || isPublishing) return;
 
     // 1. Check if it's already public
@@ -1528,9 +1547,9 @@ export const MindMap = ({
     } finally {
       setIsPublishing(false);
     }
-  };
+  }, [user, supabase, isPublishing, data, providerOptions, refreshBalance, onUpdate, router, toast]);
 
-  const handleOpenSummary = async () => {
+  const handleOpenSummary = useCallback(async () => {
     setIsSummaryDialogOpen(true);
     if (summaryContent) return; // Already generated for this session
 
@@ -1558,7 +1577,37 @@ export const MindMap = ({
     } finally {
       setIsSummarizing(false);
     }
-  };
+  }, [summaryContent, data, providerOptions, refreshBalance, toast]);
+
+  // ── Stabilized inline callbacks for memo'd children ──
+  const handleToggleSynthesis = useCallback(() => {
+    setIsSynthesisMode(prev => !prev);
+    setSynthesisSelection([]);
+  }, []);
+
+  const handleCompareExplainNode = useCallback((node: any) => {
+    onExplainInChat(`Explain "${node.title}" in the context of the comparison of ${data.topic}.`);
+  }, [onExplainInChat, data.topic]);
+
+  const handleCompareSubCategoryClick = useCallback((node: any) => {
+    handleSubCategoryClick({ name: node.title, description: node.description || '' });
+  }, [handleSubCategoryClick]);
+
+  const handleRadialNodeClick = useCallback((node: any) => {
+    if (node.type === 'subcategory') handleSubCategoryClick(node);
+  }, [handleSubCategoryClick]);
+
+  const handleRadialGenerateNewMap = useCallback((topic: string, id?: string) => {
+    onGenerateNewMap(topic, id || '', `${data.topic} > ${topic}`, 'background');
+  }, [onGenerateNewMap, data.topic]);
+
+  const handleRadialExplainWithExample = useCallback((topic: string) => {
+    handleExplainWithExample({ name: topic, type: 'subTopic' });
+  }, [handleExplainWithExample]);
+
+  const handleRadialGenerateImage = useCallback((topic: string) => {
+    handleGenerateImageClick({ name: topic, description: '' });
+  }, [handleGenerateImageClick]);
 
   return (
     <div className="min-h-screen pb-20 relative" ref={mindMapRef}>
@@ -1601,10 +1650,7 @@ export const MindMap = ({
         onOpenPinnedMessages={onOpenPinnedMessages}
         pinnedMessagesCount={pinnedMessagesCount}
         isSynthesisMode={isSynthesisMode}
-        onToggleSynthesis={() => {
-          setIsSynthesisMode(!isSynthesisMode);
-          setSynthesisSelection([]);
-        }}
+        onToggleSynthesis={handleToggleSynthesis}
       />
 
       <div className={cn(
@@ -1614,10 +1660,10 @@ export const MindMap = ({
         {data.mode === 'compare' ? (
           <CompareView
             data={data}
-            onExplainNode={(node) => onExplainInChat(`Explain "${node.title}" in the context of the comparison of ${data.topic}.`)}
+            onExplainNode={handleCompareExplainNode}
             onGenerateNewMap={onGenerateNewMap}
             onExplainInChat={onExplainInChat}
-            onSubCategoryClick={(node) => handleSubCategoryClick({ name: node.title, description: node.description || '' })}
+            onSubCategoryClick={handleCompareSubCategoryClick}
             onOpenMap={onOpenNestedMap}
             onGenerateImage={handleGenerateImageClick}
             generatingNode={generatingNode}
@@ -1735,18 +1781,14 @@ export const MindMap = ({
             <div className="fixed inset-0 top-[72px] z-40 bg-black animate-in fade-in duration-300">
               <MindMapRadialView
                 data={data}
-                onNodeClick={(node) => {
-                  if (node.type === 'subcategory') handleSubCategoryClick(node);
-                }}
-                onGenerateNewMap={(topic, id) => {
-                  onGenerateNewMap(topic, id || '', `${data.topic} > ${topic}`, 'background');
-                }}
+                onNodeClick={handleRadialNodeClick}
+                onGenerateNewMap={handleRadialGenerateNewMap}
                 generatingNode={generatingNode}
                 onExplainInChat={onExplainInChat}
-                onExplainWithExample={(topic) => handleExplainWithExample({ name: topic, type: 'subTopic' })}
+                onExplainWithExample={handleRadialExplainWithExample}
                 onStartQuiz={onStartQuiz}
                 onPracticeClick={handleGeneratePracticeQuestions}
-                onGenerateImage={(topic) => handleGenerateImageClick({ name: topic, description: '' })}
+                onGenerateImage={handleRadialGenerateImage}
                 focusedNodeName={focusedNodeName}
                 resonanceNodes={resonanceNodes}
                 onSynthesize={onSynthesize}
@@ -2040,4 +2082,4 @@ export const MindMap = ({
       />
     </div>
   );
-};
+});

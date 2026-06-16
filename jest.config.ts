@@ -1,5 +1,5 @@
 import type { Config } from 'jest';
-import nextJest from 'next/jest';
+import nextJest from 'next/jest.js';
 
 const createJestConfig = nextJest({
   dir: './',
@@ -15,6 +15,10 @@ const config: Config = {
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    // cheerio is ESM-only, which Jest can't parse without special transforms.
+    // For tests that import modules that depend on cheerio (AI flows),
+    // redirect to a mock that provides the minimal interface needed.
+    '^cheerio$': '<rootDir>/src/__tests__/helpers/cheerio-mock.ts',
   },
   transform: {
     '^.+\\.(ts|tsx)$': ['ts-jest', {
@@ -22,7 +26,7 @@ const config: Config = {
     }],
   },
   transformIgnorePatterns: [
-    '/node_modules/',
+    '/node_modules/(?!cheerio|htmlparser2|domutils|dom-serializer|domelementtype|css-select|nth-check|parse5|lucide-react)/',
     '^.+\\.module\\.(css|sass|scss)$',
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],

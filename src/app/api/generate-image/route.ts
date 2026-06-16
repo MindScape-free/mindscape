@@ -1,6 +1,23 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { rateLimit, createRateLimitResponse, getClientIdentifier, getRateLimitHeaders } from '@/lib/rate-limit';
 
 export const maxDuration = 60; // 60s timeout for serverless environments
+
+// ── CORS Headers ───────────────────────────────────────────────────────────
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Max-Age': '86400',
+};
+
+function addCorsHeaders(response: NextResponse): NextResponse {
+  for (const [key, value] of Object.entries(corsHeaders)) {
+    response.headers.set(key, value);
+  }
+  return response;
+}
 
 // In-memory cache for dynamic models
 let cachedModels: any = null;
@@ -197,18 +214,38 @@ function applyStyleToPrompt(prompt: string, style?: string, composition?: string
  * Generate images using Pollinations.ai API
  * Supports user API keys with fallback to server key
  */
-export async function POST(req: Request) {
+/**
+ * OPTIONS /api/generate-image
+ *
+ * Handle CORS preflight requests.
+ */
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
+
+export async function POST(req: NextRequest) {
+  // ── Rate Limiting ────────────────────────────────────────────────────
+  const clientId = getClientIdentifier(req);
+  const rateLimitResult = rateLimit(clientId, 'ai');
+  const rateLimitResponse = createRateLimitResponse(rateLimitResult);
+  if (rateLimitResponse) {
+    return addCorsHeaders(new NextResponse(await rateLimitResponse.text(), {
+      status: 429,
+      headers: Object.fromEntries(rateLimitResponse.headers.entries()),
+    }));
+  }
+
   try {
     // Safety check: ensure body is present to avoid "Unexpected end of JSON input"
     if (!req.body) {
-      return NextResponse.json({ error: 'Request body is required' }, { status: 400 });
+      return addCorsHeaders(NextResponse.json({ error: 'Request body is required' }, { status: 400 }));
     }
 
     let body: GenerateImageRequest;
     try {
       body = await req.json();
     } catch (e) {
-      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+      return addCorsHeaders(NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }));
     }
 
     const {
@@ -254,10 +291,10 @@ export async function POST(req: Request) {
 
     // Validate inputs
     if (!prompt || prompt.trim().length === 0) {
-      return NextResponse.json(
+      return addCorsHeaders(NextResponse.json(
         { error: 'Prompt is required' },
         { status: 400 }
-      );
+      ));
     }
 
     const POLLINATIONS_MODELS = await getDynamicModels();
@@ -271,10 +308,10 @@ export async function POST(req: Request) {
 
     if (!apiKey) {
       console.warn("⚠️ No API key found (User or Server). Image generation may fail or be restricted.");
-      return NextResponse.json(
+      return addCorsHeaders(NextResponse.json(
         { error: 'No API key available. Please add your Pollinations API key in your profile settings.' },
         { status: 401 }
-      );
+      ));
     }
 
     // Enhance prompt using the new style-aware logic
@@ -345,7 +382,7 @@ export async function POST(req: Request) {
             continue;
           }
 
-          return NextResponse.json(
+          return addCorsHeaders(NextResponse.json(
             {
               error: `Image generation failed: ${response.status}`,
               details: errorText,
@@ -356,7 +393,7 @@ export async function POST(req: Request) {
                   : 'Moderation or capacity error. Please try a more general prompt.'
             },
             { status: response.status }
-          );
+          ));
         }
 
         // Success! Convert to base64
@@ -368,7 +405,7 @@ export async function POST(req: Request) {
 
         console.log(`✅ Image generated with model ${currentModel} (${Math.round(buffer.length / 1024)} KB)`);
 
-        return NextResponse.json({
+        return addCorsHeaders(NextResponse.json({
           success: true,
           imageUrl: dataUrl,
           model: currentModel,
@@ -376,7 +413,7 @@ export async function POST(req: Request) {
           quality: (POLLINATIONS_MODELS as any)[currentModel]?.quality || 'custom',
           size: { width: safeWidth, height: safeHeight },
           usingUserKey: !!userApiKey
-        });
+        }));
 
       } catch (error: any) {
         const isTimeout = error.name === 'AbortError' || error.message.includes('timeout');
@@ -394,14 +431,14 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ error: 'Failed after multiple attempts' }, { status: 500 });
+    return addCorsHeaders(NextResponse.json({ error: 'Failed after multiple attempts' }, { status: 500 }));
 
   } catch (error: any) {
     console.error('💥 Fatal error generating image:', error);
-    return NextResponse.json(
+    return addCorsHeaders(NextResponse.json(
       { error: error.message || 'Internal Server Error' },
       { status: 500 }
-    );
+    ));
   }
 }
 
@@ -412,10 +449,10 @@ export async function POST(req: Request) {
  */
 export async function GET() {
   const models = await getDynamicModels();
-  return NextResponse.json({
+  return addCorsHeaders(NextResponse.json({
     models: Object.entries(models).map(([name, info]) => ({
       name,
       ...(info as any)
     }))
-  });
+  }));
 }

@@ -395,7 +395,7 @@ function ProfileContent() {
             fetchPollenBalance(profile.apiSettings.pollinationsApiKey);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [profile?.apiSettings?.pollinationsApiKey, user?.uid]);
+    }, [profile?.apiSettings?.pollinationsApiKey, user?.id]);
 
     const handleSaveApiKey = async () => {
         if (!user || !apiKeyInput.trim()) {
@@ -725,7 +725,7 @@ function ProfileContent() {
                                         await supabase
                                             .from('users')
                                             .update({ display_name: editName.trim() })
-                                            .eq('id', user!.uid);
+                                            .eq('id', user!.id);
                                             
                                         toast({ title: 'Profile saved!', description: 'Welcome to MindScape!' });
                                         setProfile((prev: any) => prev ? { ...prev, displayName: editName.trim() } : prev);
@@ -1215,8 +1215,7 @@ function ProfileContent() {
                                                         redirect_url: window.location.href,
                                                         permissions: 'profile,balance,usage,keys,models',
                                                         scope: 'profile,balance,usage,keys,models',
-                                                        budget: '',
-                                                        expiry: ''
+                                                        budget: '1000'
                                                     });
                                                     window.location.href = `https://enter.pollinations.ai/authorize?${params}`;
                                                 }}

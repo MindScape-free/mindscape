@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { detectInputType } from '@/lib/detect-source-type';
+import { detectInputType, SourceType } from '@/lib/detect-source-type';
 
 interface MultiSourceInputProps {
   onAdd: (value: string) => void;
@@ -33,7 +33,7 @@ export function MultiSourceInput({
   sourceCount
 }: MultiSourceInputProps) {
   const [value, setValue] = useState('');
-  const [detectedType, setDetectedType] = useState<'youtube' | 'website' | 'text'>('text');
+  const [detectedType, setDetectedType] = useState<SourceType>('text');
 
   useEffect(() => {
     if (!value.trim()) {

@@ -126,6 +126,12 @@ export function useMindMapStack(options: {
                     ? (currentMap as any).treeDepth 
                     : (typeof (currentMap as any)?.depth === 'number' ? (currentMap as any).depth : 0);
 
+                const extractedSubCategories = (mapWithId as any).subTopics?.map((st: any) => ({
+                    name: st.name,
+                    description: st.thought || '',
+                    icon: st.icon || 'Network'
+                })) || [];
+
                 const newExpansion: NestedExpansionItem = {
                     id: newId || `temp-${Date.now()}`,
                     topic: topic,
@@ -134,6 +140,7 @@ export function useMindMapStack(options: {
                     status: 'completed',
                     createdAt: new Date().toISOString(),
                     depth: parentTreeDepth + 1,
+                    subCategories: extractedSubCategories,
                     fullData: { ...mapWithId, treeDepth: parentTreeDepth + 1 } as any
                 };
 

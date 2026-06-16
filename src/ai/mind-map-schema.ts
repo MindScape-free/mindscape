@@ -154,7 +154,7 @@ export const CompareMindMapSchema = z.object({
   nestedExpansions: z.array(NestedExpansionItemSchema).optional(),
   savedImages: z.array(GeneratedImageSchema).optional(),
   thumbnailUrl: z.string().optional(),
-  depth: z.enum(['quick', 'balanced', 'detailed']).optional(),
+  depth: z.enum(['low', 'medium', 'deep', 'quick', 'balanced', 'detailed']).optional(),
 });
 
 export const SingleMindMapSchema = z.object({
@@ -174,7 +174,7 @@ export const SingleMindMapSchema = z.object({
   nestedExpansions: z.array(NestedExpansionItemSchema).optional(),
   savedImages: z.array(GeneratedImageSchema).optional(),
   thumbnailUrl: z.string().optional(),
-  depth: z.enum(['quick', 'balanced', 'detailed']).optional(),
+  depth: z.enum(['low', 'medium', 'deep', 'quick', 'balanced', 'detailed']).optional(),
 });
 
 export const MindMapSchema = z.union([SingleMindMapSchema, CompareMindMapSchema]);
