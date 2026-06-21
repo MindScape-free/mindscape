@@ -9,11 +9,12 @@
 
 import { getSupabaseClient } from './supabase-db';
 import type { AdminActivityLogEntry, ActivityType, ActivityCategory } from './admin-utils';
-import { FILTER_CATEGORIES } from './admin-utils';
+
 import { v4 as uuidv4 } from 'uuid';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { Achievement, getNewlyUnlockedAchievements, UserStatistics } from './achievements';
+import { createElement, ComponentType } from 'react';
 
 // ═══════════════════════════════════════════════════════════════
 // SECTION 1 — Types
@@ -290,8 +291,6 @@ export const analytics = new AnalyticsTracker();
 export function useAnalytics() {
   return analytics;
 }
-
-import { createElement, ComponentType } from 'react';
 
 export function withAnalytics<P extends object>(
   WrappedComponent: ComponentType<P>,
@@ -645,6 +644,7 @@ export async function fetchAdminActivityLogs(
     let entries = data.map(row => ({ id: row.id, ...row } as AdminActivityLogEntry));
 
     if (filterType && filterType !== 'all') {
+      const { FILTER_CATEGORIES } = await import('./admin-utils');
       const typesToFilter = typeof filterType === 'string' && FILTER_CATEGORIES.find(c => c.value === filterType)
         ? FILTER_CATEGORIES.find(c => c.value === filterType)!.types
         : [filterType];
