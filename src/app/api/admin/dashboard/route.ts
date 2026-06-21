@@ -108,13 +108,34 @@ export async function GET(request: Request) {
       userId: f.user_id,
     }));
 
+    // Compute active and historical node counts directly (including sub-maps)
+    let activeNodesCount = 0;
+    let historicalNodesCount = 0;
+    try {
+      const { data: mmNodes } = await supabase
+        .from('mindmaps')
+        .select('node_count');
+      activeNodesCount = (mmNodes || []).reduce((acc: number, m: any) => acc + (m.node_count || 0), 0);
+
+      const { data: createEvents } = await supabase
+        .from('user_events')
+        .select('event_data')
+        .eq('event_type', 'map_created');
+      historicalNodesCount = (createEvents || []).reduce((acc: number, e: any) => {
+        const count = e.event_data?.nodeCount ?? e.event_data?.node_count ?? 0;
+        return acc + Number(count);
+      }, 0);
+    } catch (err) {
+      console.error('[DashboardAPI] Node counts calculation failed:', err);
+    }
+
     const response = {
       stats: {
         totalUsers: platform.total_users ?? 0,
         totalMindmaps: platform.total_maps ?? 0,
         totalChats: platform.total_chats ?? 0,
-        totalNodes: platform.total_nodes ?? 0,
-        totalNodesActive: platform.total_nodes ?? 0,
+        totalNodes: (historicalNodesCount || platform.total_nodes) ?? 0,
+        totalNodesActive: (activeNodesCount || platform.total_nodes) ?? 0,
         totalImages: platform.total_images ?? 0,
         activeUsers: platform.active_users_24h ?? 0,
         healthScore: platform.health_score ?? 100,

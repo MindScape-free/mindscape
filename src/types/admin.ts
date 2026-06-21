@@ -123,6 +123,8 @@ export interface UserProfile {
   daily_activity: Record<string, Record<string, number>>;
 
   unlocked_achievements?: string[];
+  preferences: Record<string, unknown>;
+  api_settings: Record<string, unknown>;
   updated_at: string;
 }
 
@@ -132,6 +134,7 @@ export interface PlatformStats {
   total_maps_ever: number;
   total_chats: number;
   total_nodes: number;
+  total_nodes_active?: number;
   total_images: number;
   total_events: number;
 

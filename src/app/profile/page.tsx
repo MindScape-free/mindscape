@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { mapMindMapRows, mapUserRow } from '@/lib/map-mappers';
+import { mapMindMapRows, mapUserRow, mapUserProfileRow } from '@/lib/map-mappers';
 import { useAuth, useUser } from '@/lib/auth-context';
 import { getSupabaseClient } from '@/lib/supabase-db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,7 +40,7 @@ import {
     syncUserStatisticsAction, 
     checkPollenBalanceAction,
 } from '@/app/actions';
-import { trackStudyTime, updateUserStatistics } from '@/lib/tracker';
+import { trackStudyTime } from '@/lib/tracker';
 import { ModelSelector } from '@/components/model-selector';
 import { Eye, EyeOff, Menu } from 'lucide-react';
 import { getUserImageSettings, saveUserApiKey, deleteUserApiKey } from '@/lib/supabase-db';
@@ -147,11 +147,11 @@ function ProfileContent() {
 
         const setupListeners = async () => {
             try {
-                // Fetch user profile from Supabase
+                // Fetch unified user profile from user_profiles (single source of truth)
                 const { data: profileData, error: profileError } = await supabase
-                    .from('users')
+                    .from('user_profiles')
                     .select('*')
-                    .eq('id', user.id)
+                    .eq('user_id', user.id)
                     .single();
 
                 if (profileError && profileError.code !== 'PGRST116') {
@@ -164,7 +164,7 @@ function ProfileContent() {
                 }
 
                 if (profileData) {
-                    const mappedData = mapUserRow(profileData) as Record<string, unknown>;
+                    const mappedData = mapUserProfileRow(profileData) as Record<string, unknown>;
                     setProfile(mappedData as any);
                     setEditName(mappedData.displayName as string);
                 } else {
@@ -201,7 +201,8 @@ function ProfileContent() {
                     setEditName(defaultData.displayName);
                 }
 
-                // 2. Fetch API settings from user_settings table
+                // 2. API settings are now embedded in user_profiles.api_settings, but still
+                //    fetch from user_settings to keep form state in sync if user manages keys
                 getUserImageSettings(supabase, user.id).then(settings => {
                     if (settings) {
                         setApiKeyInput(settings.pollinationsApiKey || '');
@@ -225,7 +226,6 @@ function ProfileContent() {
                                 }
                             };
                         });
-                        console.log('✅ Loaded AI settings from user_settings');
                     }
                 });
 
@@ -268,11 +268,18 @@ function ProfileContent() {
 
     const savePreference = async (key: string, value: string) => {
         if (!user) return;
+        const updatedPrefs = { ...profile?.preferences, [key]: value };
         try {
-            await supabase
-                .from('users')
-                .update({ preferences: { ...profile?.preferences, [key]: value } })
-                .eq('id', user.id);
+            await Promise.all([
+                supabase
+                    .from('users')
+                    .update({ preferences: updatedPrefs })
+                    .eq('id', user.id),
+                supabase
+                    .from('user_profiles')
+                    .update({ preferences: updatedPrefs })
+                    .eq('user_id', user.id),
+            ]);
             toast({ title: 'Saved', description: 'Preference updated.' });
         } catch {
             toast({ variant: 'destructive', title: 'Error', description: 'Failed to update preferences.' });
@@ -339,11 +346,10 @@ function ProfileContent() {
             const reader = new FileReader();
             reader.onloadend = async () => {
                 const base64String = reader.result as string;
-                await supabase
-                    .from('users')
-                    .update({ photo_url: base64String })
-                    .eq('id', user.id);
-                
+                await Promise.all([
+                    supabase.from('users').update({ photo_url: base64String }).eq('id', user.id),
+                    supabase.from('user_profiles').update({ photo_url: base64String }).eq('user_id', user.id),
+                ]);
                 setProfile(prev => prev ? { ...prev, photoURL: base64String } : prev);
                 toast({ title: 'Success', description: 'Profile picture updated.' });
             };
@@ -358,11 +364,10 @@ function ProfileContent() {
         if (!user || !editName.trim()) return;
         setIsSaving(true);
         try {
-            await supabase
-                .from('users')
-                .update({ display_name: editName.trim() })
-                .eq('id', user.id);
-
+            await Promise.all([
+                supabase.from('users').update({ display_name: editName.trim() }).eq('id', user.id),
+                supabase.from('user_profiles').update({ display_name: editName.trim() }).eq('user_id', user.id),
+            ]);
             setIsEditing(false);
             setProfile(prev => prev ? { ...prev, displayName: editName.trim() } : prev);
             toast({ title: 'Saved', description: 'Your name has been updated.' });
@@ -531,11 +536,11 @@ function ProfileContent() {
         try {
             const result = await syncUserStatisticsAction(user.id);
             if (result.success) {
-                const { data: userData } = await supabase.from('users').select('*').eq('id', user.id).single();
-                if (userData) {
-                    const mappedUser = mapUserRow(userData) as Record<string, unknown>;
-                    setProfile(mappedUser as any);
-                    setEditName(mappedUser.displayName as string);
+                const { data: profileData } = await supabase.from('user_profiles').select('*').eq('user_id', user.id).single();
+                if (profileData) {
+                    const mappedProfile = mapUserProfileRow(profileData) as Record<string, unknown>;
+                    setProfile(mappedProfile as any);
+                    setEditName(mappedProfile.displayName as string);
                 }
                 
                 const { data: mapsData } = await supabase
@@ -722,11 +727,10 @@ function ProfileContent() {
                                     }
                                     setIsSaving(true);
                                     try {
-                                        await supabase
-                                            .from('users')
-                                            .update({ display_name: editName.trim() })
-                                            .eq('id', user!.id);
-                                            
+                                        await Promise.all([
+                                            supabase.from('users').update({ display_name: editName.trim() }).eq('id', user!.id),
+                                            supabase.from('user_profiles').update({ display_name: editName.trim() }).eq('user_id', user!.id),
+                                        ]);
                                         toast({ title: 'Profile saved!', description: 'Welcome to MindScape!' });
                                         setProfile((prev: any) => prev ? { ...prev, displayName: editName.trim() } : prev);
                                         router.replace('/profile');
@@ -982,7 +986,7 @@ function ProfileContent() {
                                                     <Activity className="h-5 w-5 text-violet-400" />
                                                 </div>
                                                 <div>
-                                                    <h3 className="text-lg font-black text-white tracking-tight">Neural Activity Heatmap</h3>
+                                                    <h3 className="text-lg font-black text-white tracking-tight">Daily Activity</h3>
                                                     <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Historical Learning patterns</p>
                                                 </div>
                                             </div>
@@ -1526,11 +1530,11 @@ function ActivityHeatmap({ userActivity, userHeatmapMonth }: { userActivity: any
     return (
         <>
             {days.map(({ date, data, dateObj }) => {
-                const mapsCreated = data?.mapsCreated || 0;
-                const imagesGenerated = data?.imagesGenerated || 0;
-                const nestedExpansions = data?.nestedExpansions || 0;
-                const nodesCreated = data?.nodesCreated || 0;
-                const studyTimeMinutes = data?.studyTimeMinutes || 0;
+                const mapsCreated = data?.mapsCreated || data?.maps || 0;
+                const imagesGenerated = data?.imagesGenerated || data?.images || 0;
+                const nestedExpansions = data?.nestedExpansions || data?.expansions || data?.nested_expansions || 0;
+                const nodesCreated = data?.nodesCreated || data?.map_nodes || 0;
+                const studyTimeMinutes = data?.studyTimeMinutes || data?.study_minutes || 0;
                 const totalActivity = mapsCreated + imagesGenerated + nestedExpansions + (nodesCreated > 0 ? 1 : 0) + (studyTimeMinutes > 0 ? 1 : 0);
                 const intensity = totalActivity === 0 ? 'bg-zinc-800' : totalActivity <= 2 ? 'bg-violet-900/60' : totalActivity <= 4 ? 'bg-violet-700/70' : totalActivity <= 7 ? 'bg-violet-500' : 'bg-violet-400';
                 const isToday = format(today, 'yyyy-MM-dd') === date;
@@ -1547,7 +1551,7 @@ function ActivityHeatmap({ userActivity, userHeatmapMonth }: { userActivity: any
                             <p className="text-zinc-300 font-black mb-2 border-b border-zinc-700 pb-1">{format(new Date(date), 'EEEE, MMM d')}</p>
                             <div className="space-y-1">
                                 <p className="text-blue-400 flex items-center gap-2"><Map className="h-3 w-3" /> {mapsCreated} map{mapsCreated !== 1 ? 's' : ''}</p>
-                                <p className="text-purple-400 flex items-center gap-2"><Layers className="h-3 w-3" /> {nestedExpansions} expansion{nestedExpansions !== 1 ? 's' : ''}</p>
+                                <p className="text-purple-400 flex items-center gap-2"><Layers className="h-3 w-3" /> {nestedExpansions} sub-map{nestedExpansions !== 1 ? 's' : ''}</p>
                                 <p className="text-pink-400 flex items-center gap-2"><ImageIcon className="h-3 w-3" /> {imagesGenerated} image{imagesGenerated !== 1 ? 's' : ''}</p>
                                 {nodesCreated > 0 && <p className="text-amber-400 flex items-center gap-2"><Activity className="h-3 w-3" /> {nodesCreated} node{nodesCreated !== 1 ? 's' : ''}</p>}
                                 {studyTimeMinutes > 0 && <p className="text-emerald-400 flex items-center gap-2"><Clock className="h-3 w-3" /> {studyTimeMinutes} min</p>}

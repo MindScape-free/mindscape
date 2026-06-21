@@ -20,11 +20,11 @@ export async function GET() {
       .select('*', { count: 'exact' })
       .limit(10);
     
-    // Test fetching stats
+    // Test fetching stats (platform_stats replaced admin_stats)
     const { data: stats, error: statsErr } = await supabase
-      .from('admin_stats')
+      .from('platform_stats')
       .select('*')
-      .eq('period', 'all-time')
+      .eq('id', 'global')
       .single();
     
     // Test fetching logs

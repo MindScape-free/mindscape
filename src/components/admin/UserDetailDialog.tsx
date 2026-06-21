@@ -228,13 +228,13 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
   }, [user?.id]);
 
   useEffect(() => {
-    if (isOpen && user && (supabase || session)) {
+    if (isOpen && user?.id && (supabase || session)) {
       const fetchData = async () => {
         setIsLoadingMaps(true);
         try {
           // 1. Get chat count from the unified endpoint (user profile)
           const token = session?.access_token;
-          if (token && user?.id) {
+          if (token) {
             const res = await fetch(`/api/admin/unified?userId=${user.id}`, {
               headers: { 'Authorization': `Bearer ${token}` },
             });
@@ -269,7 +269,8 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
       setChatCount(null);
       setUserMaps([]);
     }
-  }, [isOpen, user, supabase, session]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, user?.id, supabase, session?.access_token]);
 
   if (!user) return null;
 
@@ -436,11 +437,11 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
             {[
               { label: 'Total Created', value: stats.totalMapsCreated || 0, icon: MapIcon, color: 'violet', trend: '+12%' },
-              { label: 'Active Maps', value: userMaps.length, icon: Brain, color: 'indigo' },
-              { label: 'Avg Complexity', value: avgNodesPerMap, icon: Layers, color: 'blue' },
-              { label: 'Total Bubbles', value: currentTotalNodes, icon: Zap, color: 'emerald' },
+              { label: 'Active Maps', value: userMaps.length, icon: Brain, color: 'indigo', isLoading: isLoadingMaps },
+              { label: 'Avg Complexity', value: avgNodesPerMap, icon: Layers, color: 'blue', isLoading: isLoadingMaps },
+              { label: 'Total Bubbles', value: currentTotalNodes, icon: Zap, color: 'emerald', isLoading: isLoadingMaps },
               { label: 'Images Created', value: stats.totalImagesGenerated || 0, icon: ImageIcon, color: 'pink' },
-              { label: 'AI Chats', value: chatCount ?? '-', icon: BarChart3, color: 'yellow' },
+              { label: 'AI Chats', value: chatCount ?? '-', icon: BarChart3, color: 'yellow', isLoading: isLoadingMaps },
               { label: 'Daily Streak', value: `${stats.currentStreak || 0}d`, icon: Flame, color: 'orange' },
               { label: 'Time Spent', value: `${Math.floor((stats.totalStudyTimeMinutes || 0) / 60)}h`, icon: Clock, color: 'sky' },
               { label: 'Joined Date', value: userCreatedAt ? format(userCreatedAt, 'dd/MM/yy') : '-', icon: UserRound, color: 'violet' },
@@ -527,9 +528,13 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
                       </div>
                     </div>
                     <div className="flex items-end justify-between gap-2">
-                      <p className="text-2xl font-black text-white tracking-tighter leading-none group-hover:scale-[1.02] origin-left transition-transform">
-                        {stat.value}
-                      </p>
+                      {stat.isLoading ? (
+                        <div className="h-6 w-16 bg-white/10 rounded-md animate-pulse" />
+                      ) : (
+                        <p className="text-2xl font-black text-white tracking-tighter leading-none group-hover:scale-[1.02] origin-left transition-transform">
+                          {stat.value}
+                        </p>
+                      )}
                       {stat.trend && (
                         <span className="text-[8px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 mb-0.5">
                           {stat.trend}
@@ -552,7 +557,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
                     <Activity className="h-5 w-5 text-violet-400" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-black text-white tracking-tighter">Neural Activity Heatmap</h3>
+                    <h3 className="text-xl font-black text-white tracking-tighter">Daily Activity</h3>
                     <p className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500 mt-0.5">Engagement metrics</p>
                   </div>
                 </div>
@@ -633,12 +638,51 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
             </div>
 
             {isLoadingMaps ? (
-              <div className="py-32 flex flex-col items-center justify-center gap-6 relative z-10">
-                <div className="relative h-16 w-16">
-                  <div className="absolute inset-0 border-4 border-violet-500/10 rounded-full" />
-                  <div className="absolute inset-0 border-t-4 border-violet-500 rounded-full animate-spin shadow-[0_0_15px_rgba(139,92,246,0.3)]" />
+              <div className="relative z-10">
+                <div className="overflow-x-auto custom-scrollbar pb-4">
+                  <table className="w-full border-separate border-spacing-y-3">
+                    <thead>
+                      <tr>
+                        <th className="text-left text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600 pb-2 pl-6">Topic / Signature</th>
+                        <th className="text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600 pb-2">Sync Date</th>
+                        <th className="text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600 pb-2">Nodes</th>
+                        <th className="text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600 pb-2">Reach</th>
+                        <th className="text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600 pb-2">Origin</th>
+                        <th className="text-right text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600 pb-2 pr-6">Access</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: 3 }).map((_, idx) => (
+                        <tr key={idx} className="animate-pulse">
+                          <td className="py-2.5 pl-4 bg-white/[0.02] rounded-l-2xl border-y border-l border-white/5">
+                            <div className="flex items-center gap-3">
+                              <div className="h-9 w-9 rounded-xl bg-white/5 border border-white/10" />
+                              <div className="space-y-1.5">
+                                <div className="h-3 w-32 bg-white/10 rounded" />
+                                <div className="h-2.5 w-16 bg-white/5 rounded" />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-2.5 bg-white/[0.02] border-y border-white/5">
+                            <div className="h-3 w-20 bg-white/5 rounded mx-auto" />
+                          </td>
+                          <td className="py-2.5 bg-white/[0.02] border-y border-white/5">
+                            <div className="h-4.5 w-8 bg-white/5 rounded-full mx-auto" />
+                          </td>
+                          <td className="py-2.5 bg-white/[0.02] border-y border-white/5">
+                            <div className="h-3 w-10 bg-white/5 rounded mx-auto" />
+                          </td>
+                          <td className="py-2.5 bg-white/[0.02] border-y border-white/5">
+                            <div className="h-5 w-12 bg-white/5 rounded-lg mx-auto" />
+                          </td>
+                          <td className="py-2.5 pr-4 bg-white/[0.02] rounded-r-2xl border-y border-r border-white/5">
+                            <div className="h-8 w-8 bg-white/5 rounded-lg ml-auto" />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] animate-pulse">Establishing Cryptographic Sync...</p>
               </div>
             ) : userMaps.length > 0 ? (
               <div className="relative z-10">
@@ -733,7 +777,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
           </div>
 
           {/* Map Analytics Card */}
-          {userMaps.length > 0 && (
+          {(isLoadingMaps || userMaps.length > 0) && (
             <div className="space-y-6 border border-violet-500/20 rounded-[2.5rem] p-8 bg-violet-500/[0.02] hover:bg-violet-500/[0.04] hover:border-violet-500/40 transition-all shadow-[inset_0_0_40px_rgba(139,92,246,0.02)] group/analytics">
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-3">
@@ -743,38 +787,99 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
                   <div>
                     <h2 className="text-xl font-black text-white tracking-tight">Mindmap Analytics</h2>
                     <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
-                      Viewing: {analyticsView === 'current' 
+                      {isLoadingMaps ? (
+                        <span className="inline-block h-3 w-32 bg-white/5 rounded animate-pulse mt-1" />
+                      ) : analyticsView === 'current' 
                         ? `${userMaps.length} Current Maps`
                         : `${stats.totalMapsCreated || 0} Total Created`}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex gap-1.5 p-1.5 bg-white/5 rounded-2xl border border-white/10">
-                    <button
-                      onClick={() => setAnalyticsView('current')}
-                      className={`px-6 py-2.5 text-[10px] font-black rounded-[0.9rem] transition-all uppercase tracking-widest ${
-                        analyticsView === 'current'
-                          ? 'bg-violet-600 text-white shadow-xl shadow-violet-600/20 scale-105'
-                          : 'text-zinc-500 hover:text-white hover:bg-white/5'
-                      }`}
-                    >
-                      Realtime
-                    </button>
-                    <button
-                      onClick={() => setAnalyticsView('allTime')}
-                      className={`px-6 py-2.5 text-[10px] font-black rounded-[0.9rem] transition-all uppercase tracking-widest ${
-                        analyticsView === 'allTime'
-                          ? 'bg-violet-600 text-white shadow-xl shadow-violet-600/20 scale-105'
-                          : 'text-zinc-500 hover:text-white hover:bg-white/5'
-                      }`}
-                    >
-                      Aggregate
-                    </button>
+                {!isLoadingMaps && (
+                  <div className="flex items-center gap-4">
+                    <div className="flex gap-1.5 p-1.5 bg-white/5 rounded-2xl border border-white/10">
+                      <button
+                        onClick={() => setAnalyticsView('current')}
+                        className={`px-6 py-2.5 text-[10px] font-black rounded-[0.9rem] transition-all uppercase tracking-widest ${
+                          analyticsView === 'current'
+                            ? 'bg-violet-600 text-white shadow-xl shadow-violet-600/20 scale-105'
+                            : 'text-zinc-500 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        Realtime
+                      </button>
+                      <button
+                        onClick={() => setAnalyticsView('allTime')}
+                        className={`px-6 py-2.5 text-[10px] font-black rounded-[0.9rem] transition-all uppercase tracking-widest ${
+                          analyticsView === 'allTime'
+                            ? 'bg-violet-600 text-white shadow-xl shadow-violet-600/20 scale-105'
+                            : 'text-zinc-500 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        Aggregate
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {isLoadingMaps ? (
+                <div className="space-y-6">
+                  {/* Row 1: Mode & Depth */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Cognitive Modes Skeleton */}
+                    <div className="relative overflow-hidden rounded-[2rem] bg-white/5 border border-white/10 p-8 shadow-xl animate-pulse">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="h-10 w-10 bg-white/5 rounded-xl" />
+                        <div className="h-4 w-32 bg-white/5 rounded-md" />
+                      </div>
+                      <div className="grid grid-cols-3 gap-4">
+                        {[1, 2, 3].map((i) => (
+                          <div key={i} className="rounded-[1.5rem] bg-white/[0.03] border border-white/5 p-5">
+                            <div className="h-3 w-16 bg-white/5 rounded-md mb-3" />
+                            <div className="h-8 w-12 bg-white/10 rounded-md" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Structural Depth Skeleton */}
+                    <div className="relative overflow-hidden rounded-[2rem] bg-white/5 border border-white/10 p-8 shadow-xl animate-pulse">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="h-10 w-10 bg-white/5 rounded-xl" />
+                        <div className="h-4 w-32 bg-white/5 rounded-md" />
+                      </div>
+                      <div className="grid grid-cols-3 gap-4">
+                        {[1, 2, 3].map((i) => (
+                          <div key={i} className="rounded-[1.5rem] bg-white/[0.03] border border-white/5 p-5">
+                            <div className="h-3 w-16 bg-white/5 rounded-md mb-3" />
+                            <div className="h-8 w-12 bg-white/10 rounded-md" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Source Breakdown Skeleton */}
+                  <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-6 animate-pulse">
+                    <div className="flex items-center gap-2 mb-6">
+                      <div className="h-8 w-8 bg-white/5 rounded-xl" />
+                      <div className="space-y-1.5">
+                        <div className="h-3.5 w-36 bg-white/10 rounded-md" />
+                        <div className="h-2 w-28 bg-white/5 rounded-md" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                      {[1, 2, 3, 4, 5, 6].map((i) => (
+                        <div key={i} className="rounded-[1.25rem] bg-white/[0.03] border border-white/5 p-4">
+                          <div className="h-6 w-6 bg-white/5 rounded-xl mb-3" />
+                          <div className="h-3 w-12 bg-white/5 rounded-md mb-2" />
+                          <div className="h-6 w-10 bg-white/10 rounded-md" />
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-              {analyticsView === 'current' ? (
+              ) : analyticsView === 'current' ? (
                 <UserMapAnalytics userMaps={userMaps} />
               ) : (
                 <AllTimeAnalytics stats={stats} />
@@ -803,7 +908,12 @@ function ActivityHeatmap({ userActivity, userHeatmapMonth }: { userActivity: any
   return (
     <>
       {days.map(({ date, data, dateObj }) => {
-        const totalActivity = (data?.mapsCreated || 0) + (data?.imagesGenerated || 0) + (data?.studyTimeMinutes || 0);
+        const mapsCreated = data?.mapsCreated || data?.maps || 0;
+        const imagesGenerated = data?.imagesGenerated || data?.images || 0;
+        const nestedExpansions = data?.nestedExpansions || data?.expansions || data?.nested_expansions || 0;
+        const studyTimeMinutes = data?.studyTimeMinutes || data?.study_minutes || 0;
+
+        const totalActivity = mapsCreated + imagesGenerated + nestedExpansions + (studyTimeMinutes > 0 ? 1 : 0);
         const intensity = totalActivity === 0 ? 'bg-zinc-800' : totalActivity <= 2 ? 'bg-violet-900/60' : totalActivity <= 5 ? 'bg-violet-700/70' : totalActivity <= 10 ? 'bg-violet-500' : 'bg-violet-400';
         const isToday = format(today, 'yyyy-MM-dd') === date;
         const isFuture = dateObj > today;
@@ -818,9 +928,10 @@ function ActivityHeatmap({ userActivity, userHeatmapMonth }: { userActivity: any
             <TooltipContent side="top" className="bg-zinc-900 border-zinc-700 text-[10px] font-bold p-3 min-w-[150px]">
               <p className="text-zinc-300 font-black mb-2 border-b border-zinc-700 pb-1">{format(new Date(date), 'EEEE, MMM d')}</p>
               <div className="space-y-1">
-                <p className="text-blue-400 flex items-center gap-2"><MapIcon className="h-3 w-3" /> {data?.mapsCreated || 0} maps</p>
-                <p className="text-pink-400 flex items-center gap-2"><ImageIcon className="h-3 w-3" /> {data?.imagesGenerated || 0} images</p>
-                <p className="text-emerald-400 flex items-center gap-2"><Clock className="h-3 w-3" /> {data?.studyTimeMinutes || 0} min</p>
+                <p className="text-blue-400 flex items-center gap-2"><MapIcon className="h-3 w-3" /> {mapsCreated} maps</p>
+                <p className="text-purple-400 flex items-center gap-2"><Layers className="h-3 w-3" /> {nestedExpansions} sub-maps</p>
+                <p className="text-pink-400 flex items-center gap-2"><ImageIcon className="h-3 w-3" /> {imagesGenerated} images</p>
+                <p className="text-emerald-400 flex items-center gap-2"><Clock className="h-3 w-3" /> {studyTimeMinutes} min</p>
               </div>
             </TooltipContent>
           </Tooltip>

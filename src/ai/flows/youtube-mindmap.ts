@@ -11,6 +11,7 @@ export interface GenerateYouTubeMindMapInput {
   persona?: string;
   depth?: 'low' | 'medium' | 'deep';
   sessionId?: string;
+  context?: string;
 }
 
 export interface GenerateYouTubeMindMapOutput {
@@ -128,7 +129,9 @@ VALIDATION:
 5. subCategories have "description"
 6. timestamps are integers (seconds)`;
 
-    const userPrompt = `Generate a comprehensive mind map for this YouTube video:\n\n${contextSource}`;
+    const userPrompt = input.context
+      ? `Generate a comprehensive mind map for this YouTube video:\n\n${contextSource}\n\nAdditional instructions/focus from the user: "${input.context}"`
+      : `Generate a comprehensive mind map for this YouTube video:\n\n${contextSource}`;
 
     const result = await generateContent({
       provider: (options.provider as any) || 'pollinations',

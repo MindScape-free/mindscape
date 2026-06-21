@@ -496,6 +496,7 @@ function MindMapPageContent() {
                 currentMode = 'vision-image';
                 result = await generateMindMapFromImageAction({
                   imageDataUri: fileContent!,
+                  context: additionalText,
                   targetLang: params.lang,
                   persona: params.persona || aiPersona,
                   depth: params.depth,
@@ -510,6 +511,7 @@ function MindMapPageContent() {
                 currentMode = 'youtube';
                 result = await generateYouTubeMindMapAction({
                   url: fileContent!,
+                  context: additionalText,
                   targetLang: params.lang,
                   persona: params.persona || aiPersona,
                   depth: params.depth,
@@ -554,6 +556,7 @@ function MindMapPageContent() {
                 currentMode = 'website';
                 result = await generateMindMapFromWebsiteAction({
                   url: fileContent!,
+                  context: additionalText,
                   targetLang: params.lang,
                   persona: params.persona || aiPersona,
                   depth: params.depth,

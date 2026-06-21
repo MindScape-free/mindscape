@@ -89,6 +89,7 @@ function mapPlatformRow(row: any): PlatformStats {
     total_maps_ever: safeInt(row.total_maps_ever),
     total_chats: safeInt(row.total_chats),
     total_nodes: safeInt(row.total_nodes),
+    total_nodes_active: safeInt(row.total_nodes_active || row.total_nodes),
     total_images: safeInt(row.total_images),
     total_events: safeInt(row.total_events),
     new_users_24h: safeInt(row.new_users_24h),
@@ -133,6 +134,8 @@ function mapProfileRow(row: any): UserProfile | null {
     persona_breakdown: typeof row.persona_breakdown === 'object' ? row.persona_breakdown : {},
     daily_activity: typeof row.daily_activity === 'object' ? row.daily_activity : {},
     unlocked_achievements: row.unlocked_achievements || undefined,
+    preferences: typeof row.preferences === 'object' ? row.preferences : {},
+    api_settings: typeof row.api_settings === 'object' ? row.api_settings : {},
     updated_at: row.updated_at || new Date().toISOString(),
   };
 }
@@ -178,15 +181,76 @@ function profileToLegacyUser(profile: UserProfile): any {
 }
 
 /** Map a UserEvent to the shape expected by the admin dashboard logs */
-function eventToLegacyLog(event: UserEvent): any {
+function eventToLegacyLog(event: UserEvent, userLookup?: Map<string, { email: string; displayName: string }>): any {
+  const user = userLookup?.get(event.user_id);
+
+  // Build human-readable details from event_data
+  const data = event.event_data || {};
+  const eventTypeStr = event.event_type;
+  let details: string;
+  switch (eventTypeStr) {
+    case 'map_created':
+      details = `Created map "${data.topic || data.title || 'Untitled'}"`;
+      break;
+    case 'map_deleted':
+      details = `Deleted map "${data.topic || data.title || 'Untitled'}"`;
+      break;
+    case 'map_shared':
+      details = `Shared map "${data.topic || data.title || 'Untitled'}"`;
+      break;
+    case 'map_exported':
+      details = `Exported map "${data.topic || data.title || 'Untitled'}"`;
+      break;
+    case 'chat_sent':
+      details = `Sent a chat message`;
+      break;
+    case 'image_generated':
+      details = data.prompt
+        ? `Generated image: "${data.prompt.substring(0, 60)}${data.prompt.length > 60 ? '...' : ''}"`
+        : `Generated an image`;
+      break;
+    case 'node_expanded':
+      details = data.label
+        ? `Expanded node "${data.label}"`
+        : `Expanded a node`;
+      break;
+    case 'login':
+      details = `Logged in`;
+      break;
+    case 'logout':
+      details = `Logged out`;
+      break;
+    case 'study_time':
+      details = data.minutes
+        ? `Studied for ${data.minutes} minute${data.minutes > 1 ? 's' : ''}`
+        : `Recorded study time`;
+      break;
+    case 'quiz_generated':
+      details = data.topic
+        ? `Generated quiz on "${data.topic}"`
+        : `Generated a quiz`;
+      break;
+    case 'explanation_requested':
+      details = data.label
+        ? `Requested explanation for "${data.label}"`
+        : `Requested an explanation`;
+      break;
+    case 'feedback_submitted':
+      details = `Submitted feedback`;
+      break;
+    default:
+      details = (eventTypeStr as string).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+  }
+
   return {
     id: `evt_${event.id}`,
     timestamp: event.created_at,
     type: event.event_type.toUpperCase(),
     targetId: event.user_id,
     targetType: 'user',
-    details: event.event_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+    details,
     performedBy: event.user_id,
+    performedByEmail: user?.email || undefined,
     metadata: event.event_data,
     source: event.source,
     eventType: event.event_type,
@@ -342,6 +406,8 @@ export async function GET(request: Request) {
           mode_breakdown: {}, depth_breakdown: {},
           source_breakdown: {}, persona_breakdown: {},
           daily_activity: {},
+          preferences: {},
+          api_settings: {},
           updated_at: new Date().toISOString(),
         },
         recent_events: (eventRows || []).map(mapEventRow),
@@ -422,6 +488,70 @@ export async function GET(request: Request) {
 
       // Compute map analytics from profiles
       mapAnalytics = computeMapAnalytics(profiles);
+
+      // Compute active and historical node counts directly (including sub-maps)
+      let activeNodesCount = 0;
+      let historicalNodesCount = 0;
+      try {
+        const { data: mmNodes } = await supabase
+          .from('mindmaps')
+          .select('node_count');
+        activeNodesCount = (mmNodes || []).reduce((acc: number, m: any) => acc + (m.node_count || 0), 0);
+
+        const { data: createEvents } = await supabase
+          .from('user_events')
+          .select('event_data')
+          .eq('event_type', 'map_created');
+        historicalNodesCount = (createEvents || []).reduce((acc: number, e: any) => {
+          const count = e.event_data?.nodeCount ?? e.event_data?.node_count ?? 0;
+          return acc + Number(count);
+        }, 0);
+      } catch (err) {
+        console.error('[UnifiedAPI] Node counts calculation failed:', err);
+      }
+
+      platform.total_nodes_active = activeNodesCount || platform.total_nodes;
+      platform.total_nodes = historicalNodesCount || platform.total_nodes;
+
+      // Compute public/private counts directly from mindmaps table
+      // Note: mindmaps has no is_deleted/deleted columns — rows are physically DELETEd
+      // Exclude sub-maps as they inherit visibility from their parent
+      const { count: publicCount } = await supabase
+        .from('mindmaps')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_public', true)
+        .or('is_sub_map.is.null,is_sub_map.eq.false');
+
+      const { count: totalActive } = await supabase
+        .from('mindmaps')
+        .select('*', { count: 'exact', head: true })
+        .or('is_sub_map.is.null,is_sub_map.eq.false');
+
+      mapAnalytics.publicPrivate = {
+        public: publicCount ?? 0,
+        private: (totalActive ?? 0) - (publicCount ?? 0),
+      };
+
+      // Compute sub-map stats directly from mindmaps table
+      const { count: subMapCount } = await supabase
+        .from('mindmaps')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_sub_map', true);
+
+      const { data: parentRows } = await supabase
+        .from('mindmaps')
+        .select('parent_map_id')
+        .eq('is_sub_map', true)
+        .not('parent_map_id', 'is', null);
+
+      const distinctParents = new Set((parentRows || []).map((r: any) => r.parent_map_id)).size;
+      const totalSubs = subMapCount ?? 0;
+
+      mapAnalytics.subMapStats = {
+        total: totalSubs,
+        parents: distinctParents,
+        avgPerParent: distinctParents > 0 ? Math.round((totalSubs / distinctParents) * 10) / 10 : 0,
+      };
     }
 
     // ── 4. Build response ───────────────────────────────────
@@ -430,10 +560,21 @@ export async function GET(request: Request) {
       const sortedByMaps = [...legacyUsers].sort((a, b) => (b.statistics?.totalMapsCreated || 0) - (a.statistics?.totalMapsCreated || 0));
       const sortedByCreated = [...legacyUsers].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
+      // Build user lookup for enriching event logs with emails/names
+      const userLookup = new Map<string, { email: string; displayName: string }>();
+      profiles.forEach(p => {
+        if (p.email || p.display_name) {
+          userLookup.set(p.user_id, {
+            email: p.email || '',
+            displayName: p.display_name || p.email?.split('@')[0] || 'Unknown',
+          });
+        }
+      });
+
       const response = {
         platform,
         profiles: legacyUsers,
-        events: events.map(eventToLegacyLog),
+        events: events.map(e => eventToLegacyLog(e, userLookup)),
         metrics: {
           mapAnalytics,
           topUsers: sortedByMaps.slice(0, 10),

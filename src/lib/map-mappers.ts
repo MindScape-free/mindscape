@@ -168,3 +168,143 @@ export function mapUserRows(rows: unknown[] | null | undefined): Record<string, 
     if (!rows) return [];
     return rows.map(r => mapUserRow(r as UserDBRow | null)).filter(Boolean) as Record<string, unknown>[];
 }
+
+/**
+ * Maps a raw database row from the 'user_profiles' table to the same standard
+ * user object format as mapUserRow(). This allows callers to switch from
+ * `users` to `user_profiles` as the data source without changing downstream code.
+ */
+interface UserProfileDBRow {
+  user_id?: string | null;
+  email?: string | null;
+  display_name?: string | null;
+  photo_url?: string | null;
+  created_at?: string | null;
+  total_maps?: number | null;
+  total_compare_maps?: number | null;
+  total_multi_maps?: number | null;
+  total_chats?: number | null;
+  total_nodes?: number | null;
+  total_images?: number | null;
+  total_expansions?: number | null;
+  study_time_minutes?: number | null;
+  current_streak?: number | null;
+  longest_streak?: number | null;
+  last_active_date?: string | null;
+  mode_breakdown?: Record<string, number> | null;
+  depth_breakdown?: Record<string, number> | null;
+  source_breakdown?: Record<string, number> | null;
+  persona_breakdown?: Record<string, number> | null;
+  daily_activity?: Record<string, Record<string, number>> | null;
+  unlocked_achievements?: string[] | null;
+  preferences?: Record<string, unknown> | null;
+  api_settings?: Record<string, unknown> | null;
+  id?: string | null;
+  [key: string]: unknown;
+}
+
+export function mapUserProfileRow(u: UserProfileDBRow | null | undefined): Record<string, unknown> | null {
+    if (!u) return null;
+    return {
+        id: u.id || u.user_id,
+        email: u.email || null,
+        displayName: u.display_name || u.email?.split('@')[0] || 'Unknown User',
+        photoURL: u.photo_url || null,
+        createdAt: u.created_at,
+        isAdmin: false,
+        statistics: {
+            totalMapsCreated: u.total_maps || 0,
+            totalNestedExpansions: u.total_expansions || 0,
+            totalImagesGenerated: u.total_images || 0,
+            totalStudyTimeMinutes: u.study_time_minutes || 0,
+            currentStreak: u.current_streak || 0,
+            longestStreak: u.longest_streak || 0,
+            lastActiveDate: u.last_active_date || '',
+            totalNodes: u.total_nodes || 0,
+        },
+        preferences: {
+            preferredLanguage: (u.preferences as Record<string, string>)?.preferred_language || (u.preferences as Record<string, string>)?.preferredLanguage || 'en',
+            defaultAIPersona: (u.preferences as Record<string, string>)?.default_ai_persona || (u.preferences as Record<string, string>)?.defaultAIPersona || 'concise',
+            defaultDepth: (u.preferences as Record<string, string>)?.default_depth || (u.preferences as Record<string, string>)?.defaultDepth || 'auto',
+            defaultExplanationMode: (u.preferences as Record<string, string>)?.default_explanation_mode || (u.preferences as Record<string, string>)?.defaultExplanationMode,
+            autoGenerateImages: (u.preferences as Record<string, boolean>)?.auto_generate_images || (u.preferences as Record<string, boolean>)?.autoGenerateImages,
+            deepExpansionMode: (u.preferences as Record<string, boolean>)?.deep_expansion_mode || (u.preferences as Record<string, boolean>)?.deepExpansionMode || false,
+            defaultMapView: (u.preferences as Record<string, string>)?.default_map_view || (u.preferences as Record<string, string>)?.defaultMapView,
+            autoSaveFrequency: (u.preferences as Record<string, number>)?.auto_save_frequency || (u.preferences as Record<string, number>)?.autoSaveFrequency,
+        },
+        apiSettings: {
+            provider: (u.api_settings as Record<string, string>)?.provider || 'pollinations',
+            imageProvider: (u.api_settings as Record<string, string>)?.image_provider || 'pollinations',
+            imageModel: (u.api_settings as Record<string, string>)?.image_model || (u.api_settings as Record<string, string>)?.imageModel || 'flux',
+            textModel: (u.api_settings as Record<string, string>)?.text_model || (u.api_settings as Record<string, string>)?.textModel || 'openai',
+            pollinationsModel: (u.api_settings as Record<string, string>)?.pollinations_model || '',
+            pollinationsApiKey: (u.api_settings as Record<string, string>)?.pollinations_api_key || (u.api_settings as Record<string, string>)?.pollinationsApiKey || '',
+        },
+        activity: u.daily_activity ? Object.fromEntries(
+            Object.entries(u.daily_activity).map(([date, entry]) => [
+                date,
+                {
+                    mapsCreated: (entry as Record<string, number>)?.maps || 0,
+                    nestedExpansions: (entry as Record<string, number>)?.expansions || (entry as Record<string, number>)?.nested_expansions || 0,
+                    imagesGenerated: (entry as Record<string, number>)?.images || 0,
+                    studyTimeMinutes: (entry as Record<string, number>)?.study_minutes || 0,
+                    nodesCreated: (entry as Record<string, number>)?.map_nodes || 0,
+                },
+            ])
+        ) : {},
+        unlockedAchievements: u.unlocked_achievements || [],
+    };
+}
+
+export function mapUserProfileRows(rows: unknown[] | null | undefined): Record<string, unknown>[] {
+    if (!rows) return [];
+    return rows.map(r => mapUserProfileRow(r as UserProfileDBRow | null)).filter(Boolean) as Record<string, unknown>[];
+}
+
+export interface PublicMindMapDBRow {
+  id?: string | null;
+  topic?: string | null;
+  summary?: string | null;
+  content?: Record<string, unknown> | null;
+  is_public?: boolean | null;
+  public_categories?: string[] | null;
+  original_map_id?: string | null;
+  original_author_id?: string | null;
+  author_name?: string | null;
+  author_avatar?: string | null;
+  updated_at?: string | null;
+  published_at?: string | null;
+  views?: number | null;
+  public_views?: number | null;
+  depth?: string | null;
+  short_title?: string | null;
+  thumbnail_url?: string | null;
+  [key: string]: unknown;
+}
+
+export function mapPublicMindMapRow(m: PublicMindMapDBRow | null | undefined): Record<string, unknown> | null {
+  if (!m) return null;
+  return {
+    id: m.id,
+    topic: m.topic || 'Untitled Map',
+    shortTitle: m.short_title || m.topic || 'Untitled Map',
+    summary: m.summary,
+    content: m.content || {},
+    isPublic: m.is_public ?? true,
+    publicCategories: m.public_categories || [],
+    originalMapId: m.original_map_id,
+    originalAuthorId: m.original_author_id,
+    authorName: m.author_name || 'MindScaper',
+    authorAvatar: m.author_avatar || '',
+    updatedAt: m.updated_at,
+    publishedAt: m.published_at,
+    views: m.public_views ?? m.views ?? 0,
+    depth: m.depth || 'medium',
+    thumbnailUrl: m.thumbnail_url || null,
+  };
+}
+
+export function mapPublicMindMapRows(rows: unknown[] | null | undefined): Record<string, unknown>[] {
+  if (!rows) return [];
+  return rows.map(r => mapPublicMindMapRow(r as PublicMindMapDBRow | null)).filter(Boolean) as Record<string, unknown>[];
+}

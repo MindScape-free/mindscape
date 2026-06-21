@@ -1,9 +1,10 @@
 'use client';
 
 import { memo } from 'react';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, UserRound } from 'lucide-react';
 import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AdminActivityLogEntry, ACTIVITY_CONFIG, formatRelativeTime } from '@/lib/admin-utils';
 
 interface ActivityLogCardProps {
@@ -68,24 +69,36 @@ function ActivityLogCardComponent({ log, isFirst, isLast }: ActivityLogCardProps
                 </span>
               </div>
 
-              {/* Target ID Badge */}
-              {log.targetId && (
-                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/[0.03] border border-white/5 hover:border-white/10 transition-colors group/target">
-                  <span className="text-[8px] text-zinc-500 font-black uppercase tracking-tighter">ID:</span>
-                  <button
-                    onClick={handleCopyTarget}
-                    className="flex items-center gap-1.5"
-                  >
-                    <span className="text-[9px] font-mono text-zinc-400 group-hover/target:text-white transition-colors">
-                      {log.targetId.substring(0, 8)}
-                    </span>
-                    {copiedTarget ? (
-                      <Check className="h-2 w-2 text-emerald-400" />
-                    ) : (
-                      <Copy className="h-2 w-2 text-zinc-600 opacity-0 group-hover:opacity-100 transition-all" />
-                    )}
-                  </button>
-                </div>
+              {/* Target ID Badge — only show when targetId differs from performedBy */}
+              {log.targetId && log.targetId !== log.performedBy && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/[0.03] border border-white/5 hover:border-white/10 transition-colors group/target">
+                        <span className="text-[8px] text-zinc-500 font-black uppercase tracking-tighter">ID:</span>
+                        <button
+                          onClick={handleCopyTarget}
+                          className="flex items-center gap-1.5"
+                        >
+                          <span className="text-[9px] font-mono text-zinc-400 group-hover/target:text-white transition-colors">
+                            {log.targetId.length > 12 ? `${log.targetId.substring(0, 4)}...${log.targetId.slice(-4)}` : log.targetId.substring(0, 8)}
+                          </span>
+                          {copiedTarget ? (
+                            <Check className="h-2 w-2 text-emerald-400" />
+                          ) : (
+                            <Copy className="h-2 w-2 text-zinc-600 opacity-0 group-hover:opacity-100 transition-all" />
+                          )}
+                        </button>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="bg-zinc-950 border border-white/10 text-[10px]">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-zinc-400">Target ID</span>
+                        <span className="font-mono text-white">{log.targetId}</span>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
             </div>
 
@@ -105,20 +118,32 @@ function ActivityLogCardComponent({ log, isFirst, isLast }: ActivityLogCardProps
                   </span>
                 </div>
               ) : log.performedBy ? (
-                <button
-                  onClick={handleCopyId}
-                  className="flex items-center gap-2 px-2 py-1 rounded-lg bg-white/[0.03] border border-white/5 hover:border-white/10 hover:bg-white/[0.05] transition-all"
-                >
-                  <div className="h-1 w-1 rounded-full bg-zinc-500" />
-                  <span className="text-[9px] text-zinc-400 font-mono">
-                    {log.performedBy.substring(0, 8)}
-                  </span>
-                  {copiedId ? (
-                    <Check className="h-2 w-2 text-emerald-400" />
-                  ) : (
-                    <Copy className="h-2 w-2 text-zinc-600 opacity-0 group-hover:opacity-100 transition-all" />
-                  )}
-                </button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={handleCopyId}
+                        className="flex items-center gap-2 px-2 py-1 rounded-lg bg-white/[0.03] border border-white/5 hover:border-white/10 hover:bg-white/[0.05] transition-all"
+                      >
+                        <UserRound className="h-2.5 w-2.5 text-zinc-500" />
+                        <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest">
+                          User
+                        </span>
+                        {copiedId ? (
+                          <Check className="h-2 w-2 text-emerald-400" />
+                        ) : (
+                          <Copy className="h-2 w-2 text-zinc-600 opacity-0 group-hover:opacity-100 transition-all" />
+                        )}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="bg-zinc-950 border border-white/10 text-[10px]">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-zinc-400">User ID</span>
+                        <span className="font-mono text-white">{log.performedBy}</span>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               ) : (
                 <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-white/[0.03] border border-white/5">
                   <div className="h-1 w-1 rounded-full bg-zinc-600" />
@@ -126,11 +151,11 @@ function ActivityLogCardComponent({ log, isFirst, isLast }: ActivityLogCardProps
                 </div>
               )}
 
-              {/* Target Type */}
-              {log.targetType && (
+              {/* Source Badge */}
+              {(log as any).source && (
                 <div className="flex items-center gap-1.5 text-zinc-500">
                   <div className="h-0.5 w-0.5 rounded-full bg-zinc-700" />
-                  <span className="text-[8px] font-black uppercase tracking-[0.2em]">{log.targetType}</span>
+                  <span className="text-[8px] font-black uppercase tracking-[0.2em]">{(log as any).source}</span>
                 </div>
               )}
 

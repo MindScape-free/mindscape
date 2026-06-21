@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useUser } from '@/lib/auth-context';
 import { getSupabaseClient } from '@/lib/supabase-db';
+import { mapPublicMindMapRows } from '@/lib/map-mappers';
 
 import { MindMapWithId } from '@/types/mind-map';
 import { CommunityCard } from '@/components/community/community-card';
@@ -53,7 +54,7 @@ export default function CommunityPage() {
             }
             
             const { data } = await query.limit(50);
-            setPublicMaps(data || []);
+            setPublicMaps(mapPublicMindMapRows(data));
             setIsLoading(false);
         }
         

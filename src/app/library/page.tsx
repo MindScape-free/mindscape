@@ -701,14 +701,13 @@ export default function DashboardPage() {
         author_name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User',
         author_avatar: user?.user_metadata?.avatar_url || '',
         updated_at: new Date().toISOString(),
-        views: 0,
+        public_views: 0,
       };
 
       if (user && supabase) {
         await supabase.from('public_mindmaps').upsert(publicData);
         await supabase.from('mindmaps').update({ 
-          is_public: true, 
-          public_categories: categories 
+          is_public: true
         }).eq('id', map.id).eq('user_id', user.id);
       }
 

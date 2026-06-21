@@ -1,5 +1,5 @@
 import useSWR, { mutate } from 'swr';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { DEFAULT_MAP_ANALYTICS } from '@/types/admin';
 import { sortByTimestamp } from '@/lib/timestamp-utils';
@@ -40,6 +40,7 @@ interface UnifiedFullResponse {
     total_maps_ever: number;
     total_chats: number;
     total_nodes: number;
+    total_nodes_active?: number;
     total_images: number;
     total_events: number;
     new_users_24h: number;
@@ -169,14 +170,21 @@ export function useAdminDashboard() {
     }
   }, [isSyncing, session, user, getToken]);
 
-  // Sort users by createdAt desc for the UI
-  const sortedUsers = sortByTimestamp(persistentBundle.users || [], u => u.createdAt, 'desc');
+  // Sort users by createdAt desc for the UI (memoized to keep reference stable)
+  const sortedUsers = useMemo(() => {
+    return sortByTimestamp(persistentBundle.users || [], u => u.createdAt, 'desc');
+  }, [persistentBundle.users]);
+
+  const bundle = useMemo(() => ({
+    ...persistentBundle,
+    users: sortedUsers
+  }), [persistentBundle, sortedUsers]);
 
   return {
     data,
     isLoading: isLoading || (isSyncing && persistentBundle.users.length === 0),
     isValidating: isValidating || isSyncing,
-    bundle: { ...persistentBundle, users: sortedUsers },
+    bundle,
     error,
     refreshBundle,
   };

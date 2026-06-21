@@ -261,6 +261,7 @@ export interface GenerateMindMapFromImageInput {
   persona?: string;
   depth?: 'low' | 'medium' | 'deep';
   sessionId?: string;
+  context?: string;
 }
 
 /**
@@ -827,6 +828,7 @@ export async function generateYouTubeMindMapAction(
     persona?: string;
     depth?: 'low' | 'medium' | 'deep';
     sessionId?: string;
+    context?: string;
   },
   options: AIActionOptions = {}
 ) {
@@ -1642,51 +1644,14 @@ export async function syncUserStatisticsAction(userId: string) {
     const { getSupabaseAdmin } = await import('@/lib/supabase-server');
     const supabase = getSupabaseAdmin();
 
-    // 1. Fetch all maps for this user
-    const { data: maps, error: mapsError } = await supabase
-      .from('mindmaps')
-      .select('id, node_count, is_sub_map, created_at')
-      .eq('user_id', userId);
+    // 1. Full recompute via the database function
+    const { data: profile, error: recomputeError } = await supabase
+      .rpc('recompute_user_profile', { p_user_id: userId });
 
-    if (mapsError) throw mapsError;
+    if (recomputeError) throw recomputeError;
 
-    // 2. Fetch all chats for this user
-    const { count: chatsCount, error: chatsError } = await supabase
-      .from('chat_sessions')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId);
-
-    if (chatsError) throw chatsError;
-
-    // 3. Calculate aggregates
-    const rootMaps = maps.filter(m => !m.is_sub_map);
-    const subMaps = maps.filter(m => m.is_sub_map);
-    const totalNodes = maps.reduce((acc, m) => acc + (m.node_count || 0), 0);
-    
-    // 4. Update the user record
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('statistics')
-      .eq('id', userId)
-      .single();
-
-    if (userError) throw userError;
-
-    const currentStats = user.statistics || {};
-    const newStats = {
-      ...currentStats,
-      totalMapsCreated: Math.max(currentStats.totalMapsCreated || 0, rootMaps.length),
-      totalNestedExpansions: Math.max(currentStats.totalNestedExpansions || 0, subMaps.length),
-      totalNodes: totalNodes,
-      totalChats: chatsCount || 0,
-    };
-
-    await supabase
-      .from('users')
-      .update({ statistics: newStats })
-      .eq('id', userId);
-
-    return { success: true, stats: newStats };
+    // 2. Return the recomputed profile data
+    return { success: true, stats: profile };
   } catch (error: any) {
     console.error('❌ syncUserStatisticsAction failed:', error.message);
     return { success: false, error: error.message };

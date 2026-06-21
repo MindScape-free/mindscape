@@ -393,129 +393,105 @@ export async function logUserEventAdmin(
 // SECTION 3B — Supabase-backed Activity / Statistics Tracking
 // ═══════════════════════════════════════════════════════════════
 
-export async function updateUserStatistics(
+export async function callIncrementProfile(
   supabase: SupabaseClient,
   userId: string,
   updates: {
     mapsCreated?: number;
-    nestedExpansions?: number;
+    compareMapsCreated?: number;
+    multiMapsCreated?: number;
     imagesGenerated?: number;
     studyTimeMinutes?: number;
     nodesCreated?: number;
+    expansionsCreated?: number;
+    chatsCount?: number;
     mapMetadata?: {
       mode?: string;
       sourceFileType?: string;
       sourceType?: string;
-      sourceUrl?: string;
-      videoId?: string;
       depth?: string;
-      nodeCount?: number;
       aiPersona?: string;
+      isSubMap?: boolean;
     };
-    chatsCount?: number;
   }
 ): Promise<Achievement[]> {
-  const today = format(new Date(), 'yyyy-MM-dd');
-
   try {
-    const { data: user } = await supabase.from('users').select('statistics, activity, unlocked_achievements').eq('id', userId).single();
-    const stats = user?.statistics || {};
-    const activity = user?.activity || {};
+    const params: Record<string, unknown> = {
+      p_user_id: userId,
+      p_maps: (updates.mapsCreated || 0) > 0 && updates.mapMetadata?.isSubMap ? 0 : (updates.mapsCreated || 0),
+      p_compare_maps: updates.compareMapsCreated || 0,
+      p_multi_maps: updates.multiMapsCreated || 0,
+      p_chats: updates.chatsCount || 0,
+      p_images: updates.imagesGenerated || 0,
+      p_nodes: updates.nodesCreated || 0,
+      p_expansions: (updates.expansionsCreated || 0)
+        + ((updates.mapsCreated || 0) > 0 && updates.mapMetadata?.isSubMap ? 1 : 0),
+      p_study_minutes: updates.studyTimeMinutes || 0,
+      p_map_mode: updates.mapMetadata?.mode || null,
+      p_map_depth: updates.mapMetadata?.depth || null,
+      p_map_source: updates.mapMetadata?.sourceType || updates.mapMetadata?.sourceFileType || null,
+      p_map_persona: updates.mapMetadata?.aiPersona || null,
+      p_is_map_deleted: false,
+    };
 
-    // Update streak
-    const lastActiveDate = stats.lastActiveDate;
-    let currentStreak = stats.currentStreak || 0;
-    let longestStreak = stats.longestStreak || 0;
+    const { data: counters, error } = await supabase.rpc('increment_user_profile', params);
 
-    if (lastActiveDate !== today) {
-      const lastDate = lastActiveDate ? new Date(lastActiveDate) : null;
-      const todayDate = new Date(today);
-      if (lastDate) {
-        lastDate.setHours(0, 0, 0, 0);
-        todayDate.setHours(0, 0, 0, 0);
-        const daysDiff = Math.floor((todayDate.getTime() - lastDate.getTime()) / 86400000);
-        currentStreak = daysDiff === 1 ? currentStreak + 1 : 1;
-      } else {
-        currentStreak = 1;
-      }
-      longestStreak = Math.max(currentStreak, longestStreak);
+    if (error) {
+      console.warn(`[callIncrementProfile] RPC error for ${userId}: ${error.message || error.code || JSON.stringify(error)}`);
+      return [];
     }
 
-    const isSubMap = (updates.mapMetadata as any)?.isSubMap === true;
-    const mapsToIncrement = (updates.mapsCreated || 0) > 0 ? (isSubMap ? 0 : updates.mapsCreated || 0) : 0;
-    const nestedToIncrement = (updates.nestedExpansions || 0) + ((updates.mapsCreated || 0) > 0 && isSubMap ? 1 : 0);
+    if (!counters) {
+      console.warn(`[callIncrementProfile] RPC returned null for ${userId}`);
+      return [];
+    }
 
-    const newStats = {
-      ...stats,
-      totalMapsCreated: (stats.totalMapsCreated || 0) + mapsToIncrement,
-      totalNestedExpansions: (stats.totalNestedExpansions || 0) + nestedToIncrement,
-      totalImagesGenerated: (stats.totalImagesGenerated || 0) + (updates.imagesGenerated || 0),
-      totalStudyTimeMinutes: (stats.totalStudyTimeMinutes || 0) + (updates.studyTimeMinutes || 0),
-      totalNodes: (stats.totalNodes || 0) + (updates.nodesCreated || 0),
-      totalChats: (stats.totalChats || 0) + (updates.chatsCount || 0),
-      lastActiveDate: today,
-      currentStreak,
-      longestStreak,
-    };
-
-    const todayActivity = activity[today] || {};
-    const newActivity = {
-      ...activity,
-      [today]: {
-        ...todayActivity,
-        mapsCreated: (todayActivity.mapsCreated || 0) + mapsToIncrement,
-        nestedExpansions: (todayActivity.nestedExpansions || 0) + nestedToIncrement,
-        imagesGenerated: (todayActivity.imagesGenerated || 0) + (updates.imagesGenerated || 0),
-        studyTimeMinutes: (todayActivity.studyTimeMinutes || 0) + (updates.studyTimeMinutes || 0),
-        nodesCreated: (todayActivity.nodesCreated || 0) + (updates.nodesCreated || 0),
-        chatsCount: (todayActivity.chatsCount || 0) + (updates.chatsCount || 0),
-      },
-    };
-
-    await supabase.from('users').update({ statistics: newStats, activity: newActivity }).eq('id', userId);
-
-    // Check achievements
     const userStats: UserStatistics = {
-      totalMapsCreated: newStats.totalMapsCreated,
-      totalNestedExpansions: newStats.totalNestedExpansions,
-      totalImagesGenerated: newStats.totalImagesGenerated,
-      totalStudyTimeMinutes: newStats.totalStudyTimeMinutes,
-      currentStreak: newStats.currentStreak,
-      longestStreak: newStats.longestStreak,
+      totalMapsCreated: (counters as Record<string, number>)?.total_maps || 0,
+      totalNestedExpansions: (counters as Record<string, number>)?.total_expansions || 0,
+      totalImagesGenerated: (counters as Record<string, number>)?.total_images || 0,
+      totalStudyTimeMinutes: (counters as Record<string, number>)?.study_time_minutes || 0,
+      currentStreak: (counters as Record<string, number>)?.current_streak || 0,
+      longestStreak: (counters as Record<string, number>)?.longest_streak || 0,
     };
-    const currentAchievements: string[] = user?.unlocked_achievements || [];
+
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('unlocked_achievements')
+      .eq('user_id', userId)
+      .single();
+
+    const currentAchievements: string[] = profile?.unlocked_achievements || [];
     const newlyUnlocked = getNewlyUnlockedAchievements(userStats, currentAchievements);
 
     if (newlyUnlocked.length > 0) {
-      await supabase.from('users').update({
-        unlocked_achievements: [...currentAchievements, ...newlyUnlocked.map(a => a.id)],
-      }).eq('id', userId);
+      await supabase
+        .from('user_profiles')
+        .update({
+          unlocked_achievements: [...currentAchievements, ...newlyUnlocked.map(a => a.id)],
+        })
+        .eq('user_id', userId);
     }
 
     return newlyUnlocked;
-  } catch (error) {
-    console.error('Error updating user statistics:', error);
+  } catch (error: any) {
+    console.error(`[callIncrementProfile] Error for user ${userId}:`, error?.message || error?.code || error);
     return [];
   }
 }
 
 export async function trackLogin(supabase: SupabaseClient, userId: string, userMeta?: { displayName?: string | null; email?: string | null; photoURL?: string | null }) {
-  const today = format(new Date(), 'yyyy-MM-dd');
   try {
-    const { data: user } = await supabase.from('users').select('id, statistics').eq('id', userId).single();
+    const { data: user } = await supabase.from('users').select('id').eq('id', userId).single();
     if (!user) {
       await initializeUserProfile(supabase, userId, userMeta?.displayName || '', userMeta?.email || '', userMeta?.photoURL || undefined);
       return;
     }
-    const lastActiveDate = user.statistics?.lastActiveDate;
-    if (lastActiveDate !== today) {
-      await updateUserStatistics(supabase, userId, {});
-    }
+    await callIncrementProfile(supabase, userId, {});
   } catch (error) {
     console.error('Error tracking login:', error);
   }
 
-  // Fire user event
   await logUserEvent(userId, 'login', {
     displayName: userMeta?.displayName,
     email: userMeta?.email,
@@ -523,7 +499,6 @@ export async function trackLogin(supabase: SupabaseClient, userId: string, userM
 }
 
 export async function trackMapCreated(supabase: SupabaseClient, userId: string, mapMetadata?: any): Promise<Achievement[]> {
-  // Fire user event first (fire-and-forget)
   logUserEvent(userId, 'map_created', {
     mode: mapMetadata?.mode,
     sourceType: mapMetadata?.sourceFileType || mapMetadata?.sourceType,
@@ -532,33 +507,33 @@ export async function trackMapCreated(supabase: SupabaseClient, userId: string, 
     nodeCount: mapMetadata?.nodeCount,
     isSubMap: mapMetadata?.isSubMap,
   }, 'canvas');
-  return updateUserStatistics(supabase, userId, { mapsCreated: 1, mapMetadata });
+  return callIncrementProfile(supabase, userId, { mapsCreated: 1, mapMetadata });
 }
 
 export async function trackNestedExpansion(supabase: SupabaseClient, userId: string): Promise<Achievement[]> {
   logUserEvent(userId, 'node_expanded', {}, 'map');
-  return updateUserStatistics(supabase, userId, { nestedExpansions: 1 });
+  return callIncrementProfile(supabase, userId, { expansionsCreated: 1 });
 }
 
 export async function trackImageGenerated(supabase: SupabaseClient, userId: string): Promise<Achievement[]> {
   logUserEvent(userId, 'image_generated', {}, 'canvas');
-  return updateUserStatistics(supabase, userId, { imagesGenerated: 1 });
+  return callIncrementProfile(supabase, userId, { imagesGenerated: 1 });
 }
 
 export async function trackStudyTime(supabase: SupabaseClient, userId: string, minutes: number): Promise<Achievement[]> {
   logUserEvent(userId, 'study_time', { minutes }, 'canvas');
-  return updateUserStatistics(supabase, userId, { studyTimeMinutes: minutes });
+  return callIncrementProfile(supabase, userId, { studyTimeMinutes: minutes });
 }
 
 export async function trackNodesAdded(supabase: SupabaseClient, userId: string, count: number): Promise<Achievement[]> {
   if (count <= 0) return [];
   logUserEvent(userId, 'node_expanded', { nodesAdded: count }, 'canvas');
-  return updateUserStatistics(supabase, userId, { nodesCreated: count });
+  return callIncrementProfile(supabase, userId, { nodesCreated: count });
 }
 
 export async function trackChat(supabase: SupabaseClient, userId: string): Promise<Achievement[]> {
   logUserEvent(userId, 'chat_sent', {}, 'chat');
-  return updateUserStatistics(supabase, userId, { chatsCount: 1 });
+  return callIncrementProfile(supabase, userId, { chatsCount: 1 });
 }
 
 export async function initializeUserProfile(
@@ -596,6 +571,23 @@ export async function initializeUserProfile(
     activity: {},
     unlocked_achievements: [],
   }, { onConflict: 'id' });
+
+  await supabase.from('user_profiles').upsert({
+    user_id: userId,
+    email,
+    display_name: displayName,
+    photo_url: photoURL || null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    preferences: {
+      preferred_language: 'en',
+      default_ai_persona: 'Concise',
+      auto_generate_images: false,
+      default_map_view: 'collapsed',
+      auto_save_frequency: 5,
+    },
+    api_settings: {},
+  }, { onConflict: 'user_id' });
 }
 
 // ═══════════════════════════════════════════════════════════════

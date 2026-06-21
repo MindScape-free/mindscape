@@ -81,6 +81,12 @@ const SOURCE_DEPTH_PRESETS: Record<string, 'quick' | 'balanced' | 'detailed'> = 
   multi:   'detailed',
 };
 
+const getTrackerDepth = (d: string): 'low' | 'medium' | 'deep' => {
+  if (d === 'quick' || d === 'low') return 'low';
+  if (d === 'detailed' || d === 'deep') return 'deep';
+  return 'medium';
+};
+
 // Home page section components
 import { QuickStartGrid } from '@/components/home/quick-start-grid';
 import { CommunityShowcase } from '@/components/home/community-showcase';
@@ -161,10 +167,13 @@ function Hero({
   topic,
   setTopic,
   depthSuggestion,
+  selectedSource,
+  onScrollToInput,
 }: {
   onGenerate: (
     topic: string,
-    fileInfo?: { name: string; type: string; content: string; originalContent?: string }
+    fileInfo?: { name: string; type: string; content: string; originalContent?: string },
+    urlInfo?: { name: string; type: 'youtube' | 'website'; url: string } | null
   ) => void;
   onCompare: (topic1: string, topic2: string, file1?: any, file2?: any) => void;
   onMultiGenerate: (mergedContent: string, topic: string) => void;
@@ -181,11 +190,62 @@ function Hero({
   topic: string;
   setTopic: (topic: string) => void;
   depthSuggestion: any;
+  selectedSource: { type: string; timestamp: number } | null;
+  onScrollToInput?: () => void;
 }) {
   const [topic2, setTopic2] = useState('');
   const [activeMode, setActiveMode] = useState<'single' | 'compare' | 'multi'>('single');
   const [contentIndex, setContentIndex] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const topicInputRef = useRef<HTMLInputElement>(null);
+  const [uploadedUrl, setUploadedUrl] = useState<{ name: string; type: 'youtube' | 'website'; url: string } | null>(null);
+
+  useEffect(() => {
+    if (!selectedSource) return;
+    const { type } = selectedSource;
+    
+    // Delay state change and trigger focus/file input until scroll completes (600ms)
+    const scrollTimer = setTimeout(() => {
+      if (type === 'pdf') {
+        setActiveMode('single');
+        onActiveModeChange('single');
+        setUploadTarget('file1');
+        setTimeout(() => {
+          fileInputRef.current?.click();
+        }, 50);
+      } else if (type === 'image') {
+        setActiveMode('single');
+        onActiveModeChange('single');
+        setUploadTarget('file1');
+        setTimeout(() => {
+          fileInputRef.current?.click();
+        }, 50);
+      } else if (type === 'youtube') {
+        setActiveMode('single');
+        onActiveModeChange('single');
+        setTimeout(() => {
+          topicInputRef.current?.focus();
+        }, 50);
+      } else if (type === 'website') {
+        setActiveMode('single');
+        onActiveModeChange('single');
+        setTimeout(() => {
+          topicInputRef.current?.focus();
+        }, 50);
+      } else if (type === 'text') {
+        setActiveMode('single');
+        onActiveModeChange('single');
+        setTimeout(() => {
+          topicInputRef.current?.focus();
+        }, 50);
+      } else if (type === 'multi') {
+        setActiveMode('multi');
+        onActiveModeChange('multi');
+      }
+    }, 600);
+
+    return () => clearTimeout(scrollTimer);
+  }, [selectedSource]);
 
   useEffect(() => {
     // Set random index only on client to prevent hydration mismatch
@@ -197,6 +257,35 @@ function Hero({
     }, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleTopicChange = (val: string) => {
+    const trimmed = val.trim();
+    const websiteRegex = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/;
+    const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+$/;
+    
+    if (youtubeRegex.test(trimmed)) {
+      setUploadedUrl({ name: 'YouTube Video', type: 'youtube', url: trimmed });
+      setTopic('');
+      toast({ title: 'YouTube URL Attached', description: 'Link attached as source. Type prompt or click generate.' });
+      return;
+    }
+    
+    if (websiteRegex.test(trimmed)) {
+      let hostname = 'Website';
+      try {
+        const urlObj = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+        hostname = urlObj.hostname.replace('www.', '');
+      } catch (err) {
+        hostname = 'Website';
+      }
+      setUploadedUrl({ name: hostname, type: 'website', url: trimmed });
+      setTopic('');
+      toast({ title: 'Website URL Attached', description: 'Link attached as source. Type prompt or click generate.' });
+      return;
+    }
+    
+    setTopic(val);
+  };
 
   const currentContent = HERO_CONTENT_OPTIONS[contentIndex];
 
@@ -241,8 +330,8 @@ function Hero({
 
       onCompare(cleanName(topic, uploadedFile), cleanName(topic2, uploadedFile2), uploadedFile, uploadedFile2);
     } else {
-      if (!topic && !uploadedFile) return;
-      onGenerate(topic, uploadedFile);
+      if (!topic && !uploadedFile && !uploadedUrl) return;
+      onGenerate(topic, uploadedFile, uploadedUrl);
     }
   };
 
@@ -257,6 +346,7 @@ function Hero({
     if (activeMode === 'multi') {
       Array.from(event.target.files || []).forEach(f => addFile(f));
       event.target.value = '';
+      onScrollToInput?.();
       return;
     }
     try {
@@ -290,8 +380,16 @@ function Hero({
         content = await file.text();
       }
       const data = { name: file.name, type, content };
-      if (uploadTarget === 'file2') setUploadedFile2(data);
-      else setUploadedFile(data);
+      if (uploadTarget === 'file2') {
+        setUploadedFile2(data);
+      } else {
+        setUploadedFile(data);
+        // Focus the text input so user can type prompt immediately
+        setTimeout(() => {
+          topicInputRef.current?.focus();
+        }, 100);
+      }
+      onScrollToInput?.();
     } catch (err) {
       toast({ title: "Upload Failed", variant: "destructive" });
     }
@@ -427,9 +525,10 @@ function Hero({
                   <div className={cn("relative flex-1 flex transition-all duration-500", isCompareMode ? "flex-col sm:flex-row gap-3" : "flex-row")}>
                     <div className="relative flex-1">
                       <input
+                        ref={topicInputRef}
                         placeholder={isCompareMode ? 'First topic...' : 'Enter topic or URL...'}
                         value={topic}
-                        onChange={(e) => setTopic(e.target.value)}
+                        onChange={(e) => handleTopicChange(e.target.value)}
                         className="w-full h-16 rounded-3xl bg-black/40 px-8 text-zinc-100 outline-none placeholder:text-zinc-600 border border-white/5 focus:border-primary/50 text-lg font-medium"
                         onKeyDown={(e) => e.key === 'Enter' && handleInternalSubmit()}
                       />
@@ -438,6 +537,12 @@ function Hero({
                           <Badge variant="secondary" className="bg-primary/20 text-primary-foreground border-primary/30 h-9 px-3 rounded-xl backdrop-blur-sm">
                             <span className="max-w-[80px] truncate text-[10px] font-bold uppercase">{uploadedFile.name}</span>
                             <X className="h-3 w-3 ml-2 cursor-pointer" onClick={(e) => { e.stopPropagation(); setUploadedFile(null); }} />
+                          </Badge>
+                        )}
+                        {uploadedUrl && (
+                          <Badge variant="secondary" className="bg-primary/20 text-primary-foreground border-primary/30 h-9 px-3 rounded-xl backdrop-blur-sm">
+                            <span className="max-w-[120px] truncate text-[10px] font-bold uppercase">{uploadedUrl.name}</span>
+                            <X className="h-3 w-3 ml-2 cursor-pointer" onClick={(e) => { e.stopPropagation(); setUploadedUrl(null); }} />
                           </Badge>
                         )}
                         <Button variant="ghost" size="icon" onClick={() => handleFileIconClick('file1')} className="rounded-xl text-zinc-500 hover:text-white h-10 w-10">
@@ -471,7 +576,7 @@ function Hero({
                   </div>
                   <Button
                     onClick={handleInternalSubmit}
-                    disabled={isGenerating || (!topic && !uploadedFile)}
+                    disabled={isGenerating || (!topic && !uploadedFile && !uploadedUrl)}
                     className="h-16 w-16 rounded-3xl bg-primary text-white shadow-lg flex items-center justify-center p-0 shrink-0"
                   >
                     {isGenerating ? <Loader2 className="w-6 h-6 animate-spin" /> : <ArrowUp className="w-7 h-7" />}
@@ -504,6 +609,7 @@ export default function Home() {
   const supabase = getSupabaseClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const languageSelectRef = useRef<HTMLButtonElement>(null);
+  const [selectedSource, setSelectedSource] = useState<{ type: string; timestamp: number } | null>(null);
 
   const { trackPageView } = useSessionTracking(user?.id);
 
@@ -521,17 +627,56 @@ export default function Home() {
     return () => container.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleGenerate = async (topic: string, fileInfo?: any) => {
+  const handleGenerate = async (topic: string, fileInfo?: any, urlInfo?: any) => {
     setIsGenerating(true);
     let resolvedDepth = depth === 'auto' ? resolveDepthWithConfidence(topic).depth : depth;
     if (fileInfo?.type && SOURCE_DEPTH_PRESETS[fileInfo.type]) resolvedDepth = SOURCE_DEPTH_PRESETS[fileInfo.type];
+    if (urlInfo?.type && SOURCE_DEPTH_PRESETS[urlInfo.type]) resolvedDepth = SOURCE_DEPTH_PRESETS[urlInfo.type];
 
     const websiteRegex = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/;
     const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+$/;
     const trimmed = topic.trim();
 
+    if (urlInfo) {
+      if (urlInfo.type === 'youtube') {
+        const sessionId = `yt-${Date.now()}`;
+        trackGenerationStart(sessionId, {
+          sourceType: 'youtube',
+          mode: 'single',
+          depth: getTrackerDepth(SOURCE_DEPTH_PRESETS.youtube),
+          persona,
+          userId: user?.id
+        });
+        safeSetItem(`session-type-${sessionId}`, 'youtube');
+        safeSetItem(`session-content-${sessionId}`, { file: urlInfo.url, text: topic });
+        router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${SOURCE_DEPTH_PRESETS.youtube}&persona=${persona}`);
+        return;
+      }
+      if (urlInfo.type === 'website') {
+        const sessionId = `web-${Date.now()}`;
+        trackGenerationStart(sessionId, {
+          sourceType: 'website',
+          mode: 'single',
+          depth: getTrackerDepth(SOURCE_DEPTH_PRESETS.website),
+          persona,
+          userId: user?.id
+        });
+        safeSetItem(`session-type-${sessionId}`, 'website');
+        safeSetItem(`session-content-${sessionId}`, { file: urlInfo.url, text: topic });
+        router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${SOURCE_DEPTH_PRESETS.website}&persona=${persona}`);
+        return;
+      }
+    }
+
     if (youtubeRegex.test(trimmed)) {
       const sessionId = `yt-${Date.now()}`;
+      trackGenerationStart(sessionId, {
+        sourceType: 'youtube',
+        mode: 'single',
+        depth: getTrackerDepth(SOURCE_DEPTH_PRESETS.youtube),
+        persona,
+        userId: user?.id
+      });
       safeSetItem(`session-type-${sessionId}`, 'youtube');
       safeSetItem(`session-content-${sessionId}`, { file: trimmed, text: '' });
       router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${SOURCE_DEPTH_PRESETS.youtube}&persona=${persona}`);
@@ -540,6 +685,13 @@ export default function Home() {
 
     if (websiteRegex.test(trimmed)) {
       const sessionId = `web-${Date.now()}`;
+      trackGenerationStart(sessionId, {
+        sourceType: 'website',
+        mode: 'single',
+        depth: getTrackerDepth(SOURCE_DEPTH_PRESETS.website),
+        persona,
+        userId: user?.id
+      });
       safeSetItem(`session-type-${sessionId}`, 'website');
       safeSetItem(`session-content-${sessionId}`, { file: trimmed, text: '' });
       router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${SOURCE_DEPTH_PRESETS.website}&persona=${persona}`);
@@ -552,7 +704,7 @@ export default function Home() {
       trackGenerationStart(sessionId, {
         sourceType: fileInfo.type as any,
         mode: 'single',
-        depth: resolvedDepth as any,
+        depth: getTrackerDepth(resolvedDepth),
         persona,
         userId: user?.id
       });
@@ -567,7 +719,7 @@ export default function Home() {
     trackGenerationStart(genId, {
       sourceType: 'text',
       mode: 'single',
-      depth: resolvedDepth as any,
+      depth: getTrackerDepth(resolvedDepth),
       persona,
       userId: user?.id
     });
@@ -630,12 +782,11 @@ export default function Home() {
         languageSelectRef={languageSelectRef} fileInputRef={fileInputRef}
         onActiveModeChange={setActiveMode} topic={topic} setTopic={setTopic}
         depthSuggestion={depthSuggestion}
+        selectedSource={selectedSource}
+        onScrollToInput={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
       />
 
       <div className="relative z-10 pb-24">
-        {/* Stats Counter - Animated platform metrics */}
-        <StatsCounter />
-
         {/* Quick Start Grid - Clickable topic suggestions */}
         <QuickStartGrid onSelectTopic={handleGenerate} />
 
@@ -646,7 +797,10 @@ export default function Home() {
         <CommunityShowcase />
 
         {/* Source Type Cards - Action-oriented entry points */}
-        <SourceTypeCards onScrollToInput={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} />
+        <SourceTypeCards 
+          onSourceSelect={(type) => setSelectedSource({ type, timestamp: Date.now() })}
+          onScrollToInput={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} 
+        />
 
         {/* How It Works - Keep existing pipeline illustration */}
          <SectionContainer className="bg-white/[0.02] border-y border-white/5"
@@ -688,6 +842,9 @@ export default function Home() {
 
         {/* FAQ Section - Common questions */}
         <FAQSection />
+
+        {/* Stats Counter - Animated platform metrics */}
+        <StatsCounter />
       </div>
 
       <AnimatePresence>

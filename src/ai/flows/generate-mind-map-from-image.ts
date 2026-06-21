@@ -12,6 +12,7 @@ const GenerateMindMapFromImageInputSchema = z.object({
   depth: z.enum(['low', 'medium', 'deep', 'auto']).default('auto'),
   apiKey: z.string().optional(),
   sessionId: z.string().optional(),
+  context: z.string().optional(),
 });
 type GenerateMindMapFromImageInput = z.infer<typeof GenerateMindMapFromImageInputSchema>;
 export type GenerateMindMapFromImageOutput = AIGeneratedMindMap;
@@ -108,7 +109,9 @@ RULES:
 - If the image is a table, ENSURE all rows are captured as Categories.
 - Return ONLY raw JSON`;
 
-  const userPrompt = `Analyze this image and generate the mind map JSON.`;
+  const userPrompt = input.context
+    ? `Analyze this image and generate the mind map JSON. Additional instructions/focus from the user: "${input.context}"`
+    : `Analyze this image and generate the mind map JSON.`;
 
   const matches = input.imageDataUri.match(/^data:(.+);base64,(.+)$/);
   let images: { inlineData: { mimeType: string; data: string } }[] | undefined;

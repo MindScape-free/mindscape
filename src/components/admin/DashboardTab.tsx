@@ -187,8 +187,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
             {[
               { label: 'Users', value: stats?.totalUsers || 0, icon: Users, color: 'violet' },
               { label: 'Active Maps', value: stats?.totalMaps || 0, icon: MapIcon, color: 'blue' },
-              { label: 'Active Nodes', value: stats?.totalNodesActive || 0, icon: Layers, color: 'indigo' },
-              { label: 'Global Nodes', value: stats?.totalNodes || 0, icon: Signal, color: 'violet' },
+              { label: 'Current Nodes', value: stats?.totalNodesActive || 0, icon: Layers, color: 'indigo' },
+              { label: 'Total Nodes (inc. deleted)', value: stats?.totalNodes || 0, icon: Signal, color: 'violet' },
               { label: 'AI Chats', value: stats?.totalChats || 0, icon: MessageSquare, color: 'emerald' },
             ].map((stat: any, i) => (
               <motion.div 
@@ -755,59 +755,99 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
             </div>
           </div>
 
-          {/* Activity Section */}
+
+          {/* Activity Section — New Users */}
           <div className="grid grid-cols-1 gap-6">
             <motion.div 
                whileHover={{ y: -3 }}
                className="rounded-[1.5rem] bg-white/5 border border-white/10 overflow-hidden backdrop-blur-3xl shadow-xl group"
             >
-              <div className="p-6 border-b border-white/5 flex items-center justify-between">
+              <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
                     <UserPlus className="h-4 w-4 text-indigo-400" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-black text-white tracking-tight">New Users</h3>
+                    <h3 className="text-base font-black text-white tracking-tight">New Users</h3>
                     <p className="text-[9px] text-zinc-500 font-black uppercase tracking-[0.2em] mt-0.5">Latest people to join</p>
                   </div>
                 </div>
-                <button onClick={() => setActiveTab('users')} className="px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black text-white hover:bg-white/10 uppercase tracking-[0.2em] transition-all">
+                <button onClick={() => setActiveTab('users')} className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black text-white hover:bg-white/10 uppercase tracking-[0.2em] transition-all">
                   Directory
                 </button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-8">
-                {metrics?.latestUsers.slice(0, 4).map((u) => (
-                  <button
-                    key={u.id}
-                    onClick={() => { setSelectedUser(u); setIsUserDetailOpen(true); }}
-                    className="rounded-2xl p-5 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-indigo-500/30 transition-all text-left relative overflow-hidden group/u"
-                  >
-                    <div className="absolute top-0 right-0 p-3">
-                       {(() => {
-                        const date = toDate(u.createdAt);
-                        const isNew = differenceInMinutes(new Date(), date) < 1440;
-                        return isNew && <div className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse shadow-[0_0_10px_rgba(99,102,241,0.5)]" />;
-                      })()}
-                    </div>
-                    <Avatar className="h-12 w-12 rounded-2xl border-2 border-white/10 mb-4 group-hover/u:scale-110 group-hover/u:rotate-3 transition-transform">
-                      <AvatarImage src={u.photoURL} />
-                      <AvatarFallback className="bg-zinc-800 text-sm font-black text-indigo-400">
-                        {u.displayName?.substring(0, 2).toUpperCase() || '??'}
-                      </AvatarFallback>
-                    </Avatar>
-                    <p className="text-sm font-black text-white truncate mb-1">{u.displayName || 'User'}</p>
-                    <p className="text-[10px] text-zinc-500 font-bold tracking-tight truncate mb-4">{u.email || 'No email'}</p>
-                    <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                      <div className="flex items-center gap-1.5 grayscale opacity-50 group-hover/u:grayscale-0 group-hover/u:opacity-100 transition-all">
-                        <MapIcon className="h-3 w-3 text-indigo-400" />
-                        <span className="text-[10px] font-black text-white">{u.statistics?.totalMapsCreated || 0}</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4">
+                {metrics?.latestUsers.slice(0, 6).map((u) => {
+                  const maps = u.statistics?.totalMapsCreated || 0;
+                  const nodes = u.statistics?.totalNodes || 0;
+                  const images = u.statistics?.totalImagesGenerated || 0;
+                  const streak = u.statistics?.currentStreak || 0;
+                  const studyMins = u.statistics?.totalStudyTimeMinutes || 0;
+                  const lastActive = u.statistics?.lastActiveDate;
+                  const createdDate = toDate(u.createdAt);
+                  const isNew = differenceInMinutes(new Date(), createdDate) < 1440;
+
+                  return (
+                    <button
+                      key={u.id}
+                      onClick={() => { setSelectedUser(u); setIsUserDetailOpen(true); }}
+                      className="rounded-xl p-3.5 bg-white/[0.03] hover:bg-white/[0.07] border border-white/5 hover:border-indigo-500/30 transition-all text-left relative overflow-hidden group/u"
+                    >
+                      {/* Top Row: Avatar + Name + Join badge */}
+                      <div className="flex items-center gap-3 mb-3">
+                        <Avatar className="h-9 w-9 rounded-xl border border-white/10 shrink-0 group-hover/u:scale-105 transition-transform">
+                          <AvatarImage src={u.photoURL} />
+                          <AvatarFallback className="bg-zinc-800 text-[10px] font-black text-indigo-400">
+                            {u.displayName?.substring(0, 2).toUpperCase() || '??'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-black text-white truncate">{u.displayName || 'User'}</p>
+                            {isNew && <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse shadow-[0_0_8px_rgba(99,102,241,0.5)] shrink-0" />}
+                          </div>
+                          <p className="text-[10px] text-zinc-500 font-medium truncate">{u.email || 'No email'}</p>
+                        </div>
+                        <span className="text-[8px] font-bold text-zinc-600 uppercase tracking-tight shrink-0 whitespace-nowrap">
+                          {u.createdAt ? formatDistanceToNow(createdDate, { addSuffix: true }).replace('about ', '') : 'Recent'}
+                        </span>
                       </div>
-                      <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-tighter">
-                        {u.createdAt ? formatDistanceToNow(toDate(u.createdAt), { addSuffix: true }) : 'Recent'}
-                      </span>
-                    </div>
-                  </button>
-                ))}
+
+                      {/* Stats Grid */}
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[
+                          { icon: MapIcon, value: maps, label: 'Maps', color: 'text-indigo-400' },
+                          { icon: Layers, value: nodes.toLocaleString(), label: 'Nodes', color: 'text-violet-400' },
+                          { icon: ImageIcon, value: images, label: 'Images', color: 'text-blue-400' },
+                          { icon: Flame, value: streak > 0 ? `${streak}d` : '—', label: 'Streak', color: 'text-amber-400' },
+                        ].map(({ icon: Icon, value, label, color }) => (
+                          <div key={label} className="rounded-lg bg-white/[0.03] px-2 py-1.5 text-center">
+                            <div className="flex items-center justify-center gap-1 mb-0.5">
+                              <Icon className={`h-2.5 w-2.5 ${color}`} />
+                              <span className="text-[10px] font-black text-white">{value}</span>
+                            </div>
+                            <span className="text-[7px] font-bold text-zinc-600 uppercase tracking-wider">{label}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Bottom Row: Study time + Last active */}
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="h-2.5 w-2.5 text-emerald-400/60" />
+                          <span className="text-[9px] font-bold text-zinc-500">
+                            {studyMins > 60 ? `${(studyMins / 60).toFixed(1)}h` : `${studyMins}m`} studied
+                          </span>
+                        </div>
+                        {lastActive && (
+                          <span className="text-[8px] font-bold text-zinc-600">
+                            Active {formatDistanceToNow(toDate(lastActive), { addSuffix: true }).replace('about ', '')}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </motion.div>
           </div>

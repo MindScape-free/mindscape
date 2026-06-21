@@ -55,8 +55,9 @@ export function Navbar() {
 
   const navItems = [
     { href: '/', label: 'Home' },
-    { href: '/community', label: 'Community' },
     { href: '/library', label: 'Library' },
+    { href: '/community', label: 'Community' },
+    ...(isAdmin ? [{ href: '/admin', label: 'Admin' }] : []),
   ];
 
   const handleLogout = async () => {
@@ -109,12 +110,7 @@ export function Navbar() {
               <MessageSquare className="mr-2 h-4 w-4" />
               <span>Feedback</span>
             </DropdownMenuItem>
-            {isAdmin && (
-              <DropdownMenuItem onClick={() => router.push('/admin')}>
-                <Icons.shield className="mr-2 h-4 w-4 text-primary" />
-                <span>Admin Dashboard</span>
-              </DropdownMenuItem>
-            )}
+
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />

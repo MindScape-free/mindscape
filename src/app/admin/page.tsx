@@ -105,32 +105,10 @@ export default function AdminDashboard() {
     }, 'all', 100);
     ids.push(globalListenerManager.register('admin/logs', logsUnsub));
 
-    // 2. Stats Live Listener
-    const statsChannel = supabase
-      .channel('admin-stats-live')
-      .on('postgres_changes', { 
-        event: 'UPDATE', 
-        schema: 'public', 
-        table: 'admin_stats',
-        filter: 'period=eq.all-time'
-      }, (payload) => {
-        const data = payload.new;
-        setStats(prev => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            totalUsers: data.totalUsers || prev.totalUsers,
-            totalMindmaps: data.totalMindmaps || prev.totalMindmaps,
-            totalMindmapsEver: data.totalMindmapsEver || prev.totalMindmapsEver,
-            totalChats: data.totalChats || prev.totalChats,
-          };
-        });
-      })
-      .subscribe();
-    
-    ids.push(globalListenerManager.register('admin/stats', () => {
-      supabase.removeChannel(statsChannel);
-    }));
+    // 2. Stats Live Listener — platform_stats is the source of truth,
+    //    updated by cron every 5 min. The dashboard auto-refreshes on
+    //    page load and via the Force Refresh button.
+    //    (admin_stats was dropped in migration 00012)
 
     // 3. Optional Users real-time update
     const usersChannel = supabase
@@ -158,16 +136,16 @@ export default function AdminDashboard() {
 
   const activityLogs = useMemo(() => {
     const logMap = new Map();
-    (bundle?.logs || []).forEach(log => logMap.set(log.id, log));
-    liveLogs.forEach(log => logMap.set(log.id, log));
-    return sortByTimestamp(Array.from(logMap.values()), l => l.timestamp, 'desc');
+    (bundle?.logs || []).forEach((log: any) => logMap.set(log.id, log));
+    liveLogs.forEach((log: any) => logMap.set(log.id, log));
+    return sortByTimestamp(Array.from(logMap.values()), (l: any) => l.timestamp, 'desc');
   }, [bundle?.logs, liveLogs]);
 
   // Deep fetch logic removed as per user request
 
   const users = useMemo(() => {
     const userMap = new Map<string, any>();
-    (bundle?.users || []).forEach(u => userMap.set(u.id, u));
+    (bundle?.users || []).forEach((u: any) => userMap.set(u.id, u));
     liveUsers.forEach(u => userMap.set(u.id, { ...userMap.get(u.id), ...u }));
     const result = sortByTimestamp(Array.from(userMap.values()), u => u.createdAt, 'desc');
     console.log('[Admin] Users computed:', {
@@ -201,22 +179,31 @@ export default function AdminDashboard() {
         totalMindmapsEver: platformP.total_maps_ever || 0,
         totalChats: platformP.total_chats || 0,
         totalNodes: platformP.total_nodes || 0,
-        totalNodesActive: platformP.total_nodes || 0,
+        totalNodesActive: platformP.total_nodes_active || platformP.total_nodes || 0,
         totalImages: platformP.total_images || 0,
         dailyActiveUsers: platformP.active_users_24h || 0,
       });
 
       // Map daily_snapshot to heatmapDays format
-      const heatmapDays = dailySnapshot.map((d: any) => ({
-        date: d.date,
-        newUsers: d.active_users || 0,
-        newMaps: d.new_maps || d.newMaps || 0,
-        newSubMaps: 0,
-        activeUsers: d.active_users || 0,
-        publicMaps: 0,
-        privateMaps: 0,
-        totalActions: d.new_events || 0,
-      }));
+      const heatmapDays = dailySnapshot.map((d: any) => {
+        const normalizedDate = d.date ? d.date.substring(0, 10) : '';
+        // Calculate new users created on this day from user list in bundle
+        const newUsersCount = (bundle?.users || []).filter((u: any) => {
+          if (!u.createdAt) return false;
+          return u.createdAt.substring(0, 10) === normalizedDate;
+        }).length;
+
+        return {
+          date: normalizedDate,
+          newUsers: newUsersCount,
+          newMaps: d.new_maps || d.newMaps || 0,
+          newSubMaps: 0,
+          activeUsers: d.active_users || 0,
+          publicMaps: 0,
+          privateMaps: 0,
+          totalActions: d.new_events || 0,
+        };
+      });
 
       setMetrics({
         newUsersToday: platformP.new_users_24h || 0,
@@ -236,8 +223,8 @@ export default function AdminDashboard() {
         latestUsers: metrics?.latestUsers || [],
         latestMaps: [],
         heatmapDays,
-        usersLast7Days: dailySnapshot.slice(-7).map((d: any) => ({ date: d.date, count: (d.active_users || 0) })),
-        mapsLast7Days: dailySnapshot.slice(-7).map((d: any) => ({ date: d.date, count: (d.new_maps || 0) })),
+        usersLast7Days: dailySnapshot.slice(-7).map((d: any) => ({ date: d.date ? d.date.substring(0, 10) : '', count: (d.active_users || 0) })),
+        mapsLast7Days: dailySnapshot.slice(-7).map((d: any) => ({ date: d.date ? d.date.substring(0, 10) : '', count: (d.new_maps || 0) })),
         topUsers: metrics?.topUsers || [],
         topMaps: [],
         mapAnalytics,
@@ -247,7 +234,7 @@ export default function AdminDashboard() {
       setLastSyncedAt(platformP.updated_at || new Date().toISOString());
       setCalculatedHealthScore(platformP.health_score || 100);
     }
-  }, [dashboardData]);
+  }, [dashboardData, bundle]);
 
   useEffect(() => {
     if (!isUserLoading && !isAdmin) router.push('/');
