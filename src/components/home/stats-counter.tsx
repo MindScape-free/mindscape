@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { getSupabaseClient } from '@/lib/supabase-db';
 
-interface PlatformStats {
-  totalMaps: number;
-  totalUsers: number;
-  totalNodes: number;
+interface StatItem {
+  value: number;
+  label: string;
+  suffix: string;
 }
 
 function AnimatedCounter({ value, label, suffix = '' }: { value: number; label: string; suffix?: string }) {
@@ -63,63 +62,103 @@ function AnimatedCounter({ value, label, suffix = '' }: { value: number; label: 
   );
 }
 
-const FALLBACK_STATS = [
-  { value: 12847, label: 'Maps Generated', suffix: '+' },
-  { value: 8321, label: 'Users Joined', suffix: '+' },
-  { value: 4502, label: 'Hours Saved', suffix: '+' },
-  { value: 3, label: 'New Ranks This Week', suffix: ' 🏆' },
-];
+function SkeletonCard() {
+  return (
+    <div className="text-center motion-safe:animate-pulse" aria-hidden="true">
+      <div className="flex justify-center">
+        <div className="h-9 md:h-[2.25rem] w-24 rounded-md shimmer bg-zinc-800/60" />
+      </div>
+      <div className="flex justify-center mt-1">
+        <div className="h-[12px] w-28 rounded shimmer bg-zinc-800/40" />
+      </div>
+    </div>
+  );
+}
 
 export function StatsCounter() {
-  const [stats, setStats] = useState(FALLBACK_STATS);
-  const [loaded, setLoaded] = useState(false);
+  const [stats, setStats] = useState<StatItem[]>([
+    { value: 0, label: 'Maps Generated', suffix: '+' },
+    { value: 0, label: 'Users Joined', suffix: '+' },
+    { value: 0, label: 'Total Nodes', suffix: '+' },
+    { value: 0, label: 'Study Hours', suffix: '+' },
+  ]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
-    const fetchStats = async () => {
-      try {
-        const supabase = getSupabaseClient();
-        const { count: mapsCount } = await supabase
-          .from('mindmaps')
-          .select('id', { count: 'exact', head: true });
-        const { count: usersCount } = await supabase
-          .from('users')
-          .select('id', { count: 'exact', head: true });
 
+    fetch('/api/stats/public')
+      .then((res) => res.json())
+      .then((data: { mapsCount: number; usersCount: number; nodesCount: number; studyHours: number }) => {
         if (!mounted) return;
+        setStats([
+          { value: data.mapsCount, label: 'Maps Generated', suffix: '+' },
+          { value: data.usersCount, label: 'Users Joined', suffix: '+' },
+          { value: data.nodesCount, label: 'Total Nodes', suffix: '+' },
+          { value: data.studyHours, label: 'Study Hours', suffix: '+' },
+        ]);
+      })
+      .catch((err) => console.error('[StatsCounter] Failed to fetch stats:', err))
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
 
-        if (mapsCount !== null || usersCount !== null) {
-          setStats([
-            { value: Math.max(mapsCount || 0, 12847), label: 'Maps Generated', suffix: '+' },
-            { value: Math.max(usersCount || 0, 8321), label: 'Users Joined', suffix: '+' },
-            { value: 4502, label: 'Hours Saved', suffix: '+' },
-            { value: 3, label: 'New Ranks This Week', suffix: ' 🏆' },
-          ]);
-        }
-        setLoaded(true);
-      } catch {
-        if (mounted) setLoaded(true);
-      }
-    };
-    fetchStats();
     return () => { mounted = false; };
   }, []);
 
   return (
     <section className="py-10 md:py-14 relative overflow-hidden">
+      <style jsx>{`
+        @media (prefers-reduced-motion: no-preference) {
+          @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+          }
+          .shimmer {
+            background: linear-gradient(
+              90deg,
+              rgb(39 39 42) 25%,
+              rgb(63 63 70) 50%,
+              rgb(39 39 42) 75%
+            );
+            background-size: 200% 100%;
+            animation: shimmer 1.5s ease-in-out infinite;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .shimmer {
+            background: rgb(39 39 42);
+          }
+        }
+      `}</style>
       <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-purple-500/5" />
       <div className="mx-auto max-w-5xl px-6 relative">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
-          {stats.map((stat, i) => (
-            <motion.div
-              key={stat.label}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-            >
-              <AnimatedCounter value={stat.value} label={stat.label} suffix={stat.suffix} />
-            </motion.div>
-          ))}
+          {loading ? (
+            <>
+              {[0, 1, 2, 3].map((i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.1 }}
+                >
+                  <SkeletonCard />
+                </motion.div>
+              ))}
+            </>
+          ) : (
+            stats.map((stat, i) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+              >
+                <AnimatedCounter value={stat.value} label={stat.label} suffix={stat.suffix} />
+              </motion.div>
+            ))
+          )}
         </div>
       </div>
     </section>
