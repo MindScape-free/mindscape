@@ -34,7 +34,6 @@ jest.mock('@/lib/supabase-server', () => ({
   }),
   getMindMapAdmin: jest.fn(),
   getUserImageSettingsAdmin: jest.fn(),
-  incrementAdminStatAdmin: jest.fn(),
 }));
 
 // Note: AI flow module mocks (categorize-mind-map, suggest-related-topics, lib/serialize)

@@ -22,9 +22,6 @@ export async function logAdminActivity(entry: ActivityLogEntry): Promise<{ succe
 
   try {
     const timestamp = entry.timestamp || new Date().toISOString();
-    const dateObj = new Date(timestamp);
-    const dateStr = dateObj.toISOString().split('T')[0];
-    const monthStr = dateStr.substring(0, 7);
 
     // 1. Log the activity with snake_case mapping
     const { error: logError } = await supabase.from('admin_activity_log').insert({
@@ -41,44 +38,8 @@ export async function logAdminActivity(entry: ActivityLogEntry): Promise<{ succe
 
     if (logError) throw logError;
 
-    // 2. Compute increments for stats
-    const type = entry.type;
-    const updates: Record<string, number> = {};
-
-    if (type === 'MAP_CREATED') {
-      updates.total_mindmaps_ever = 1;
-      updates.new_maps_today = 1;
-      const isSubMap = entry.metadata?.isSubMap === true || !!entry.metadata?.parentMapId;
-      if (!isSubMap) {
-        updates.total_mindmaps = 1;
-      }
-    } else if (type === 'USER_CREATED') {
-      updates.total_users = 1;
-      updates.new_users_today = 1;
-    } else if (type === 'LOGIN') {
-      updates.active_users = 1;
-    } else if (type === 'MAP_DELETED') {
-      updates.total_mindmaps = -1;
-    } else if (type === 'CHAT_CREATED') {
-      updates.total_chats = 1;
-    }
-
-    // 3. Update stats if needed
-    if (Object.keys(updates).length > 0) {
-      const lastUpdated = Date.now();
-      
-      const updateStats = async (period: string, extra: object = {}) => {
-        // Atomic increment would be better, but we follow the established project pattern
-        await supabase.from('admin_stats').upsert(
-          { period, ...updates, last_updated: lastUpdated, ...extra },
-          { onConflict: 'period', ignoreDuplicates: false }
-        );
-      };
-
-      await Promise.all([
-        updateStats('all-time'),
-      ]);
-    }
+    // admin_stats updates are deprecated — metrics are now computed from
+    // user_profiles/events via recompute_platform_stats().
 
     return { success: true };
   } catch (error: any) {

@@ -21,7 +21,6 @@ export interface MockStore {
   user_settings: Map<string, Record<string, any>>;
   chat_sessions: Map<string, Record<string, any>>;
   admin_activity_log: Record<string, any>[];
-  admin_stats: Record<string, any>[];
   ai_calls: Record<string, any>[];
 }
 
@@ -440,7 +439,6 @@ export function createMockSupabaseClient(
     user_settings: new Map(),
     chat_sessions: new Map(),
     admin_activity_log: [],
-    admin_stats: [],
     ai_calls: [],
     ...initialStore,
   };

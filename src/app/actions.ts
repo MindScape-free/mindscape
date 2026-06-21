@@ -1502,26 +1502,11 @@ export async function logAdminActivityAction(entry: any) {
   // Fire and forget (background execution)
   Promise.resolve().then(async () => {
     try {
-      const { logActivityAdmin, incrementAdminStatAdmin } = await import('@/lib/supabase-server');
+      const { logActivityAdmin } = await import('@/lib/supabase-server');
       await logActivityAdmin(entry);
-
-      const type = entry.type;
-      if (type === 'MAP_CREATED') {
-        await incrementAdminStatAdmin('total_mindmaps_ever');
-        await incrementAdminStatAdmin('new_maps_today');
-        if (!entry.metadata?.isSubMap && !entry.metadata?.parentMapId) {
-          await incrementAdminStatAdmin('total_mindmaps');
-        }
-      } else if (type === 'USER_CREATED') {
-        await incrementAdminStatAdmin('total_users');
-        await incrementAdminStatAdmin('new_users_today');
-      } else if (type === 'LOGIN') {
-        await incrementAdminStatAdmin('active_users');
-      } else if (type === 'MAP_DELETED') {
-        await incrementAdminStatAdmin('total_mindmaps', -1);
-      } else if (type === 'CHAT_CREATED') {
-        await incrementAdminStatAdmin('total_chats');
-      }
+      // admin_stats incremental updates are deprecated —
+      // metrics are now computed from user_profiles/events via
+      // recompute_platform_stats() and recompute_all_user_profiles().
     } catch (error: any) {
       console.error('❌ Failed to log admin activity:', error.message);
     }

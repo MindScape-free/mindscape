@@ -89,33 +89,7 @@ export async function logActivityAdmin(entry: Record<string, any>): Promise<void
   }
 }
 
-export async function incrementAdminStatAdmin(field: string, value: number = 1): Promise<void> {
-  try {
-    const supabase = getSupabaseAdmin();
-    const dateStr = new Date().toISOString().split('T')[0];
-    const monthStr = dateStr.substring(0, 7);
-
-    // Helper: read-modify-write with atomic increment per period
-    const atomicIncrement = async (period: string, extra: Record<string, any> = {}) => {
-      const { data: existing } = await supabase
-        .from('admin_stats')
-        .select(field)
-        .eq('period', period)
-        .maybeSingle();
-
-      const current = (existing as any)?.[field] ?? 0;
-      await supabase.from('admin_stats').upsert(
-        { period, ...extra, [field]: current + value, last_updated: Date.now() },
-        { onConflict: 'period' }
-      );
-    };
-
-    await Promise.all([
-      atomicIncrement('all-time'),
-      atomicIncrement(`daily_${dateStr}`, { date: dateStr }),
-      atomicIncrement(`monthly_${monthStr}`, { month: monthStr }),
-    ]);
-  } catch (error) {
-    console.error('Error incrementing admin stat:', error);
-  }
-}
+/**
+ * @deprecated admin_stats is deprecated. Metrics are now computed from
+ * user_profiles/events via recompute_platform_stats().
+ */

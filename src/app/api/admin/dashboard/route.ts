@@ -32,39 +32,6 @@ async function verifyAdmin(request: Request): Promise<{ authorized: boolean; uid
   }
 }
 
-function safeMapAnalytics(data?: any): typeof DEFAULT_MAP_ANALYTICS {
-  if (!data) return { ...DEFAULT_MAP_ANALYTICS };
-  return {
-    totalAnalyzed: data.total_analyzed ?? data.totalAnalyzed ?? 0,
-    modeCounts: {
-      single: data.mode_counts?.single ?? data.modeCounts?.single ?? 0,
-      compare: data.mode_counts?.compare ?? data.modeCounts?.compare ?? 0,
-      multi: data.mode_counts?.multi ?? data.modeCounts?.multi ?? 0,
-    },
-    depthCounts: {
-      low: data.depth_counts?.low ?? data.depthCounts?.low ?? 0,
-      medium: data.depth_counts?.medium ?? data.depthCounts?.medium ?? 0,
-      deep: data.depth_counts?.deep ?? data.depthCounts?.deep ?? 0,
-      unspecified: data.depth_counts?.unspecified ?? data.depthCounts?.unspecified ?? 0,
-    },
-    sourceCounts: data.source_counts || data.sourceCounts || {},
-    personaCounts: data.persona_counts || data.personaCounts || {},
-    subMapStats: {
-      total: data.sub_map_stats?.total ?? data.subMapStats?.total ?? 0,
-      parents: data.sub_map_stats?.parents ?? data.subMapStats?.parents ?? 0,
-      avgPerParent: data.sub_map_stats?.avg_per_parent ?? data.subMapStats?.avgPerParent ?? 0,
-    },
-    publicPrivate: {
-      public: data.public_private?.public ?? data.publicPrivate?.public ?? 0,
-      private: data.public_private?.private ?? data.publicPrivate?.private ?? 0,
-    },
-    avgNodesPerMap: data.avg_nodes_per_map ?? data.avgNodesPerMap ?? 0,
-    featuredCount: data.featured_count ?? data.featuredCount ?? 0,
-    topPersona: data.top_persona ?? data.topPersona ?? 'N/A',
-    userStats: data.user_stats || data.userStats || [],
-  };
-}
-
 export async function GET(request: Request) {
   try {
     const authCheck = await verifyAdmin(request);
@@ -73,23 +40,37 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const url = new URL(request.url);
-    const since = url.searchParams.get('since') || undefined;
-
-    const { authorized, uid, error } = await verifyAdmin(request);
     const supabase = getSupabaseAdmin();
     console.log(`📊 [DashboardAPI] Fetching unified analytics`);
 
-    // 1. Fetch the "Single Sheet" Analytics via RPC
-    const { data: analyticsResult, error: analyticsError } = await supabase.rpc('refresh_platform_analytics');
-    
-    // 2. Fetch the persisted stats (Heatmap, etc.) from admin_stats
-    const { data: statsData } = await supabase.from('admin_stats').select('data').eq('id', 'global').single();
-    
-    // 3. Merge: Persistent data (heatmap) + Fresh data (RPC totals)
+    // 1. Fetch platform_stats (single source of truth — admin_stats is deprecated)
+    const { data: platformRow } = await supabase
+      .from('platform_stats')
+      .select('*')
+      .eq('id', 'global')
+      .single();
+
+    // 2. Build analytics from platform_stats (canonical source) with defaults
     let analytics = {
-      ...(statsData?.data || {}),
-      ...(analyticsResult || {})
+      platform: {
+        total_users: platformRow?.total_users ?? 0,
+        total_maps: platformRow?.total_maps ?? 0,
+        total_maps_ever: platformRow?.total_maps_ever ?? 0,
+        total_chats: platformRow?.total_chats ?? 0,
+        total_nodes: platformRow?.total_nodes ?? 0,
+        total_images: platformRow?.total_images ?? 0,
+        new_users_24h: platformRow?.new_users_24h ?? 0,
+        new_maps_24h: platformRow?.new_maps_24h ?? 0,
+        active_users_24h: platformRow?.active_users_24h ?? 0,
+        active_users_7d: platformRow?.active_users_7d ?? 0,
+        new_users_7d: platformRow?.new_users_7d ?? 0,
+        new_maps_7d: platformRow?.new_maps_7d ?? 0,
+        health_score: platformRow?.health_score ?? 100,
+        engagement_rate: platformRow?.engagement_rate ?? 0,
+        avg_maps_per_user: platformRow?.avg_maps_per_user ?? 0,
+        avg_nodes_per_map: platformRow?.avg_nodes_per_map ?? 0,
+        daily_snapshot: platformRow?.daily_snapshot ?? [],
+      },
     };
 
     const { data: usersResult } = await supabase.from('users').select('*').order('created_at', { ascending: false });
@@ -108,8 +89,10 @@ export async function GET(request: Request) {
     }));
 
     const platform = analytics?.platform || {};
-    const mapAnalyticsSource = analytics?.map_analytics || analytics?.mapAnalytics || {};
-    const ai = analytics?.ai_performance || {};
+    // map_analytics and ai_performance were previously in admin_stats (deprecated)
+    // they now use empty defaults — the response builder handles fallbacks below
+    const mapAnalyticsSource = {} as Record<string, any>;
+    const ai = {} as Record<string, any>;
     const bundleUsers = (usersResult || []).map(mapUserRow);
     const bundleLogs = (logsResult || []).map(l => ({
       ...l,
@@ -128,29 +111,29 @@ export async function GET(request: Request) {
     const response = {
       stats: {
         totalUsers: platform.total_users ?? 0,
-        totalMindmaps: platform.active_root_maps ?? 0,
+        totalMindmaps: platform.total_maps ?? 0,
         totalChats: platform.total_chats ?? 0,
-        totalNodes: platform.global_nodes ?? platform.active_nodes ?? 0,
-        totalNodesActive: platform.active_nodes ?? 0,
+        totalNodes: platform.total_nodes ?? 0,
+        totalNodesActive: platform.total_nodes ?? 0,
         totalImages: platform.total_images ?? 0,
-        activeUsers: platform.active_users ?? platform.active_users_24h ?? 0,
-        healthScore: analytics.health_score ?? 100,
+        activeUsers: platform.active_users_24h ?? 0,
+        healthScore: platform.health_score ?? 100,
         timestamp: new Date().toISOString(),
         lastUpdated: Date.now()
       },
       // Field mappings for frontend
-      activeUsers24h: platform.active_users ?? platform.active_users_24h ?? 0,
-      totalMindmapsEver: platform.total_mindmaps_ever ?? platform.total_maps_ever ?? 0,
-      engagementRate: analytics.engagement_rate ?? (platform.total_users > 0 ? (platform.active_users_24h / platform.total_users) * 100 : 0),
-      avgMapsPerUser: analytics.avg_maps_per_user ?? (platform.total_users > 0 ? (platform.total_maps_ever / platform.total_users) : 0),
-      avgChatsPerUser: analytics.avg_chats_per_user ?? (platform.total_users > 0 ? (platform.total_chats / platform.total_users) : 0),
+      activeUsers24h: platform.active_users_24h ?? 0,
+      totalMindmapsEver: platform.total_maps_ever ?? platform.total_maps ?? 0,
+      engagementRate: platform.engagement_rate ?? (platform.total_users > 0 ? (platform.active_users_24h / platform.total_users) * 100 : 0),
+      avgMapsPerUser: platform.avg_maps_per_user ?? (platform.total_users > 0 ? (platform.total_maps_ever / platform.total_users) : 0),
+      avgChatsPerUser: platform.total_users > 0 ? (platform.total_chats / platform.total_users) : 0,
       latestUsers: bundleUsers.slice(0, 10),
       topUsers: bundleUsers.sort((a: any, b: any) => (b.statistics?.totalMapsCreated || 0) - (a.statistics?.totalMapsCreated || 0)).slice(0, 10),
       mapAnalytics: { 
         ...DEFAULT_MAP_ANALYTICS, 
-        totalAnalyzed: mapAnalyticsSource.totalAnalyzed ?? mapAnalyticsSource.total_analyzed ?? platform.active_root_maps ?? 0,
-        avgNodesPerMap: (platform.active_root_maps > 0) 
-          ? (platform.global_nodes / platform.active_root_maps) 
+        totalAnalyzed: mapAnalyticsSource.totalAnalyzed ?? mapAnalyticsSource.total_analyzed ?? platform.total_maps ?? 0,
+        avgNodesPerMap: (platform.total_maps > 0) 
+          ? (platform.total_nodes / platform.total_maps) 
           : 0,
         modeCounts: mapAnalyticsSource.modeCounts ?? mapAnalyticsSource.mode_counts ?? {},
         sourceCounts: mapAnalyticsSource.sourceCounts ?? mapAnalyticsSource.source_counts ?? {},
@@ -163,7 +146,7 @@ export async function GET(request: Request) {
         },
         publicPrivate: mapAnalyticsSource.publicPrivate ?? mapAnalyticsSource.public_private ?? { public: 0, private: 0 }
       },
-      heatmapDays: analytics?.heatmap_days || [], 
+      heatmapDays: [], // admin_stats (heatmap source) is deprecated
       bundle: {
         users: bundleUsers,
         logs: bundleLogs || [],
@@ -174,7 +157,7 @@ export async function GET(request: Request) {
       },
       meta: {
         cached: false,
-        source: 'rpc_single_sheet'
+        source: 'platform_stats'
       }
     };
 
