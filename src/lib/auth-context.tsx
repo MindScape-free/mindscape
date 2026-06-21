@@ -53,64 +53,61 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
+  const [supabase] = useState<SupabaseClient>(() => getSupabaseClient());
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isUserLoading, setIsUserLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const initSupabase = () => {
-      const client = getSupabaseClient();
-      setSupabase(client);
-      console.log('[Auth] Using singleton client');
+    let cancelled = false;
 
-      client.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
-        if (session?.user) {
-          const userData = session.user;
-          setUser({
-            id: userData.id,
-            uid: userData.id,
-            email: userData.email || null,
-            displayName: userData.user_metadata?.username as string | null || userData.email?.split('@')[0] || null,
-            photoURL: userData.user_metadata?.avatar_url as string | null || null,
-          });
-          setSession(session);
-          
-          const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '03504efc-d50a-4e84-ba24-1d82ef41fd82').split(',').map(id => id.trim());
-          setIsAdmin(adminIds.includes(userData.id));
-        }
-        setIsUserLoading(false);
-      });
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
+      if (cancelled) return;
+      if (session?.user) {
+        const userData = session.user;
+        setUser({
+          id: userData.id,
+          uid: userData.id,
+          email: userData.email || null,
+          displayName: userData.user_metadata?.username as string | null || userData.email?.split('@')[0] || null,
+          photoURL: userData.user_metadata?.avatar_url as string | null || null,
+        });
+        setSession(session);
 
-      const { data: { subscription } } = client.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
-        if (session?.user) {
-          const userData = session.user;
-          setUser({
-            id: userData.id,
-            uid: userData.id,
-            email: userData.email || null,
-            displayName: userData.user_metadata?.username as string | null || userData.email?.split('@')[0] || null,
-            photoURL: userData.user_metadata?.avatar_url as string | null || null,
-          });
-          setSession(session);
-          
-          const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '03504efc-d50a-4e84-ba24-1d82ef41fd82').split(',').map(id => id.trim());
-          setIsAdmin(adminIds.includes(userData.id));
-        } else {
-          setUser(null);
-          setSession(null);
-          setIsAdmin(false);
-        }
-        setIsUserLoading(false);
-      });
+        const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '03504efc-d50a-4e84-ba24-1d82ef41fd82').split(',').map(id => id.trim());
+        setIsAdmin(adminIds.includes(userData.id));
+      }
+      if (!cancelled) setIsUserLoading(false);
+    });
 
-      return () => {
-        subscription.unsubscribe();
-      };
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
+      if (cancelled) return;
+      if (session?.user) {
+        const userData = session.user;
+        setUser({
+          id: userData.id,
+          uid: userData.id,
+          email: userData.email || null,
+          displayName: userData.user_metadata?.username as string | null || userData.email?.split('@')[0] || null,
+          photoURL: userData.user_metadata?.avatar_url as string | null || null,
+        });
+        setSession(session);
+
+        const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '03504efc-d50a-4e84-ba24-1d82ef41fd82').split(',').map(id => id.trim());
+        setIsAdmin(adminIds.includes(userData.id));
+      } else {
+        setUser(null);
+        setSession(null);
+        setIsAdmin(false);
+      }
+      if (!cancelled) setIsUserLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
     };
-
-    initSupabase();
   }, []);
 
   const signIn = async (email: string, password: string) => {

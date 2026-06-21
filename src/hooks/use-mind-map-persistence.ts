@@ -99,7 +99,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
         searchImages, searchTimestamp, pdfContext, videoId, sourceType,
         categoriesCount, sourcesCount, pinnedMessages, enrichments,
         confidenceRatings, quizAnswers, createdAt, updatedAt,
-        ...metadata // eslint-disable-line @typescript-eslint/no-unused-vars  
+        ...metadata
       } = mapToSave as any;
 
       // Calculate node count
@@ -158,6 +158,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
       const isSynthesizing = (mapToSave as any).subTopics?.some((st: any) => st.name === "Synthesizing...");
       if (!mapToSave.thumbnailUrl && !generatingThumbnailsRef.current.has(finalId) && !isSynthesizing) {
         generatingThumbnailsRef.current.add(finalId);
+        // Don't await — fire and forget async thumbnail generation
         (async () => {
           try {
             console.log(`🖼️ Auto-generating topic-oriented thumbnail for map: ${finalId} (Topic: ${safeTopic})`);
@@ -273,12 +274,13 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
     } finally {
       isSavingRef.current = false;
     }
-  }, [user, supabase, toast, aiPersona, options.userApiKey]);
+  }, [user, supabase, toast, aiPersona, options, showAchievementToasts]);
 
   // Track study time every 5 minutes (only if user has been active)
-  const lastActivityRef = useRef(Date.now());
+  const lastActivityRef = useRef<number>(0);
   useEffect(() => {
     if (!user || !supabase) return;
+    lastActivityRef.current = Date.now();
     const onActivity = () => { lastActivityRef.current = Date.now(); };
     window.addEventListener('mousedown', onActivity);
     window.addEventListener('keydown', onActivity);

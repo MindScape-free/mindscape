@@ -7,18 +7,27 @@ import { getSupabaseClient, saveChatSession, getChatSessions, deleteChatSession 
 
 export function useChatPersistence() {
   const { user, isUserLoading } = useUser();
+  const userRef = useRef(user);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Keep ref in sync without violating rules of hooks
+  useEffect(() => { userRef.current = user; }, [user]);
+
   useEffect(() => {
     if (isUserLoading) return;
-    if (!user) { setSessions([]); setIsLoading(false); return; }
+    if (!user) {
+      const id = setTimeout(() => {
+        setSessions([]);
+        setIsLoading(false);
+      }, 0);
+      return () => clearTimeout(id);
+    }
 
     const supabase = getSupabaseClient();
-    setIsLoading(true);
 
     getChatSessions(supabase, user.id).then(data => {
       setSessions(data.map(row => ({
@@ -53,20 +62,21 @@ export function useChatPersistence() {
   }, [user, isUserLoading]);
 
   const saveSession = useCallback((session: ChatSession) => {
-    if (!user) return;
+    const uid = userRef.current?.id;
+    if (!uid) return;
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     setIsSyncing(true);
     debounceTimerRef.current = setTimeout(async () => {
       try {
         const supabase = getSupabaseClient();
-        await saveChatSession(supabase, user.id, session);
+        await saveChatSession(supabase, uid, session);
       } catch (error) {
         console.error('Error saving chat session:', error);
       } finally {
         setIsSyncing(false);
       }
     }, 1000);
-  }, [user]);
+  }, []);
 
   const createSession = useCallback(async (topic: string, mapId: string | null = null, mapTitle = 'General') => {
     if (!user) return null;

@@ -1,7 +1,7 @@
 
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 
 interface MindflowMinimapProps {
@@ -23,6 +23,17 @@ export const MindflowMinimap = ({
     setOffset,
     containerRef
 }: MindflowMinimapProps) => {
+    const [viewport, setViewport] = useState({ w: 0, h: 0 });
+
+    useEffect(() => {
+        if (containerRef.current) {
+            setViewport({
+                w: containerRef.current.clientWidth,
+                h: containerRef.current.clientHeight,
+            });
+        }
+    }, [containerRef]);
+
     if (!containerRef.current) return null;
 
     const MINIMAP_WIDTH = 200;
@@ -32,16 +43,11 @@ export const MindflowMinimap = ({
     const scale = (MINIMAP_WIDTH - padding * 2) / width;
     const minimapHeight = height * scale + padding * 2;
 
-    const viewportWidth = containerRef.current.clientWidth;
-    const viewportHeight = containerRef.current.clientHeight;
-
     // Calculate viewport box in minimap coordinates
-    // offset.x is where content (0,0) is relative to viewport top-left
-    // So viewport top-left in content coordinates is (-offset.x / zoom)
     const vx = (-offset.x / zoom) * scale + padding;
     const vy = (-offset.y / zoom) * scale + padding;
-    const vw = (viewportWidth / zoom) * scale;
-    const vh = (viewportHeight / zoom) * scale;
+    const vw = (viewport.w / zoom) * scale;
+    const vh = (viewport.h / zoom) * scale;
 
     const handleMinimapClick = (e: React.MouseEvent) => {
         const rect = e.currentTarget.getBoundingClientRect();
@@ -53,8 +59,8 @@ export const MindflowMinimap = ({
         const targetY = (clickY / scale);
 
         setOffset({
-            x: (viewportWidth / 2) - targetX * zoom,
-            y: (viewportHeight / 2) - targetY * zoom
+            x: (viewport.w / 2) - targetX * zoom,
+            y: (viewport.h / 2) - targetY * zoom
         });
     };
 

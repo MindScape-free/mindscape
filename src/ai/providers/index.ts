@@ -12,13 +12,9 @@ export type {
   AIStreamCallback,
   OrchestratorOptions,
   AICallRecord,
-  SingleProviderConfig,
-  AIProviderSystemConfig,
 } from './types';
 
 export { PollinationsAdapter } from './pollinations-adapter';
-export { getProviderRegistry } from './registry';
-export { loadAIConfig } from './config';
 export { orchestrate, orchestrateStream } from './orchestrator';
 export {
   postProcess,

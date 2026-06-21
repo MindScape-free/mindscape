@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Profiler as ReactProfiler, useRef } from 'react';
+import React, { Profiler as ReactProfiler, useRef, useEffect } from 'react';
 
 /**
  * Dev-only Profiler wrapper.
@@ -100,12 +100,15 @@ if (typeof window !== 'undefined') {
 // ── Component ────────────────────────────────────────────────────────────
 
 export function Profiler({ id, children, threshold = 0, alwaysOn = false }: ProfilerProps) {
+  const thresholdRef = useRef(threshold);
+
+  useEffect(() => {
+    thresholdRef.current = threshold;
+  }, [threshold]);
+
   if (!alwaysOn && process.env.NODE_ENV !== 'development') {
     return <>{children}</>;
   }
-
-  const thresholdRef = useRef(threshold);
-  thresholdRef.current = threshold;
 
   return (
     <ReactProfiler

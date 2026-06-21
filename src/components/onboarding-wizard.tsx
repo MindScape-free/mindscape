@@ -78,16 +78,18 @@ export function OnboardingWizard() {
     }, [user, isUserLoading, config.pollinationsApiKey, isAuthPage]);
 
     useEffect(() => {
-        // Show immediately on mount or state change if conditions met
-        checkAndShow();
+        // Show on mount with microtask deferral to avoid cascading render
+        const id = setTimeout(() => checkAndShow(), 0);
 
-        // Listen for manual triggers (e.g. from Hero section)
         const handleTrigger = () => {
             checkAndShow(true);
         };
 
         window.addEventListener(TRIGGER_ONBOARDING_EVENT, handleTrigger);
-        return () => window.removeEventListener(TRIGGER_ONBOARDING_EVENT, handleTrigger);
+        return () => {
+            clearTimeout(id);
+            window.removeEventListener(TRIGGER_ONBOARDING_EVENT, handleTrigger);
+        };
     }, [checkAndShow]);
 
     const handleDismiss = () => {
@@ -152,7 +154,7 @@ export function OnboardingWizard() {
                                         <div className="space-y-2">
                                             <DialogTitle className="text-3xl font-black text-white tracking-tight">Master Your Mind</DialogTitle>
                                             <DialogDescription className="text-zinc-400 text-sm leading-relaxed max-w-[300px] mx-auto">
-                                                Welcome to the next generation of visual thinking. Let's optimize your setup.
+                                                Welcome to the next generation of visual thinking. Let&apos;s optimize your setup.
                                             </DialogDescription>
                                         </div>
                                     </div>
@@ -274,7 +276,7 @@ export function OnboardingWizard() {
                                                     BYOP: Bring Your Own Pollen
                                                 </div>
                                                 <p className="text-[11px] text-zinc-500 leading-relaxed italic">
-                                                    "Connect your personal API key to avoid rate limits and use the world's best open-source models at no platform cost."
+                                                    &ldquo;Connect your personal API key to avoid rate limits and use the world&apos;s best open-source models at no platform cost.&rdquo;
                                                 </p>
                                             </div>
                                             <Button

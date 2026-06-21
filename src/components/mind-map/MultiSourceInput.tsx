@@ -33,15 +33,7 @@ export function MultiSourceInput({
   sourceCount
 }: MultiSourceInputProps) {
   const [value, setValue] = useState('');
-  const [detectedType, setDetectedType] = useState<SourceType>('text');
-
-  useEffect(() => {
-    if (!value.trim()) {
-      setDetectedType('text'); // Neutral state
-    } else {
-      setDetectedType(detectInputType(value));
-    }
-  }, [value]);
+  const detectedType: SourceType = !value.trim() ? 'text' : detectInputType(value);
 
   const handleAdd = () => {
     if (!value.trim()) return;

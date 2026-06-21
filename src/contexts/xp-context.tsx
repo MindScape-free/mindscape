@@ -92,7 +92,8 @@ export function XPProvider({ children }: { children: React.ReactNode }) {
         photoURL: user.photoURL
       }).catch(err => console.error('[XPContext] trackLogin failed:', err));
     }
-  }, [user?.id, user?.displayName, user?.email, user?.photoURL, awardXP]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, awardXP]);
 
   const dismissToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));

@@ -41,9 +41,9 @@ export const CommunityCard = ({ map, onClick }: CommunityCardProps) => {
     const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false);
     const [isRemoving, setIsRemoving] = useState(false);
 
-    const updatedAt = typeof map.updatedAt === 'number'
-        ? new Date(map.updatedAt)
-        : new Date(map.updatedAt || Date.now());
+    const [updatedAt] = useState(() =>
+        map.updatedAt ? new Date(map.updatedAt) : new Date()
+    );
 
     // Check if current user can remove this map (original author or admin)
     const canRemove = user && (user.id === map.originalAuthorId || isUserAdmin);

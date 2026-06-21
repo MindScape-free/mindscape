@@ -59,7 +59,7 @@ const cleanCitations = (text: string) => {
     return text.replace(/\[\d+\]/g, '').trim();
 };
 
-export const MindMapAccordion = memo(({
+const MindMapAccordionComponent = ({
     mindMap,
     onGenerateNewMap,
     onExplainInChat,
@@ -420,4 +420,7 @@ export const MindMapAccordion = memo(({
             })}
         </Accordion>
     );
-});
+};
+
+MindMapAccordionComponent.displayName = 'MindMapAccordion';
+export const MindMapAccordion = memo(MindMapAccordionComponent);

@@ -136,17 +136,18 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
         if (config.pollinationsApiKey && user) {
             refreshBalance(config.pollinationsApiKey);
         } else if (!config.pollinationsApiKey) {
-            setPollenBalance(null);
+            const id = setTimeout(() => setPollenBalance(null), 0);
+            return () => clearTimeout(id);
         }
     }, [config.pollinationsApiKey, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Reset config when user logs out
     useEffect(() => {
         if (user === null) {
-            console.log('🚪 User logged out, resetting AI config');
-            resetConfig();
+            const id = setTimeout(() => resetConfig(), 0);
+            return () => clearTimeout(id);
         }
-    }, [user, resetConfig]);
+    }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Sync state with local storage on mount and when storage changes
     useEffect(() => {
@@ -155,10 +156,12 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
             const storedConfigStr = JSON.stringify(storedConfig);
             if (storedConfigStr !== lastStoredConfigRef.current) {
                 lastStoredConfigRef.current = storedConfigStr;
-                setConfig(storedConfig);
+                const id1 = setTimeout(() => setConfig(storedConfig), 0);
                 if (storedConfig.pollenBalance !== undefined) {
-                    setPollenBalance(storedConfig.pollenBalance ?? null);
+                    const id2 = setTimeout(() => setPollenBalance(storedConfig.pollenBalance ?? null), 0);
+                    return () => { clearTimeout(id1); clearTimeout(id2); };
                 }
+                return () => clearTimeout(id1);
             }
         }
         // Reset the flag after processing

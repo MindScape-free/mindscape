@@ -87,9 +87,12 @@ export async function awardPoints(
   const currentLevelPoints = newTotal - newRankInfo.minPoints;
   const currentLevelTarget = newRankInfo.maxPoints === -1 ? 0 : newRankInfo.maxPoints - newRankInfo.minPoints + 1;
 
+  // Track highest-ever streak to prevent re-earning streak bonuses after streak break
+  const highestStreak = Math.max(ledger.highestStreak || 0, newStreak);
+
   const updatedLedger: PointLedger = {
     totalPoints: newTotal, level: newRankInfo.level, rank: newRankInfo.rank,
-    rankColor: newRankInfo.color, currentStreak: newStreak,
+    rankColor: newRankInfo.color, currentStreak: newStreak, highestStreak,
     multiplier: getStreakMultiplier(newStreak), pointsToNextLevel: pointsToNext,
     currentLevelPoints, currentLevelTarget, lastActivityDate: today, updatedAt: Date.now(),
   };
@@ -113,8 +116,8 @@ export async function awardPoints(
   const event: PointEvent = { id: generateId(), type: eventType, basePoints, bonusPoints, totalPoints: totalEarned, multiplier, timestamp: Date.now(), metadata };
   await supabase.from('point_transactions').insert({ user_id: userId, ...event });
 
-  // Auto-fire streak bonuses
-  if (eventType === 'DAILY_LOGIN' && newStreak > ledger.currentStreak) {
+  // Auto-fire streak bonuses (only if this streak milestone hasn't been earned before)
+  if (eventType === 'DAILY_LOGIN' && newStreak > (ledger.highestStreak || 0)) {
     const streakBonuses: Array<{ streak: number; type: PointEventType }> = [
       { streak: 3, type: 'STREAK_3' }, { streak: 7, type: 'STREAK_7' }, { streak: 30, type: 'STREAK_30' },
     ];

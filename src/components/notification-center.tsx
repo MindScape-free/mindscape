@@ -35,11 +35,11 @@ export function NotificationCenter() {
     const { notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications } = useNotifications();
     const router = useRouter();
     const { status, aiHealth, activeTaskName } = useActivity();
-    const [mounted, setMounted] = React.useState(false);
-
-    React.useEffect(() => {
-        setMounted(true);
-    }, []);
+    const mounted = React.useSyncExternalStore(
+      () => () => {},
+      () => true,
+      () => false
+    );
 
     const isBusy = status !== 'idle' || aiHealth.some(h => h.status !== 'healthy');
 
@@ -96,7 +96,7 @@ export function NotificationCenter() {
                                 value="changelog"
                                 className="text-[10px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white transition-all flex items-center gap-1.5"
                             >
-                                What's New
+                                What&apos;s New
                                 <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             </TabsTrigger>
                         </TabsList>

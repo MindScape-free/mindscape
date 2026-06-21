@@ -737,7 +737,7 @@ const DimensionBentoCard = ({
                             <div className="relative overflow-hidden rounded-2xl bg-[#0c0c0e]/40 border border-white/5 p-5 backdrop-blur-2xl shadow-lg group/insight-card hover:border-primary/30 transition-all duration-500">
                                 <div className="relative z-10">
                                     <p className="text-base md:text-lg text-zinc-200 leading-relaxed font-serif italic text-balance">
-                                        "{dimension.neutralSynthesis}"
+                                        &ldquo;{dimension.neutralSynthesis}&rdquo;
                                     </p>
                                 </div>
                                 <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[radial-gradient(circle_at_50%_0%,#8b5cf6_0,transparent_50%)]" />

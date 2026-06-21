@@ -46,6 +46,7 @@ export interface PointLedger {
   rank: string;
   rankColor: string;
   currentStreak: number;
+  highestStreak?: number;      // highest streak ever achieved (prevents re-earning streak bonuses)
   multiplier: number;
   pointsToNextLevel: number;
   currentLevelPoints: number;   // points earned within current level

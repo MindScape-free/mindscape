@@ -73,7 +73,7 @@ export function PollinationsAuthHandler() {
         // Also listen for hash changes
         window.addEventListener('hashchange', handleHash);
         return () => window.removeEventListener('hashchange', handleHash);
-    }, [updateConfig, toast, user, supabase]);
+    }, [updateConfig, toast, user, supabase, config.imageModel, config.pollinationsModel, config.textModel]);
 
     return null;
 }

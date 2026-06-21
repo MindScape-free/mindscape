@@ -108,7 +108,7 @@ export function useAdminStats(options?: {
     const url = forceRefresh ? `${API_BASE}?refresh=true` : API_BASE;
     const token = await getToken();
     await mutate([API_BASE, user?.id], fetchWithAuth(url, token), { revalidate: true });
-  }, [getToken, user?.id, revalidate]);
+  }, [getToken, user?.id]);
 
   return {
     stats: data?.data || null,

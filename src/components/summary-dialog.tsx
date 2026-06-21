@@ -39,9 +39,17 @@ import {
 } from '@/components/ui/select';
 
 function VoiceWaveform({ isPlaying }: { isPlaying: boolean }) {
+  const [bars] = useState(() =>
+    [1, 2, 3, 4, 5, 6, 7, 8].map((i) => ({
+      height: `${Math.random() * 80 + 20}%`,
+      animationDelay: `${i * 0.1}s`,
+      animationDuration: `${0.5 + Math.random()}s`,
+    }))
+  );
+
   return (
     <div className="flex items-end gap-[3px] h-6 px-2">
-      {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+      {bars.map((bar, i) => (
         <div
           key={i}
           className={cn(
@@ -49,9 +57,9 @@ function VoiceWaveform({ isPlaying }: { isPlaying: boolean }) {
             isPlaying ? "animate-pulse" : "h-1 opacity-30"
           )}
           style={{
-            height: isPlaying ? `${Math.random() * 80 + 20}%` : '4px',
-            animationDelay: `${i * 0.1}s`,
-            animationDuration: isPlaying ? `${0.5 + Math.random()}s` : '0s'
+            height: isPlaying ? bar.height : '4px',
+            animationDelay: bar.animationDelay,
+            animationDuration: isPlaying ? bar.animationDuration : '0s',
           }}
         />
       ))}

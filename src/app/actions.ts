@@ -609,6 +609,16 @@ export async function generateMindMapAction(
  */
 const balanceCache = new Map<string, { balance: number | null; error: string | null; timestamp: number }>();
 
+// Periodic sweep to prevent balanceCache memory leak
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    const cutoff = Date.now() - 60000;
+    for (const [key, entry] of balanceCache.entries()) {
+      if (entry.timestamp < cutoff) balanceCache.delete(key);
+    }
+  }, 60000);
+}
+
 export async function checkPollenBalanceAction(
   options: { apiKey?: string; userId?: string } = {}
 ): Promise<{ balance: number | null; error: string | null }> {
@@ -628,8 +638,8 @@ export async function checkPollenBalanceAction(
 
     let checkPollinationsBalance;
     try {
-      const module = await import('@/ai/pollinations-client');
-      checkPollinationsBalance = module.checkPollinationsBalance;
+      const pollinationsModule = await import('@/ai/pollinations-client');
+      checkPollinationsBalance = pollinationsModule.checkPollinationsBalance;
       if (typeof checkPollinationsBalance !== 'function') {
         throw new Error('checkPollinationsBalance is not a function in the imported module');
       }
@@ -1557,33 +1567,25 @@ export async function generateThumbnailAction(
       enhance: 'false',
     });
 
-    const imageUrl = `${baseUrl}?${params}`;
+    const fullUrl = `${baseUrl}?${params}`;
 
-    const response = await fetch(imageUrl, {
-      method: 'GET',
+    // Verify the image URL is reachable with a HEAD request before returning it
+    const headResp = await fetch(fullUrl, {
+      method: 'HEAD',
       headers: {
         'Authorization': `Bearer ${effectiveApiKey || process.env.POLLINATIONS_API_KEY || ''}`,
-        'Accept': 'image/jpeg, image/png',
       },
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(10000),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => '');
-      throw new Error(`Image generation failed (${response.status}): ${errorText.substring(0, 200)}`);
+    if (!headResp.ok && headResp.status !== 405) {
+      // HEAD not supported (405) is fine; actual errors are not
+      const errorText = await headResp.text().catch(() => '');
+      throw new Error(`Image generation failed (${headResp.status}): ${errorText.substring(0, 200)}`);
     }
 
-    // Convert to base64 data URL
-    const contentType = response.headers.get('content-type') || 'image/jpeg';
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const base64Image = buffer.toString('base64');
-    const dataUrl = `data:${contentType};base64,${base64Image}`;
-
-    console.log(`✅ Thumbnail generated for "${input.topic}" (${Math.round(buffer.length / 1024)} KB)`);
-
     return {
-      imageUrl: dataUrl,
+      imageUrl: fullUrl,
       enhancedPrompt: finalPrompt,
       error: null,
     };

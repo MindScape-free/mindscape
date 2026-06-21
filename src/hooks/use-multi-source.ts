@@ -84,7 +84,7 @@ export function useMultiSource(options?: MultiSourceOptions) {
     } catch (err: any) {
       updateSourceItem(id, { status: 'error', error: err.message });
     }
-  }, [addSourceItem, updateSourceItem, options]);
+  }, [addSourceItem, updateSourceItem]);
 
   const addFile = useCallback(async (file: File) => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -144,7 +144,7 @@ export function useMultiSource(options?: MultiSourceOptions) {
     } catch (err: any) {
       updateSourceItem(id, { status: 'error', error: err.message });
     }
-  }, [addSourceItem, updateSourceItem, options]);
+  }, [addSourceItem, updateSourceItem]);
 
   const clearSources = useCallback(() => {
     setSources([]);

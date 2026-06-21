@@ -39,6 +39,23 @@ class InMemoryCache {
     clear(): void {
         this.cache.clear();
     }
+
+    /** Evict only expired entries — run periodically to prevent memory leaks */
+    sweep(): void {
+        const now = Date.now();
+        for (const [key, entry] of this.cache.entries()) {
+            if (now > entry.timestamp) {
+                this.cache.delete(key);
+            }
+        }
+    }
+}
+
+// Periodic cleanup to evict expired entries (prevent memory leaks)
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    apiCache.sweep();
+  }, 60 * 60 * 1000);
 }
 
 // Export a singleton instance

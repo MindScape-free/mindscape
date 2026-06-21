@@ -348,6 +348,36 @@ export async function logUserEvent(
   if (!userId) return;
   try {
     const supabase = getSupabaseClient();
+    // Use the authenticated client for RLS — if called from server context
+    // without a session, this write will be silently rejected by RLS.
+    // Server-side callers should pass their own supabase client.
+    const { error } = await supabase.from('user_events').insert({
+      user_id: userId,
+      event_type: eventType,
+      event_data: eventData,
+      source: source || 'system',
+      created_at: new Date().toISOString(),
+    });
+    if (error) console.warn(`[UserEvent] RLS rejected ${eventType}: ${error.message}`);
+  } catch (error) {
+    // Silently fail — don't disrupt the main action
+    console.error(`[UserEvent] Failed to log ${eventType}:`, error);
+  }
+}
+
+/**
+ * Server-side variant of logUserEvent — uses the admin client so it works
+ * without a user session. Call from API routes / server actions only.
+ */
+export async function logUserEventAdmin(
+  userId: string,
+  eventType: UserEventType,
+  eventData: Record<string, any> = {},
+  source?: string
+): Promise<void> {
+  try {
+    const { getSupabaseAdmin } = await import('@/lib/supabase-server');
+    const supabase = getSupabaseAdmin();
     await supabase.from('user_events').insert({
       user_id: userId,
       event_type: eventType,
@@ -356,8 +386,7 @@ export async function logUserEvent(
       created_at: new Date().toISOString(),
     });
   } catch (error) {
-    // Silently fail — don't disrupt the main action
-    console.error(`[UserEvent] Failed to log ${eventType}:`, error);
+    console.error(`[UserEvent] Admin log failed for ${eventType}:`, error);
   }
 }
 

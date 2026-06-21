@@ -1,18 +1,4 @@
-/**
- * useRenderTiming — Tracks render count and mount/duration timing for a component.
- *
- * Usage:
- *   function MyComponent() {
- *     useRenderTiming('MyComponent');
- *     return <div>...</div>;
- *   }
- *
- * Logs to the Performance API and optionally to console.table in dev mode.
- */
-
 import { useRef, useEffect } from 'react';
-
-// ── Aggregator ───────────────────────────────────────────────────────────
 
 interface RenderEntry {
   name: string;
@@ -37,40 +23,16 @@ function recordRender(name: string, startTime: number) {
   renderStats.set(name, existing);
 }
 
-// ── Hook ─────────────────────────────────────────────────────────────────
-
-/**
- * Log render timing for the calling component.
- *
- * @param label - A human-readable component label (e.g. "MindMap")
- * @param onlyInDev - If true, only runs in development (default: true)
- */
 export function useRenderTiming(label: string, onlyInDev = true) {
-  if (onlyInDev && process.env.NODE_ENV !== 'development') return;
-
-  // Guard against SSR — performance is not available on the server
-  if (typeof window === 'undefined') return;
-
   const renderCount = useRef(0);
   const startTime = useRef(0);
 
-  // Initialize start time lazily (not at module scope, safe for SSR)
-  if (startTime.current === 0) {
-    startTime.current = performance.now();
-  }
-
-  // Increment on every render
-  renderCount.current++;
-
-  // Record timing on mount + every render
   useEffect(() => {
-    recordRender(label, startTime.current);
-    // Start time for next render
-    startTime.current = performance.now();
-  });
+    if (onlyInDev && process.env.NODE_ENV !== 'development') return;
+    if (typeof window === 'undefined') return;
 
-  // Log summary on unmount
-  useEffect(() => {
+    startTime.current = performance.now();
+
     return () => {
       const entry = renderStats.get(label);
       if (entry && process.env.NODE_ENV === 'development') {
@@ -81,14 +43,19 @@ export function useRenderTiming(label: string, onlyInDev = true) {
         );
       }
     };
-  }, [label]);
+  }, [label, onlyInDev]);
+
+  useEffect(() => {
+    if (onlyInDev && process.env.NODE_ENV !== 'development') return;
+    if (typeof window === 'undefined') return;
+
+    const start = startTime.current;
+    renderCount.current++;
+    recordRender(label, start);
+    startTime.current = performance.now();
+  });
 }
 
-// ── Report ───────────────────────────────────────────────────────────────
-
-/**
- * Log the full render stats table to the console.
- */
 export function logRenderStats() {
   if (process.env.NODE_ENV !== 'development') return;
 
@@ -116,7 +83,6 @@ export function logRenderStats() {
   );
 }
 
-// Make it available globally for quick console access
 if (typeof window !== 'undefined') {
   (window as any).__logRenderStats = logRenderStats;
 }

@@ -23,16 +23,21 @@ export function getSupabaseClient(): SupabaseClient {
 }
 
 export function getSupabaseClientWithOptions(options?: { persistSession?: boolean }) {
-  if (clientInstance) return clientInstance;
+  // Always create a fresh client when options are specified (never return singleton)
+  if (!options) {
+    if (clientInstance) return clientInstance;
+    clientInstance = createClient(getSupabaseConfig().url, getSupabaseConfig().key, {
+      auth: { persistSession: true, autoRefreshToken: true },
+    });
+    return clientInstance;
+  }
   const { url, key } = getSupabaseConfig();
-
-  clientInstance = createClient(url, key, {
+  return createClient(url, key, {
     auth: {
-      persistSession: true,
+      persistSession: options.persistSession ?? true,
       autoRefreshToken: true,
     }
   });
-  return clientInstance;
 }
 
 

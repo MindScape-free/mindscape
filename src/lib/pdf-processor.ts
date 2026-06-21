@@ -35,7 +35,6 @@ async function getPdfJsLib() {
         throw new Error('parsePdfContent can only be used in a browser environment.');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const pdfjsDist = require('pdfjs-dist/legacy/build/pdf');
 
     pdfjsDist.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';

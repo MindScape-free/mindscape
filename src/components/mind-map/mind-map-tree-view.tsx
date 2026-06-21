@@ -397,20 +397,17 @@ export const MindMapTreeView = React.memo(({
 
     const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(() => generateInitialCollapsed(data));
 
-    useEffect(() => {
-        setCollapsedNodes(generateInitialCollapsed(data));
-    }, [data, generateInitialCollapsed]);
-
     const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
     const [selectedNode, setSelectedNode] = useState<NodePosition | null>(null);
     const [lastTouchDistance, setLastTouchDistance] = useState<number | null>(null);
 
     const { nodes, connections, width, height } = useMemo(() => LayoutEngine(data, collapsedNodes), [data, collapsedNodes]);
 
-    // Keep refs in sync after latest render
-    nodesRef.current = nodes;
-    zoomRef.current = zoom;
-    offsetRef.current = offset;
+    useEffect(() => {
+        nodesRef.current = nodes;
+        zoomRef.current = zoom;
+        offsetRef.current = offset;
+    });
 
     const lastExpandedRef = useRef<string | null>(null);
 

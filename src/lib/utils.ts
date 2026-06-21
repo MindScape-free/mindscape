@@ -365,15 +365,10 @@ export function toPascalCase(str: string): string {
 
 /**
  * Extracts the YouTube video ID from a URL.
- * @param {string} url - The YouTube URL.
- * @returns {string | null} The video ID, or null if not found.
+ * Delegates to the single canonical implementation in utils/youtube.
  */
-export function extractYoutubeId(url: string): string | null {
-  if (!url) return null;
-  const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
-  const match = url.match(regExp);
-  return (match && match[7].length === 11) ? match[7] : null;
-}
+import { getVideoId } from '@/utils/youtube/extract-id';
+export { getVideoId as extractYoutubeId };
 
 /**
  * Truncates a string to a specified length and adds an ellipsis if needed.

@@ -28,7 +28,10 @@ export function usePoints(): UsePointsReturn {
 
   useEffect(() => {
     if (isUserLoading) return;
-    if (!user) { setIsLoading(false); return; }
+    if (!user) {
+      const id = setTimeout(() => setIsLoading(false), 0);
+      return () => clearTimeout(id);
+    }
 
     const supabase = getSupabaseClient();
 

@@ -36,22 +36,27 @@ export async function POST(req: NextRequest) {
     console.log('✅ [ChatStream] Input validated');
     const { apiKey: effectiveApiKey, topic, persona, history, question, attachments, pdfContext, model: requestedModel, agentMode } = input;
 
-    // Track chat activity if user is authenticated
-    try {
-      const authHeader = req.headers.get('Authorization');
-      if (authHeader?.startsWith('Bearer ')) {
-        const token = authHeader.substring(7);
+    // Authenticate user
+    let currentUserId: string | undefined;
+    const authHeader = req.headers.get('Authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      try {
         const { getSupabaseAdmin } = await import('@/lib/supabase-server');
         const supabase = getSupabaseAdmin();
-        const { data: { user } } = await supabase.auth.getUser(token);
-        if (user) {
-          const { trackChat } = await import('@/lib/tracker');
-          await trackChat(supabase, user.id);
-          console.log(`💬 [ChatStream] Tracked chat for user: ${user.id}`);
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+        if (authError || !user) {
+          return NextResponse.json({ error: 'Invalid or expired authentication token.' }, { status: 401 });
         }
+        currentUserId = user.id;
+        const { trackChat } = await import('@/lib/tracker');
+        await trackChat(supabase, user.id).catch(() => {});
+      } catch (err) {
+        console.warn('[ChatStream] Auth verification error:', err);
+        return NextResponse.json({ error: 'Authentication failed.' }, { status: 401 });
       }
-    } catch (err) {
-      console.warn('[ChatStream] Failed to track chat activity:', err);
+    } else {
+      return NextResponse.json({ error: 'Authorization header required.' }, { status: 401 });
     }
 
     // Ensure we have at least some API key to work with (user provided or system default)

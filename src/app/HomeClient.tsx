@@ -177,14 +177,9 @@ function Hero({
 }) {
   const [topic2, setTopic2] = useState('');
   const [activeMode, setActiveMode] = useState<'single' | 'compare' | 'multi'>('single');
-  const [contentIndex, setContentIndex] = useState(0);
+  const [contentIndex, setContentIndex] = useState(() => Math.floor(Math.random() * HERO_CONTENT_OPTIONS.length));
 
   useEffect(() => {
-    const randomIdx = Math.floor(Math.random() * HERO_CONTENT_OPTIONS.length);
-    if (randomIdx !== 0) {
-      setContentIndex(randomIdx);
-    }
-
     const interval = setInterval(() => {
       setContentIndex((prev) => (prev + 1) % HERO_CONTENT_OPTIONS.length);
     }, 60000);
@@ -631,7 +626,7 @@ export default function Home() {
                     MindScape is a <strong className="text-zinc-200">Visual Intelligence Engine</strong> built for researchers, students, and professionals to combat information overload. Instead of flat text summaries, it converts complex sources into explorable, interconnected knowledge graphs.
                 </p>
                 <p className="text-zinc-400 text-lg leading-relaxed">
-                    Powered by a unique deterministic pre-processing step (SKEE), MindScape guarantees structural accuracy before AI synthesis begins. This ensures that the generated mind maps are not just creative, but rigidly aligned with the source material's true hierarchy and intent.
+                    Powered by a unique deterministic pre-processing step (SKEE), MindScape guarantees structural accuracy before AI synthesis begins. This ensures that the generated mind maps are not just creative, but rigidly aligned with the source material&apos;s true hierarchy and intent.
                 </p>
             </div>
          </SectionContainer>

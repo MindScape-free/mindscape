@@ -85,8 +85,11 @@ export function usePointsHistory(): UsePointsHistoryReturn {
   }, [user, offset]);
 
   useEffect(() => {
-    if (!isUserLoading) fetchTransactions(true);
-  }, [user?.id, isUserLoading]);
+    if (!isUserLoading) {
+      const id = setTimeout(() => fetchTransactions(true), 0);
+      return () => clearTimeout(id);
+    }
+  }, [user?.id, isUserLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     history: groupTransactionsByDate(transactions),

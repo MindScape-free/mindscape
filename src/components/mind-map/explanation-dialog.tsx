@@ -390,10 +390,10 @@ function E_MicroQuiz({
     const [isRevealed, setIsRevealed] = useState(!!initialAnswer);
     const [isRegenerating, setIsRegenerating] = useState(false);
 
-    useEffect(() => {
+    if (selectedOption !== initialAnswer) {
         setSelectedOption(initialAnswer);
         setIsRevealed(!!initialAnswer);
-    }, [initialAnswer]);
+    }
 
     const handleCheck = () => {
         if (!selectedOption) return;
@@ -755,9 +755,8 @@ export function ExplanationDialog({
                 setLoadingMessageIndex((prev) => (prev + 1) % loadingMessages.length);
             }, 2000);
             return () => clearInterval(interval);
-        } else {
-            setLoadingMessageIndex(0);
         }
+        setLoadingMessageIndex(0);
     }, [isLoading, loadingMessages.length]);
 
     const hasExistingContent = content.length > 0;

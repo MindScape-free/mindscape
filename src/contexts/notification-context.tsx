@@ -66,11 +66,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
     // Hydrate from localStorage on mount (client-side only)
     useEffect(() => {
-        const stored = loadFromStorage();
-        if (stored.length > 0) {
-            setNotifications(stored);
-        }
-        setHydrated(true);
+        const id = setTimeout(() => {
+            const stored = loadFromStorage();
+            if (stored.length > 0) {
+                setNotifications(stored);
+            }
+            setHydrated(true);
+        }, 0);
+        return () => clearTimeout(id);
     }, []);
 
     // Sync to localStorage whenever notifications change (after hydration)

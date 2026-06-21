@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 
@@ -119,6 +120,10 @@ interface LoadingCardProps {
 }
 
 export function LoadingCard({ className, lines = 3 }: LoadingCardProps) {
+  const [widths] = useState(() =>
+    Array.from({ length: lines }, () => `${Math.random() * 40 + 60}%`)
+  );
+
   return (
     <div className={cn('space-y-3', className)}>
       <div className="h-4 w-3/4 bg-muted animate-pulse rounded" />
@@ -126,7 +131,7 @@ export function LoadingCard({ className, lines = 3 }: LoadingCardProps) {
         <div 
           key={i} 
           className="h-3 bg-muted animate-pulse rounded" 
-          style={{ width: `${Math.random() * 40 + 60}%` }}
+          style={{ width: widths[i] }}
         />
       ))}
     </div>

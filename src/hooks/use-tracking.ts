@@ -4,7 +4,7 @@
 // Extracted from src/lib/tracker.ts to fix Next.js build issue.
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { analytics, logAdminActivity, logUserEvent } from '@/lib/tracker';
 
@@ -178,15 +178,17 @@ interface SessionMetrics {
 }
 
 export function useSessionTracking(userId?: string) {
-  const metricsRef = useRef<SessionMetrics>({
-    pageViews: 0,
-    searches: 0,
-    mapsViewed: 0,
-    aiGenerations: 0,
-    chatsStarted: 0,
-    startTime: Date.now(),
-    lastActivity: Date.now(),
-  });
+  const [metricsRef] = useState<{ current: SessionMetrics }>(() => ({
+    current: {
+      pageViews: 0,
+      searches: 0,
+      mapsViewed: 0,
+      aiGenerations: 0,
+      chatsStarted: 0,
+      startTime: Date.now(),
+      lastActivity: Date.now(),
+    }
+  }));
   const sessionIdRef = useRef<string>(uuidv4());
 
   useEffect(() => {
@@ -274,12 +276,14 @@ export function useSessionTracking(userId?: string) {
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    const sessionId = sessionIdRef.current;
+    const metrics = metricsRef.current;
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       analytics.track('session_end', 'engagement', {
-        sessionId: sessionIdRef.current,
-        metrics: metricsRef.current,
+        sessionId,
+        metrics,
       });
     };
   }, []);

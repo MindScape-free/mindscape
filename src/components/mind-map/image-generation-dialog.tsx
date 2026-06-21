@@ -150,23 +150,25 @@ export function ImageGenerationDialog({
 
     const { config } = useAIConfig();
 
-    // Sync prompt with initialPrompt when it changes
+    // Reset state when dialog opens
     React.useEffect(() => {
         if (isOpen) {
-            setPrompt(initialPrompt);
-            setSelectedStyle('cinematic');
-            setAspectRatio(ASPECT_RATIOS[0]);
-            setComposition('none');
-            setMood('none');
-            setColorPalette('none');
-            setLighting('none');
+            const id = setTimeout(() => {
+                setPrompt(initialPrompt);
+                setSelectedStyle('cinematic');
+                setAspectRatio(ASPECT_RATIOS[0]);
+                setComposition('none');
+                setMood('none');
+                setColorPalette('none');
+                setLighting('none');
 
-            // Use imageModel from AIConfigContext (already synced from supabase)
-            const savedModel = config.imageModel || 'flux';
-            const normalized = (savedModel === 'flux-pro' || savedModel === 'klein-large' || savedModel === 'klein') ? 'flux' : savedModel;
-            setModel(normalized);
+                const savedModel = config.imageModel || 'flux';
+                const normalized = (savedModel === 'flux-pro' || savedModel === 'klein-large' || savedModel === 'klein') ? 'flux' : savedModel;
+                setModel(normalized);
+            }, 0);
+            return () => clearTimeout(id);
         }
-    }, [initialPrompt, isOpen, config.imageModel]);
+    }, [isOpen, initialPrompt, config.imageModel]);
 
     const handleEnhance = async () => {
         const enhanced = await onEnhancePrompt(prompt, selectedStyle, composition, mood, colorPalette, lighting);
@@ -206,7 +208,7 @@ export function ImageGenerationDialog({
                                         Visual Insight Lab
                                     </DialogTitle>
                                     <DialogDescription className="text-zinc-500 text-sm mt-0.5 truncate">
-                                        Generating for <span className="text-violet-400 font-semibold italic">"{nodeName}"</span>
+                                        Generating for <span className="text-violet-400 font-semibold italic">&ldquo;{nodeName}&rdquo;</span>
                                     </DialogDescription>
                                 </div>
                             </div>

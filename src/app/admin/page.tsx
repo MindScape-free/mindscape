@@ -67,7 +67,8 @@ export default function AdminDashboard() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isUserDetailOpen, setIsUserDetailOpen] = useState(false);
   const [logFilter, setLogFilter] = useState<AdminActivityLogEntry['type'] | 'all'>('all');
-  const [feedbackData, setFeedbackData] = useState<Feedback[]>([]);
+  const [feedbackData, setFeedbackData] = useState<Feedback[]>(() => bundle?.feedback || []);
+
   const [topContributorsStatFilter, setTopContributorsStatFilter] = useState<string>('totalMapsCreated');
   const [liveLogs, setLiveLogs] = useState<any[]>([]);
   const [liveUsers, setLiveUsers] = useState<any[]>([]);
@@ -145,7 +146,7 @@ export default function AdminDashboard() {
       ids.forEach(id => globalListenerManager.unregister(id));
       listenerIdsRef.current = [];
     };
-  }, [supabase, subscribeToAdminActivityLogs, refreshBundle]);
+  }, [supabase, refreshBundle]);
 
   const activityLogs = useMemo(() => {
     const logMap = new Map();
@@ -170,12 +171,6 @@ export default function AdminDashboard() {
     return result;
   }, [bundle?.users, extraUsers, liveUsers]);
 
-  useEffect(() => {
-    if (bundle) {
-      if (bundle.feedback.length > 0) setFeedbackData(bundle.feedback);
-    }
-  }, [bundle]);
-  
   useEffect(() => {
     if (dashboardData) {
       const { platform, metrics } = dashboardData;

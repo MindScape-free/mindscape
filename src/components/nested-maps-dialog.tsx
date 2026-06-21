@@ -111,9 +111,11 @@ export function NestedMapsDialog({
             path.forEach((item, index) => {
                 newLevels[index + 1] = [item.id];
             });
-            setExpandedLevels(newLevels);
+            const id = setTimeout(() => setExpandedLevels(newLevels), 0);
+            return () => clearTimeout(id);
         } else if (isOpen) {
-            setExpandedLevels({});
+            const id = setTimeout(() => setExpandedLevels({}), 0);
+            return () => clearTimeout(id);
         }
     }, [isOpen, currentMapId, rootMap, expansions]);
 

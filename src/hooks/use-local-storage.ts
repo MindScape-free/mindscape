@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 
 /**
  * Safely retrieves a value from window.localStorage.
@@ -36,17 +36,13 @@ export function useLocalStorage<T>(
   key: string,
   initialValue: T
 ): [T, (value: T | ((val: T) => T)) => void] {
-  const [storedValue, setStoredValue] = useState<T>(initialValue);
-
-  // This effect runs only on the client, after initial hydration.
-  useEffect(() => {
-    const valueFromStorage = getValueFromLocalStorage<T>(key);
-    if (valueFromStorage !== null) {
-      setStoredValue(valueFromStorage);
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    if (typeof window !== 'undefined') {
+      const valueFromStorage = getValueFromLocalStorage<T>(key);
+      if (valueFromStorage !== null) return valueFromStorage;
     }
-    // We only want this to run once on mount to get the initial value.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+    return initialValue;
+  });
 
   /**
    * Sets the new value in both the component's state and localStorage.
