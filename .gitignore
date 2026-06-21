@@ -55,3 +55,7 @@ src/tmp/
 .temp/
 .agents/
 .gemini/
+
+# stray Windows reserved name artifact
+nul
+
