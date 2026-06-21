@@ -145,7 +145,7 @@ export async function GET(request: Request) {
       avgMapsPerUser: analytics.avg_maps_per_user ?? (platform.total_users > 0 ? (platform.total_maps_ever / platform.total_users) : 0),
       avgChatsPerUser: analytics.avg_chats_per_user ?? (platform.total_users > 0 ? (platform.total_chats / platform.total_users) : 0),
       latestUsers: bundleUsers.slice(0, 10),
-      topUsers: bundleUsers.sort((a, b) => (b.statistics?.totalMapsCreated || 0) - (a.statistics?.totalMapsCreated || 0)).slice(0, 10),
+      topUsers: bundleUsers.sort((a: any, b: any) => (b.statistics?.totalMapsCreated || 0) - (a.statistics?.totalMapsCreated || 0)).slice(0, 10),
       mapAnalytics: { 
         ...DEFAULT_MAP_ANALYTICS, 
         totalAnalyzed: mapAnalyticsSource.totalAnalyzed ?? mapAnalyticsSource.total_analyzed ?? platform.active_root_maps ?? 0,

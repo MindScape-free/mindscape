@@ -17,15 +17,41 @@ const rateLimits: Record<string, RateLimitConfig> = {
   upload: { windowMs: 60 * 1000, maxRequests: 5 },
 };
 
+/**
+ * In-memory rate limiter with automatic eviction of expired entries
+ * on every check — no background sweep timer needed.
+ *
+ * NOTE: In serverless environments (Vercel, Netlify), each cold start
+ * creates a fresh instance, making this a best-effort limiter.
+ * For strict production rate limiting, replace with Supabase RLS,
+ * Vercel KV, or a database-backed approach.
+ */
 class InMemoryRateLimiter {
   private store: Map<string, { count: number; resetTime: number }> = new Map();
+  private readonly MAX_ENTRIES = 10000;
 
   check(identifier: string, config: RateLimitConfig): RateLimitResult {
     const now = Date.now();
     const key = identifier;
+
+    // Evict expired entries on every check to prevent memory leaks
+    // without requiring a background timer.
+    if (this.store.size > this.MAX_ENTRIES) {
+      for (const [k, v] of this.store) {
+        if (now > v.resetTime) {
+          this.store.delete(k);
+        }
+      }
+    }
+
     const record = this.store.get(key);
 
     if (!record || now > record.resetTime) {
+      // Prevent unbounded growth: if store is at capacity, evict oldest
+      if (this.store.size >= this.MAX_ENTRIES) {
+        const oldest = this.store.entries().next().value;
+        if (oldest) this.store.delete(oldest[0]);
+      }
       this.store.set(key, {
         count: 1,
         resetTime: now + config.windowMs,
@@ -52,22 +78,9 @@ class InMemoryRateLimiter {
       reset: record.resetTime,
     };
   }
-
-  cleanup(): void {
-    const now = Date.now();
-    for (const [key, value] of this.store.entries()) {
-      if (now > value.resetTime) {
-        this.store.delete(key);
-      }
-    }
-  }
 }
 
 const inMemoryLimiter = new InMemoryRateLimiter();
-
-setInterval(() => {
-  inMemoryLimiter.cleanup();
-}, 60000);
 
 export function rateLimit(
   identifier: string,

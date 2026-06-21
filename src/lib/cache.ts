@@ -12,6 +12,7 @@ class InMemoryCache {
     private cache: Map<string, CacheEntry<any>> = new Map();
     // Default TTL: 1 hour (in ms)
     private defaultTTL: number = 60 * 60 * 1000;
+    private sweepTimer: ReturnType<typeof setInterval> | null = null;
 
     set<T>(key: string, data: T, ttl: number = this.defaultTTL): void {
         this.cache.set(key, {
@@ -49,14 +50,30 @@ class InMemoryCache {
             }
         }
     }
-}
 
-// Periodic cleanup to evict expired entries (prevent memory leaks)
-if (typeof setInterval !== 'undefined') {
-  setInterval(() => {
-    apiCache.sweep();
-  }, 60 * 60 * 1000);
+    /** Start periodic sweep. Call from a controlled lifecycle, not module scope. */
+    startSweep(intervalMs: number = 60 * 60 * 1000): void {
+        if (this.sweepTimer) return;
+        this.sweepTimer = setInterval(() => this.sweep(), intervalMs);
+    }
+
+    /** Stop periodic sweep. Call on component unmount or serverless handler cleanup. */
+    stopSweep(): void {
+        if (this.sweepTimer) {
+            clearInterval(this.sweepTimer);
+            this.sweepTimer = null;
+        }
+    }
 }
 
 // Export a singleton instance
 export const apiCache = new InMemoryCache();
+
+// Start sweep in a try block to survive edge-runtime environments that lack setInterval
+if (typeof setInterval !== 'undefined') {
+  try {
+    apiCache.startSweep();
+  } catch {
+    // Edge runtime may throw; sweep isn't critical
+  }
+}

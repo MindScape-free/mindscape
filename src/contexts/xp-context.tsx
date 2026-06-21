@@ -54,6 +54,9 @@ export function XPProvider({ children }: { children: React.ReactNode }) {
   const [levelUpData, setLevelUpData] = useState<{ level: number; rank: string } | null>(null);
   const toastIdRef = useRef(0);
 
+  const processedUserRef = useRef<string | null>(null);
+  const processingRef = useRef(false); // Guard against React StrictMode double-fire
+
   const awardXP = useCallback(async (
     eventType: PointEventType,
     metadata?: Record<string, any>
@@ -75,10 +78,13 @@ export function XPProvider({ children }: { children: React.ReactNode }) {
     return data;
   }, [user]);
 
-  const processedUserRef = useRef<string | null>(null);
-
   // Handle daily login and activity tracking
+  // Uses processingRef to guard against React StrictMode double-invocation
   React.useEffect(() => {
+    // Guard: prevent double-fire in StrictMode (React 18+ calls effects twice)
+    if (processingRef.current) return;
+    processingRef.current = true;
+
     if (user && processedUserRef.current !== user.id) {
       processedUserRef.current = user.id;
       // Award daily login points
@@ -92,6 +98,8 @@ export function XPProvider({ children }: { children: React.ReactNode }) {
         photoURL: user.photoURL
       }).catch(err => console.error('[XPContext] trackLogin failed:', err));
     }
+
+    return () => { processingRef.current = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, awardXP]);
 

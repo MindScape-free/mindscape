@@ -2,6 +2,7 @@ import {
   PointEventType, PointEvent, PointLedger, DailyPointCaps,
   POINT_VALUES, DAILY_CAPS, getRankForPoints, getStreakMultiplier,
 } from '@/types/points';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
 
 function todayString(): string {
   return new Date().toISOString().split('T')[0];
@@ -35,7 +36,6 @@ export async function awardPoints(
   eventType: PointEventType,
   metadata?: Record<string, any>
 ): Promise<AwardResult> {
-  const { getSupabaseAdmin } = await import('@/lib/supabase-server');
   const supabase = getSupabaseAdmin();
   const today = todayString();
 

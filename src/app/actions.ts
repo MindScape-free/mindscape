@@ -90,12 +90,6 @@ export interface AIActionOptions {
  * Ensures AI-generated data strictly adheres to the frontend MindMapData interface.
  * Fills in default values for required fields like tags and isExpanded.
  */
-function depthToServer(depth: 'low' | 'medium' | 'deep'): 'low' | 'medium' | 'deep' {
-  return depth;
-}
-
-
-
 function stableId(id: string | undefined, prefix: string, name: string): string {
   if (id) return id;
   let hash = 0;
@@ -108,18 +102,21 @@ function stableId(id: string | undefined, prefix: string, name: string): string 
 }
 
 export async function mapToMindMapData(raw: any, depth: 'low' | 'medium' | 'deep' = 'low'): Promise<MindMapData> {
+  // SAFETY: Do NOT spread raw AI output into the result — use only known fields
+  // to prevent unexpected properties from leaking through.
+
   if (raw.mode === 'compare' || raw.compareData) {
     const unityNexusLength = raw.compareData?.unityNexus?.length || raw.similarities?.length || 0;
     const dimensionsLength = raw.compareData?.dimensions?.length || 0;
     const nodeCount = 1 + unityNexusLength + dimensionsLength;
 
-    // If the data is already in the new nested compareData format, pass it through
     if (raw.compareData) {
       return {
-        ...raw,
-        mode: 'compare',
+        mode: 'compare' as const,
         depth,
         nodeCount,
+        topic: raw.topic || 'Comparison',
+        icon: raw.icon || 'git-compare',
         createdAt: raw.createdAt || raw.created_at || Date.now(),
         updatedAt: raw.updatedAt || raw.updated_at || Date.now(),
         shortTitle: raw.short_title || raw.shortTitle || raw.content?.shortTitle,
@@ -129,31 +126,36 @@ export async function mapToMindMapData(raw: any, depth: 'low' | 'medium' | 'deep
             ...n,
             id: stableId(n.id, 'nexus', n.title || n.name || '')
           })),
-          dimensions: (raw.compareData.dimensions || []).map((d: any) => ({
-            ...d
-          }))
+          dimensions: (raw.compareData.dimensions || []).map((d: any) => ({ ...d }))
         }
       } as CompareMindMapData;
     }
 
     return {
-      ...raw,
-      mode: 'compare',
+      mode: 'compare' as const,
       depth,
       nodeCount,
+      topic: raw.topic || 'Comparison',
+      icon: raw.icon || 'git-compare',
+      createdAt: raw.createdAt || raw.created_at || Date.now(),
+      updatedAt: raw.updatedAt || raw.updated_at || Date.now(),
+      shortTitle: raw.short_title || raw.shortTitle || raw.content?.shortTitle,
       compareData: {
         root: raw.root || { title: raw.topic || 'Comparison' },
         unityNexus: (raw.similarities || []).map((n: any) => ({ ...n, id: stableId(n.id, 'nexus', n.title || n.name || '') })),
-        dimensions: [], // Old format can't satisfy dimensions easily
+        dimensions: [],
         synthesisHorizon: { expertVerdict: '', futureEvolution: '' },
         relevantLinks: raw.relevantLinks || []
       }
     } as CompareMindMapData;
   }
 
-  // Handle single mode
+  // Handle single mode — compute node count during mapping to avoid a second iteration
+  let nodeCount = 1; // start with root
+
   const mappedSubTopics = (raw.subTopics || []).map((st: any): SubTopic => {
     const normalizedName = (st.name || '').trim().replace(/[:.!?]$/, '');
+    nodeCount++; // add subtopic
     return {
       name: normalizedName,
       icon: st.icon || 'flag',
@@ -161,6 +163,7 @@ export async function mapToMindMapData(raw: any, depth: 'low' | 'medium' | 'deep
       id: stableId(st.id, 'topic', normalizedName),
       categories: (st.categories || []).map((cat: any): Category => {
         const catName = (cat.name || '').trim().replace(/[:.!?]$/, '');
+        nodeCount++; // add category
         return {
           name: catName,
           icon: cat.icon || 'folder',
@@ -175,43 +178,79 @@ export async function mapToMindMapData(raw: any, depth: 'low' | 'medium' | 'deep
               return sub;
             })
             .filter((sub: any) => sub && typeof sub.name === 'string' && sub.name.trim() !== '')
-            .map((sub: any): SubCategory => ({
-              name: (sub.name || '').trim().replace(/[:.!?]$/, ''),
-              description: sub.description || '',
-              icon: sub.icon || 'book-open',
-              tags: Array.isArray(sub.tags) ? sub.tags : [],
-              id: stableId(sub.id, 'sub', sub.name || ''),
-              isExpanded: false
-            }))
+            .map((sub: any): SubCategory => {
+              nodeCount++; // add subcategory
+              return {
+                name: (sub.name || '').trim().replace(/[:.!?]$/, ''),
+                description: sub.description || '',
+                icon: sub.icon || 'book-open',
+                tags: Array.isArray(sub.tags) ? sub.tags : [],
+                id: stableId(sub.id, 'sub', sub.name || ''),
+                isExpanded: false
+              };
+            })
         };
       })
     };
   });
 
-  let nodeCount = 1; // start with root
-  mappedSubTopics.forEach((st: any) => {
-    nodeCount++; // add subtopic
-    st.categories?.forEach((cat: any) => {
-      nodeCount++; // add category
-      nodeCount += cat.subCategories?.length || 0; // add subcategories
-    });
-  });
-
   return {
-    ...raw,
-    mode: 'single',
+    mode: 'single' as const,
     depth,
     nodeCount,
+    topic: raw.topic || 'Mind Map',
+    icon: raw.icon || 'brain-circuit',
+    thought: raw.thought,
+    userId: raw.userId,
+    uid: raw.uid,
+    parentMapId: raw.parentMapId,
     createdAt: raw.createdAt || raw.created_at || Date.now(),
     updatedAt: raw.updatedAt || raw.updated_at || Date.now(),
-    shortTitle: raw.short_title || raw.shortTitle || raw.content?.shortTitle,
+    summary: raw.summary,
+    summaryAudioUrl: raw.summaryAudioUrl,
+    thumbnailUrl: raw.thumbnailUrl,
+    thumbnailPrompt: raw.thumbnailPrompt,
+    isPublic: raw.isPublic,
+    isShared: raw.isShared,
+    publicCategories: raw.publicCategories,
+    views: raw.views,
+    publicViews: raw.publicViews,
+    originalAuthorId: raw.originalAuthorId,
+    authorName: raw.authorName,
+    authorAvatar: raw.authorAvatar,
+    searchSources: raw.searchSources,
+    searchImages: raw.searchImages,
+    searchTimestamp: raw.searchTimestamp,
+    pdfContext: raw.pdfContext,
+    sourceFileContent: raw.sourceFileContent,
+    sourceFileType: raw.sourceFileType,
+    originalPdfFileContent: raw.originalPdfFileContent,
+    sourceFile2Content: raw.sourceFile2Content,
+    sourceFile2Type: raw.sourceFile2Type,
+    sourceUrl: raw.sourceUrl,
+    videoId: raw.videoId,
+    sourceType: raw.sourceType,
+    categoriesCount: raw.categoriesCount,
+    sourcesCount: raw.sourcesCount,
+    aiPersona: raw.aiPersona,
+    explanations: raw.explanations,
     nestedExpansions: (raw.nestedExpansions || []).map((ne: any) => ({
-      ...ne,
+      id: ne.id,
+      parentName: ne.parentName,
+      topic: ne.topic,
+      icon: ne.icon,
+      createdAt: ne.createdAt,
+      depth: ne.depth,
+      path: ne.path,
+      status: ne.status,
       subCategories: (ne.subCategories || []).map((sub: any) => ({
-        ...sub,
+        name: sub.name,
+        description: sub.description,
+        icon: sub.icon,
         tags: Array.isArray(sub.tags) ? sub.tags : []
       }))
     })),
+    savedImages: raw.savedImages,
     subTopics: mappedSubTopics
   } as SingleMindMapData;
 }
@@ -231,8 +270,19 @@ export interface GenerateMindMapFromImageInput {
  */
 // Server-side API key cache: userId -> { key, timestamp }
 // Avoids repeated supabase reads for the same user within a short window
+// Evicts entries older than TTL on every access
 const apiKeyCache = new Map<string, { key: string | undefined; timestamp: number }>();
 const API_KEY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Periodically sweep stale entries to prevent unbounded growth
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    const cutoff = Date.now() - API_KEY_CACHE_TTL;
+    for (const [key, entry] of apiKeyCache.entries()) {
+      if (entry.timestamp < cutoff) apiKeyCache.delete(key);
+    }
+  }, 5 * 60 * 1000);
+}
 
 export async function resolveApiKey(options: AIActionOptions): Promise<string | undefined> {
   let effectiveApiKey = options.apiKey;
@@ -610,13 +660,16 @@ export async function generateMindMapAction(
 const balanceCache = new Map<string, { balance: number | null; error: string | null; timestamp: number }>();
 
 // Periodic sweep to prevent balanceCache memory leak
+// Also evicts stale entries on access for immediate cleanup
+function sweepBalanceCache() {
+  const cutoff = Date.now() - 60000;
+  for (const [key, entry] of balanceCache.entries()) {
+    if (entry.timestamp < cutoff) balanceCache.delete(key);
+  }
+}
+
 if (typeof setInterval !== 'undefined') {
-  setInterval(() => {
-    const cutoff = Date.now() - 60000;
-    for (const [key, entry] of balanceCache.entries()) {
-      if (entry.timestamp < cutoff) balanceCache.delete(key);
-    }
-  }, 60000);
+  setInterval(sweepBalanceCache, 60000);
 }
 
 export async function checkPollenBalanceAction(

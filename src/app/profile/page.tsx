@@ -164,9 +164,9 @@ function ProfileContent() {
                 }
 
                 if (profileData) {
-                    const mappedData = mapUserRow(profileData);
-                    setProfile(mappedData);
-                    setEditName(mappedData.displayName);
+                    const mappedData = mapUserRow(profileData) as Record<string, unknown>;
+                    setProfile(mappedData as any);
+                    setEditName(mappedData.displayName as string);
                 } else {
                     const defaultData: UserProfile = {
                         displayName: user.displayName || 'ADMIN',
@@ -533,9 +533,9 @@ function ProfileContent() {
             if (result.success) {
                 const { data: userData } = await supabase.from('users').select('*').eq('id', user.id).single();
                 if (userData) {
-                    const mappedUser = mapUserRow(userData);
-                    setProfile(mappedUser);
-                    setEditName(mappedUser.displayName);
+                    const mappedUser = mapUserRow(userData) as Record<string, unknown>;
+                    setProfile(mappedUser as any);
+                    setEditName(mappedUser.displayName as string);
                 }
                 
                 const { data: mapsData } = await supabase

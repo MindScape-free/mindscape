@@ -61,17 +61,20 @@ export function useStreamingChat(options: StreamingChatOptions = {}): StreamingC
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    // Separate auth concerns: token goes in Authorization header (Supabase JWT),
+    // apiKey stays in the request body (Pollinations API key for AI calls).
     const headers: HeadersInit = { 'Content-Type': 'application/json' };
     if (input.token) {
       headers['Authorization'] = `Bearer ${input.token}`;
-    } else if (input.apiKey) {
-      headers['Authorization'] = `Bearer ${input.apiKey}`;
     }
+
+    // Remove token from body so it's not sent twice; keep apiKey in body
+    const { token: _token, ...bodyPayload } = input;
 
     fetch('/api/chat/stream', {
       method: 'POST',
       headers,
-      body: JSON.stringify(input),
+      body: JSON.stringify(bodyPayload),
       signal: controller.signal,
     })
     .then(async (response) => {

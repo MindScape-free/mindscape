@@ -69,7 +69,6 @@ import { MultiSourceInput } from '@/components/mind-map/MultiSourceInput';
 import { SourcePillList } from '@/components/mind-map/SourcePillList';
 import { resolveDepthWithConfidence, getDepthLabel, getDepthColor } from '@/lib/depth-analysis';
 import { SectionContainer } from '@/components/home/section-container';
-import { FeatureBlock } from '@/components/home/feature-block';
 import { ProcessStep } from '@/components/home/process-step';
 
 // #6 — Source-type depth presets
@@ -81,6 +80,14 @@ const SOURCE_DEPTH_PRESETS: Record<string, 'quick' | 'balanced' | 'detailed'> = 
   text:    'balanced',
   multi:   'detailed',
 };
+
+// Home page section components
+import { QuickStartGrid } from '@/components/home/quick-start-grid';
+import { CommunityShowcase } from '@/components/home/community-showcase';
+import { RecentMaps } from '@/components/home/recent-maps';
+import { StatsCounter } from '@/components/home/stats-counter';
+import { SourceTypeCards } from '@/components/home/source-type-cards';
+import { FAQSection } from '@/components/home/faq-section';
 
 const ChatPanel = dynamic(() => import('@/components/chat-panel').then(mod => mod.ChatPanel), {
   ssr: false,
@@ -177,9 +184,14 @@ function Hero({
 }) {
   const [topic2, setTopic2] = useState('');
   const [activeMode, setActiveMode] = useState<'single' | 'compare' | 'multi'>('single');
-  const [contentIndex, setContentIndex] = useState(() => Math.floor(Math.random() * HERO_CONTENT_OPTIONS.length));
+  const [contentIndex, setContentIndex] = useState(0);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // Set random index only on client to prevent hydration mismatch
+    setContentIndex(Math.floor(Math.random() * HERO_CONTENT_OPTIONS.length));
+    setMounted(true);
+
     const interval = setInterval(() => {
       setContentIndex((prev) => (prev + 1) % HERO_CONTENT_OPTIONS.length);
     }, 60000);
@@ -304,9 +316,9 @@ function Hero({
               style={{ gridArea: '1 / 1', transformStyle: 'preserve-3d' }}
               className="flex flex-col justify-center items-center w-full"
             >
-              <div className="bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60 leading-tight py-2 px-4 whitespace-nowrap">
+              <div className="bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60 leading-tight py-2 px-4">
                 {currentContent.headlineLine1} <br />
-                <span className="text-primary">{currentContent.headlineLine2}</span>
+                <span className="text-primary whitespace-nowrap">{currentContent.headlineLine2}</span>
               </div>
             </motion.div>
           </AnimatePresence>
@@ -314,17 +326,19 @@ function Hero({
 
         <div className="grid min-h-[100px] md:min-h-[60px] mb-12 max-w-2xl mx-auto w-full items-center justify-center [perspective:800px]">
           <AnimatePresence>
-            <motion.p
-              key={`subhead-${contentIndex}`}
-              initial={{ opacity: 0, y: 20, filter: 'blur(8px)', rotateX: 5 }}
-              animate={{ opacity: 1, y: 0, filter: 'blur(0px)', rotateX: 0 }}
-              exit={{ opacity: 0, y: -20, filter: 'blur(8px)', rotateX: -3 }}
-              transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1], delay: 0.15 }}
-              style={{ gridArea: '1 / 1', transformStyle: 'preserve-3d' }}
-              className="flex items-center justify-center text-zinc-400 text-lg md:text-xl leading-relaxed text-center w-full px-4"
-            >
-              {currentContent.subheadline}
-            </motion.p>
+            {mounted && (
+              <motion.p
+                key={`subhead-${contentIndex}`}
+                initial={{ opacity: 0, y: 20, filter: 'blur(8px)', rotateX: 5 }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)', rotateX: 0 }}
+                exit={{ opacity: 0, y: -20, filter: 'blur(8px)', rotateX: -3 }}
+                transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1], delay: 0.15 }}
+                style={{ gridArea: '1 / 1', transformStyle: 'preserve-3d' }}
+                className="flex items-center justify-center text-zinc-400 text-lg md:text-xl leading-relaxed text-center w-full px-4"
+              >
+                {currentContent.subheadline}
+              </motion.p>
+            )}
           </AnimatePresence>
         </div>
 
@@ -618,76 +632,24 @@ export default function Home() {
         depthSuggestion={depthSuggestion}
       />
 
-      <div className="relative z-10 space-y-12 pb-24">
-         <SectionContainer className="bg-white/[0.02] border-y border-white/5">
-            <div className="max-w-4xl mx-auto text-center space-y-6">
-                <h2 className="text-3xl font-bold text-white mb-6">About MindScape</h2>
-                <p className="text-zinc-400 text-lg leading-relaxed">
-                    MindScape is a <strong className="text-zinc-200">Visual Intelligence Engine</strong> built for researchers, students, and professionals to combat information overload. Instead of flat text summaries, it converts complex sources into explorable, interconnected knowledge graphs.
-                </p>
-                <p className="text-zinc-400 text-lg leading-relaxed">
-                    Powered by a unique deterministic pre-processing step (SKEE), MindScape guarantees structural accuracy before AI synthesis begins. This ensures that the generated mind maps are not just creative, but rigidly aligned with the source material&apos;s true hierarchy and intent.
-                </p>
-            </div>
-         </SectionContainer>
+      <div className="relative z-10 pb-24">
+        {/* Stats Counter - Animated platform metrics */}
+        <StatsCounter />
 
-         <SectionContainer 
-            title="What MindScape Does" 
-            subtitle="Built to handle complex information processing, converting noise into highly structured visual intelligence."
-         >
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                <FeatureBlock 
-                    icon={Network} 
-                    title="Knowledge Graphs" 
-                    valueProp="Transform dense documents into explorable visual graphs." 
-                    outcomes={["Interactive mapping", "Automatic grouping", "Visual relationship linking"]} 
-                    iconColorClass="text-violet-400"
-                    iconBgClass="bg-violet-500/10"
-                />
-                <FeatureBlock 
-                    icon={GitBranch} 
-                    title="Compare Mode" 
-                    valueProp="Analyze overlapping concepts between two disparate topics." 
-                    outcomes={["Side-by-side analysis", "Highlight structural differences", "Unified output generation"]} 
-                    iconColorClass="text-sky-400"
-                    iconBgClass="bg-sky-500/10"
-                />
-                <FeatureBlock 
-                    icon={Gauge} 
-                    title="Deterministic Structuring" 
-                    valueProp="SKEE extracts pure structure before AI generation." 
-                    outcomes={["High accuracy extraction", "No hallucinated headings", "Consistent hierarchy"]} 
-                    iconColorClass="text-emerald-400"
-                    iconBgClass="bg-emerald-500/10"
-                />
-                <FeatureBlock 
-                    icon={FastForward} 
-                    title="Multi-Depth Exploration" 
-                    valueProp="Toggle between quick summaries and deep-dive analysis." 
-                    outcomes={["Adjustable verbosity", "Macro to micro zooming", "On-demand detail expansion"]} 
-                    iconColorClass="text-amber-400"
-                    iconBgClass="bg-amber-500/10"
-                />
-                <FeatureBlock 
-                    icon={Share2} 
-                    title="Share & Collaborate" 
-                    valueProp="Export maps to community or share permanent links." 
-                    outcomes={["1-click publish", "Public knowledge links", "Community gallery"]} 
-                    iconColorClass="text-pink-400"
-                    iconBgClass="bg-pink-500/10"
-                />
-                <FeatureBlock 
-                    icon={Layers} 
-                    title="Multi-Source Knowledge Mapping" 
-                    valueProp="Combine PDFs, links, and text into one unified graph." 
-                    outcomes={["Cross-document linking", "Automated merging", "Holistic topic overview"]} 
-                    iconColorClass="text-rose-400"
-                    iconBgClass="bg-rose-500/10"
-                />
-            </div>
-         </SectionContainer>
+        {/* Quick Start Grid - Clickable topic suggestions */}
+        <QuickStartGrid onSelectTopic={handleGenerate} />
 
-         <SectionContainer 
+        {/* Recent Maps - For logged-in returning users */}
+        <RecentMaps />
+
+        {/* Community Showcase - Live public maps */}
+        <CommunityShowcase />
+
+        {/* Source Type Cards - Action-oriented entry points */}
+        <SourceTypeCards onScrollToInput={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} />
+
+        {/* How It Works - Keep existing pipeline illustration */}
+         <SectionContainer className="bg-white/[0.02] border-y border-white/5"
             title="How It Works" 
             subtitle="A deterministic pipeline designed for maximum accuracy."
          >
@@ -723,6 +685,9 @@ export default function Home() {
                 />
             </div>
          </SectionContainer>
+
+        {/* FAQ Section - Common questions */}
+        <FAQSection />
       </div>
 
       <AnimatePresence>

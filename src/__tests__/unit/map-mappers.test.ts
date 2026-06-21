@@ -14,7 +14,7 @@ describe('mapMindMapRow()', () => {
 
   it('maps snake_case id and topic to the output', () => {
     const row = createMockDbRow({ id: 'abc-123', topic: 'Test Topic', user_id: 'user-1' });
-    const result = mapMindMapRow(row);
+    const result = mapMindMapRow(row)!;
     expect(result.id).toBe('abc-123');
     expect(result.topic).toBe('Test Topic');
     expect(result.userId).toBe('user-1');
@@ -31,7 +31,7 @@ describe('mapMindMapRow()', () => {
       parent_map_id: 'parent-123',
       is_sub_map: true,
     });
-    const result = mapMindMapRow(row);
+    const result = mapMindMapRow(row)!;
     expect(result.shortTitle).toBe('ML Overview');
     expect(result.thumbnailUrl).toBe('https://example.com/thumb.png');
     expect(result.isPublic).toBe(true);
@@ -42,16 +42,17 @@ describe('mapMindMapRow()', () => {
     expect(result.isSubMap).toBe(true);
   });
 
-  it('preserves the original row data via spread', () => {
+  it('maps snake_case to camelCase for known fields', () => {
     const row = createMockDbRow({ topic: 'Preserved Test' });
-    const result = mapMindMapRow(row);
+    const result = mapMindMapRow(row) as Record<string, unknown>;
     expect(result.topic).toBe('Preserved Test');
-    expect(result.user_id).toBe(row.user_id); // original field still accessible
+    expect(result.userId).toBe(row.user_id); // camelCase mapping
   });
 
   it('provides fallback values for missing optional fields', () => {
     const minimalRow = { id: 'min-1', user_id: 'user-1', topic: 'Minimal' };
-    const result = mapMindMapRow(minimalRow);
+    const result = mapMindMapRow(minimalRow) as Record<string, unknown>;
+    expect(result).toBeTruthy();
     expect(result.shortTitle).toBe('Minimal');
     expect(result.isPublic).toBe(undefined); // mapper passes through undefined is_public
     expect(result.nodeCount).toBe(0);
@@ -64,14 +65,17 @@ describe('mapMindMapRow()', () => {
   it('handles content JSON field correctly', () => {
     const content = { subTopics: [{ name: 'Topic 1', categories: [] }] };
     const row = createMockDbRow({ content });
-    const result = mapMindMapRow(row);
-    expect(result.content).toEqual(content);
-    expect(result.content.subTopics).toHaveLength(1);
+    const result = mapMindMapRow(row) as Record<string, unknown>;
+    expect(result).toBeTruthy();
+    const mappedContent = result.content as Record<string, unknown>;
+    expect(mappedContent).toEqual(content);
+    expect((mappedContent.subTopics as Array<unknown>)).toHaveLength(1);
   });
 
   it('maps uid as legacy alias for userId', () => {
     const row = createMockDbRow({ user_id: 'legacy-user' });
-    const result = mapMindMapRow(row);
+    const result = mapMindMapRow(row) as Record<string, unknown>;
+    expect(result).toBeTruthy();
     expect(result.uid).toBe('legacy-user');
     expect(result.userId).toBe('legacy-user');
   });
@@ -96,7 +100,8 @@ describe('mapMindMapRow()', () => {
       created_at: '2025-01-01T00:00:00.000Z',
       updated_at: '2025-06-01T00:00:00.000Z',
     });
-    const result = mapMindMapRow(row);
+    const result = mapMindMapRow(row) as Record<string, unknown>;
+    expect(result).toBeTruthy();
     expect(result.id).toBe('full-test-id');
     expect(result.topic).toBe('Full Integration Test');
     expect(result.mode).toBe('compare');
@@ -106,8 +111,8 @@ describe('mapMindMapRow()', () => {
     expect(result.isPublic).toBe(true);
     expect(result.sourceFileType).toBe('youtube');
     expect(result.sourceUrl).toBe('https://youtube.com/watch?v=test');
-    expect(result.pinnedMessages).toHaveLength(1);
-    expect(result.searchSources).toHaveLength(1);
+    expect((result.pinnedMessages as any[])).toHaveLength(1);
+    expect((result.searchSources as any[])).toHaveLength(1);
     expect(result.createdAt).toBe('2025-01-01T00:00:00.000Z');
     expect(result.updatedAt).toBe('2025-06-01T00:00:00.000Z');
   });
@@ -130,7 +135,7 @@ describe('mapMindMapRows()', () => {
       createMockDbRow({ id: 'row-2', topic: 'Second Map' }),
       createMockDbRow({ id: 'row-3', topic: 'Third Map' }),
     ];
-    const results = mapMindMapRows(rows);
+    const results = mapMindMapRows(rows) as Record<string, unknown>[];
     expect(results).toHaveLength(3);
     expect(results[0].topic).toBe('First Map');
     expect(results[1].id).toBe('row-2');
@@ -143,7 +148,7 @@ describe('mapMindMapRows()', () => {
       createMockDbRow({ id: 'r2', created_at: '2025-06-01' }),
       createMockDbRow({ id: 'r3', created_at: '2025-03-01' }),
     ];
-    const results = mapMindMapRows(rows);
+    const results = mapMindMapRows(rows) as Record<string, unknown>[];
     expect(results[0].id).toBe('r1');
     expect(results[1].id).toBe('r2');
     expect(results[2].id).toBe('r3');
@@ -154,7 +159,7 @@ describe('mapMindMapRows()', () => {
       createMockDbRow({ id: 'v1', topic: 'Valid 1' }),
       createMockDbRow({ id: 'v2', topic: 'Valid 2' }),
     ];
-    const results = mapMindMapRows(rows);
+    const results = mapMindMapRows(rows) as Record<string, unknown>[];
     results.forEach(r => expectValidMindMap(r));
   });
 });
@@ -173,7 +178,7 @@ describe('mapUserRow()', () => {
       display_name: 'Test User',
       is_admin: false,
     };
-    const result = mapUserRow(row);
+    const result = mapUserRow(row) as Record<string, unknown>;
     expect(result.id).toBe('user-1');
     expect(result.email).toBe('test@example.com');
     expect(result.displayName).toBe('Test User');
@@ -182,30 +187,32 @@ describe('mapUserRow()', () => {
 
   it('provides fallback displayName from email local part', () => {
     const row = { id: 'user-2', email: 'john@example.com' };
-    const result = mapUserRow(row);
+    const result = mapUserRow(row) as Record<string, unknown>;
     expect(result.displayName).toBe('john');
   });
 
   it('defaults isAdmin to false', () => {
     const row = { id: 'user-3' };
-    const result = mapUserRow(row);
+    const result = mapUserRow(row) as Record<string, unknown>;
     expect(result.isAdmin).toBe(false);
   });
 
   it('maps statistics with defaults', () => {
     const row = { id: 'user-4', statistics: { total_maps_created: 5, total_nodes: 100 } };
-    const result = mapUserRow(row);
-    expect(result.statistics.totalMapsCreated).toBe(5);
-    expect(result.statistics.totalNodes).toBe(100);
-    expect(result.statistics.totalStudyTimeMinutes).toBe(0); // default
+    const result = mapUserRow(row) as Record<string, unknown>;
+    const stats = result.statistics as Record<string, number>;
+    expect(stats.totalMapsCreated).toBe(5);
+    expect(stats.totalNodes).toBe(100);
+    expect(stats.totalStudyTimeMinutes).toBe(0); // default
   });
 
   it('maps preferences with defaults', () => {
     const row = { id: 'user-5' };
-    const result = mapUserRow(row);
-    expect(result.preferences.preferredLanguage).toBe('en');
-    expect(result.preferences.defaultAIPersona).toBe('concise');
-    expect(result.preferences.deepExpansionMode).toBe(false);
+    const result = mapUserRow(row) as Record<string, unknown>;
+    const prefs = result.preferences as Record<string, unknown>;
+    expect(prefs.preferredLanguage).toBe('en');
+    expect(prefs.defaultAIPersona).toBe('concise');
+    expect(prefs.deepExpansionMode).toBe(false);
   });
 
   it('handles apiSettings', () => {
@@ -217,10 +224,11 @@ describe('mapUserRow()', () => {
         provider: 'pollinations',
       },
     };
-    const result = mapUserRow(row);
-    expect(result.apiSettings.textModel).toBe('gpt-4');
-    expect(result.apiSettings.imageModel).toBe('dall-e');
-    expect(result.apiSettings.provider).toBe('pollinations');
+    const result = mapUserRow(row) as Record<string, unknown>;
+    const api = result.apiSettings as Record<string, string>;
+    expect(api.textModel).toBe('gpt-4');
+    expect(api.imageModel).toBe('dall-e');
+    expect(api.provider).toBe('pollinations');
   });
 });
 
@@ -236,7 +244,7 @@ describe('mapUserRows()', () => {
       { id: 'u1', email: 'a@test.com' },
       { id: 'u2', email: 'b@test.com' },
     ];
-    const results = mapUserRows(rows);
+    const results = mapUserRows(rows) as Record<string, unknown>[];
     expect(results).toHaveLength(2);
     expect(results[0].email).toBe('a@test.com');
     expect(results[1].email).toBe('b@test.com');

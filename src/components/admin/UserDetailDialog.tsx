@@ -256,7 +256,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
               .order('updated_at', { ascending: false });
             
             if (mapsError) throw mapsError;
-            setUserMaps(mapMindMapRows(mapsData || []));
+            setUserMaps(mapMindMapRows(mapsData || []) as unknown as MindMapData[]);
           }
         } catch (e) {
           console.error('Error fetching profile detail:', e);

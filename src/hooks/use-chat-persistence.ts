@@ -66,10 +66,14 @@ export function useChatPersistence() {
     if (!uid) return;
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     setIsSyncing(true);
+    
+    // Capture session snapshot at call time, not at debounce fire time
+    const sessionSnapshot = { ...session };
+    
     debounceTimerRef.current = setTimeout(async () => {
       try {
         const supabase = getSupabaseClient();
-        await saveChatSession(supabase, uid, session);
+        await saveChatSession(supabase, uid, sessionSnapshot);
       } catch (error) {
         console.error('Error saving chat session:', error);
       } finally {
