@@ -24,6 +24,7 @@ export interface AIRequest {
   strict?: boolean;                      // Strict schema enforcement
   taskType?: string;                     // For telemetry (e.g. 'generate-mind-map')
   stream?: boolean;                      // Request streaming response
+  userId?: string;                       // For telemetry (user who initiated the call)
 }
 
 // ── Response ───────────────────────────────────────────────────────────

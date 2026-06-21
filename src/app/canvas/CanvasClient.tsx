@@ -67,9 +67,8 @@ import { Profiler } from '@/components/debug/profiler';
 import { useAIHealth } from '@/hooks/use-ai-health';
 import { useActivity } from '@/contexts/activity-context';
 import { resolveDepthWithConfidence, analyzeTopicComplexity } from '@/lib/depth-analysis';
-import { useAITracking } from '@/hooks/use-ai-tracking';
-import { useSessionTracking } from '@/hooks/use-session-tracking';
-import { useMapTracking } from '@/hooks/use-map-tracking';
+import { trackGenerationComplete, trackGenerationFailed } from '@/lib/tracker';
+import { useSessionTracking, useMapTracking } from '@/hooks/use-tracking';
 
 function MindMapPageContent() {
   const { params, navigateToMap, changeLanguage, clearRegenFlag, getParamKey, router } = useMindMapRouter();
@@ -183,7 +182,6 @@ function MindMapPageContent() {
     }
   });
 
-  const { trackGenerationComplete, trackGenerationFailed } = useAITracking();
   const { trackPageView } = useSessionTracking(user?.id);
   const mapTracker = useMapTracking({
     mapId: mindMap?.id || params.mapId || 'pending',

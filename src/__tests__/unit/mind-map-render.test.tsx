@@ -111,7 +111,7 @@ jest.mock('@/app/actions/community', () => ({
 }));
 
 // Mock activity tracker
-jest.mock('@/lib/activity-tracker', () => ({
+jest.mock('@/lib/tracker', () => ({
   trackNestedExpansion: jest.fn(),
   trackImageGenerated: jest.fn(),
   trackMapCreated: jest.fn(),

@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Loader2, Mail, User, Lock, ArrowRight, Eye, EyeOff, Check } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { Icons } from '@/components/icons';
-import { useAdminActivityLog } from '@/lib/admin-utils';
+import { logAdminActivity } from '@/lib/tracker';
 
 function SignupForm() {
   const [email, setEmail] = useState('');
@@ -23,7 +23,7 @@ function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const { logAdminActivity } = useAdminActivityLog();
+  // logAdminActivity imported directly from @/lib/tracker
 
   useEffect(() => {
     const emailParam = searchParams.get('email');

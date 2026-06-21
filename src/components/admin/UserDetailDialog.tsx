@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/lib/auth-context';
-import { useAdminActivityLog } from '@/lib/admin-utils';
+import { logAdminActivity } from '@/lib/tracker';
 import { mapMindMapRows } from '@/lib/map-mappers';
 import { format } from 'date-fns';
 import { formatDistanceToNow } from 'date-fns';
@@ -183,8 +183,8 @@ interface UserDetailDialogProps {
 }
 
 export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted, rank }: UserDetailDialogProps) {
-  const { supabase, isAdmin, user: adminUser } = useAuth();
-  const { logAdminActivity } = useAdminActivityLog();
+  const { supabase, isAdmin, user: adminUser, session } = useAuth();
+  // logAdminActivity imported directly from @/lib/tracker
   const [chatCount, setChatCount] = useState<number | null>(null);
   const [userMaps, setUserMaps] = useState<MindMapData[]>([]);
   const [isLoadingMaps, setIsLoadingMaps] = useState(false);
@@ -228,28 +228,36 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
   }, [user?.id]);
 
   useEffect(() => {
-    if (isOpen && user && supabase) {
+    if (isOpen && user && (supabase || session)) {
       const fetchData = async () => {
         setIsLoadingMaps(true);
         try {
-          // 1. Get chat count using Supabase count
-          const { count, error: countError } = await supabase
-            .from('chat_sessions')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', user.id);
-          
-          if (!countError) setChatCount(count);
+          // 1. Get chat count from the unified endpoint (user profile)
+          const token = session?.access_token;
+          if (token && user?.id) {
+            const res = await fetch(`/api/admin/unified?userId=${user.id}`, {
+              headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (res.ok) {
+              const data = await res.json();
+              const profile = data?.user?.profile;
+              if (profile) {
+                setChatCount(profile.total_chats);
+              }
+            }
+          }
 
-          // 2. Get mindmaps using Supabase select
-          const { data: mapsData, error: mapsError } = await supabase
-            .from('mindmaps')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('updated_at', { ascending: false });
-          
-          if (mapsError) throw mapsError;
-
-          setUserMaps(mapMindMapRows(mapsData || []));
+          // 2. Get mindmaps using Supabase select (still needed for individual map details)
+          if (supabase) {
+            const { data: mapsData, error: mapsError } = await supabase
+              .from('mindmaps')
+              .select('*')
+              .eq('user_id', user.id)
+              .order('updated_at', { ascending: false });
+            
+            if (mapsError) throw mapsError;
+            setUserMaps(mapMindMapRows(mapsData || []));
+          }
         } catch (e) {
           console.error('Error fetching profile detail:', e);
         } finally {
@@ -261,7 +269,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
       setChatCount(null);
       setUserMaps([]);
     }
-  }, [isOpen, user, supabase]);
+  }, [isOpen, user, supabase, session]);
 
   if (!user) return null;
 

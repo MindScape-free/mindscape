@@ -2,7 +2,8 @@
  * AI Orchestrator — Direct Pollinations routing.
  *
  * Routes all AI requests directly and solely to Pollinations.ai,
- * bypassing multi-provider scoring, health checks, shadow testing, and telemetry logs.
+ * bypassing multi-provider scoring, health checks, shadow testing.
+ * Telemetry is recorded to ai_calls table after each generation.
  */
 
 import {
@@ -12,6 +13,7 @@ import {
   AIStreamCallback,
 } from './types';
 import { PollinationsAdapter } from './pollinations-adapter';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
 
 // ── Retry Helper ───────────────────────────────────────────────────────
 
@@ -57,6 +59,49 @@ async function retryWithProvider<T>(
   throw lastError;
 }
 
+// ── Telemetry Recording ──────────────────────────────────────────────
+
+/**
+ * Records an AI call to the ai_calls telemetry table.
+ * Failures are silently caught so they never break the generation flow.
+ */
+async function recordTelemetry(params: {
+  taskType?: string;
+  provider: string;
+  model: string;
+  durationMs: number;
+  wasError: boolean;
+  errorMessage?: string;
+  prompt?: string;
+  userId?: string;
+  repairApplied?: boolean;
+  salvaged?: boolean;
+}) {
+  try {
+    const supabase = getSupabaseAdmin();
+    await supabase.from('ai_calls').insert({
+      task_type: params.taskType || 'unspecified',
+      provider: params.provider,
+      model: params.model,
+      duration_ms: params.durationMs,
+      was_error: params.wasError,
+      error_message: params.errorMessage || null,
+      prompt: params.prompt || null,
+      user_id: params.userId || null,
+      metadata: {
+        repairApplied: params.repairApplied || false,
+        salvaged: params.salvaged || false,
+        model: params.model,
+        provider: params.provider,
+      },
+      created_at: new Date().toISOString(),
+    });
+  } catch (e: any) {
+    // Never let telemetry failures bubble up
+    console.warn('[Telemetry] Failed to record AI call:', e?.message || e);
+  }
+}
+
 // ── Direct Routing Functions ───────────────────────────────────────────
 
 export async function orchestrate(
@@ -70,16 +115,49 @@ export async function orchestrate(
 
   console.log(`🤖 [Orchestrator] Direct Pollinations: Task=${options.taskType || 'unknown'}, Model=${request.model || 'auto'}`);
 
-  return await retryWithProvider(
-    async (attempt) => {
-      return await provider.generate({
-        ...request,
-        attempt,
-        apiKey,
-      });
-    },
-    2 // 2 attempts per provider
-  );
+  const startTime = Date.now();
+
+  try {
+    const result = await retryWithProvider(
+      async (attempt) => {
+        return await provider.generate({
+          ...request,
+          attempt,
+          apiKey,
+        });
+      },
+      2 // 2 attempts per provider
+    );
+
+    // Record successful telemetry
+    recordTelemetry({
+      taskType: options.taskType || request.taskType,
+      provider: result.provider,
+      model: result.model,
+      durationMs: result.latencyMs,
+      wasError: false,
+      prompt: request.userPrompt?.substring(0, 500),
+      userId: request.userId,
+      repairApplied: result.repairApplied,
+      salvaged: result.salvaged,
+    });
+
+    return result;
+  } catch (error: any) {
+    // Record failed telemetry
+    recordTelemetry({
+      taskType: options.taskType || request.taskType,
+      provider: provider.name,
+      model: request.model || 'unknown',
+      durationMs: Date.now() - startTime,
+      wasError: true,
+      errorMessage: error.message,
+      prompt: request.userPrompt?.substring(0, 500),
+      userId: request.userId,
+    });
+
+    throw error;
+  }
 }
 
 export async function orchestrateStream(
@@ -98,11 +176,44 @@ export async function orchestrateStream(
 
   console.log(`🌊 [Orchestrator] Direct Stream Pollinations: Task=${options.taskType || 'unknown'}, Model=${request.model || 'auto'}`);
 
-  return await provider.generateStream(
-    {
-      ...request,
-      apiKey,
-    },
-    onChunk
-  );
+  const startTime = Date.now();
+
+  try {
+    const result = await provider.generateStream(
+      {
+        ...request,
+        apiKey,
+      },
+      onChunk
+    );
+
+    // Record successful stream telemetry
+    recordTelemetry({
+      taskType: options.taskType || request.taskType,
+      provider: result.provider,
+      model: result.model,
+      durationMs: result.latencyMs,
+      wasError: false,
+      prompt: request.userPrompt?.substring(0, 500),
+      userId: request.userId,
+      repairApplied: result.repairApplied,
+      salvaged: result.salvaged,
+    });
+
+    return result;
+  } catch (error: any) {
+    // Record failed stream telemetry
+    recordTelemetry({
+      taskType: options.taskType || request.taskType,
+      provider: provider.name,
+      model: request.model || 'unknown',
+      durationMs: Date.now() - startTime,
+      wasError: true,
+      errorMessage: error.message,
+      prompt: request.userPrompt?.substring(0, 500),
+      userId: request.userId,
+    });
+
+    throw error;
+  }
 }

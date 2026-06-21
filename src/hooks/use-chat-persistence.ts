@@ -80,7 +80,7 @@ export function useChatPersistence() {
       try {
         const { logAdminActivityAction } = await import('@/app/actions');
         await logAdminActivityAction({ type: 'CHAT_CREATED', targetId: newId, targetType: 'chat', details: `Chat session started: ${topic}`, performedBy: user.id, performedByEmail: user.email || 'anonymous', metadata: { mapId, mapTitle } });
-      } catch { /* non-critical */ }
+      } catch (e) { console.error('Failed to log chat creation activity:', e); }
     } catch (error) { console.error('Error creating session:', error); }
     return newId;
   }, [user]);

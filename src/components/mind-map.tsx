@@ -156,7 +156,7 @@ import { ExplanationDialog } from './mind-map/explanation-dialog';
 import { SummaryDialog } from './summary-dialog';
 import { MindMapToolbar } from './mind-map/mind-map-toolbar';
 import { TopicHeader } from './mind-map/topic-header';
-import { MindMapRadialView } from './mind-map/mind-map-radial-view';
+import { MindMapTreeView } from './mind-map/mind-map-tree-view';
 import { cn } from '@/lib/utils';
 import { MindMapAccordion } from './mind-map/mind-map-accordion';
 import { CompareView } from './mind-map/compare-view';
@@ -198,7 +198,7 @@ import { findMatchingCategory } from '@/lib/depth-analysis';
 // Supabase logic
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
-import { trackNestedExpansion, trackImageGenerated, trackMapCreated } from '@/lib/activity-tracker';
+import { trackNestedExpansion, trackImageGenerated, trackMapCreated } from '@/lib/tracker';
 import { useXP } from '@/contexts/xp-context';
 
 
@@ -1779,7 +1779,7 @@ export const MindMap = React.memo(({
           // Map Mode - Full Screen Portal (NO CONTAINER)
           mountNode && createPortal(
             <div className="fixed inset-0 top-[72px] z-40 bg-black animate-in fade-in duration-300">
-              <MindMapRadialView
+              <MindMapTreeView
                 data={data}
                 onNodeClick={handleRadialNodeClick}
                 onGenerateNewMap={handleRadialGenerateNewMap}
@@ -2041,7 +2041,7 @@ export const MindMap = React.memo(({
           }}
           nodeName={nestedLabNode.topic}
           nodeDescription={`Updating thumbnail for ${nestedLabNode.topic}`}
-          initialPrompt={`${nestedLabNode.topic}, concept visualization, abstract representation, professional illustration, clean design, high quality`}
+          initialPrompt={`${nestedLabNode.topic}${nestedLabNode.fullData?.summary ? `: ${nestedLabNode.fullData.summary}` : ''}`}
           onEnhancePrompt={async (prompt, style, composition, mood, colorPalette, lighting) => {
             setIsEnhancingNested(true);
             try {

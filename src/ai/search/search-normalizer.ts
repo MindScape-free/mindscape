@@ -173,7 +173,7 @@ export function normalizeSearchResults(rawResults: any, query: string): SearchCo
                         url: url,
                     });
                 } catch (e) {
-                    // Invalid URL, skip
+                    console.warn(`⚠️ Invalid URL in search content, skipping: ${url}`);
                 }
             }
         }
@@ -215,7 +215,9 @@ export function normalizeSearchResults(rawResults: any, query: string): SearchCo
                                 }
                             }
                         }
-                    } catch (e) { /* ignore */ }
+                    } catch (e) {
+                        console.warn('⚠️ Failed to parse image from tool call arguments:', e);
+                    }
                 }
             }
         }

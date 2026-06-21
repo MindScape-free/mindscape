@@ -60,8 +60,8 @@ import { useUser } from '@/lib/auth-context';
 import { getSupabaseClient } from '@/lib/supabase-db';
 import { useAIConfig } from '@/contexts/ai-config-context';
 import { OnboardingWizard, TRIGGER_ONBOARDING_EVENT } from '@/components/onboarding-wizard';
-import { useAITracking } from '@/hooks/use-ai-tracking';
-import { useSessionTracking } from '@/hooks/use-session-tracking';
+import { trackGenerationStart } from '@/lib/tracker';
+import { useSessionTracking } from '@/hooks/use-tracking';
 
 import dynamic from 'next/dynamic';
 import { useMultiSource } from '@/hooks/use-multi-source';
@@ -496,7 +496,6 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const languageSelectRef = useRef<HTMLButtonElement>(null);
 
-  const { trackGenerationStart } = useAITracking();
   const { trackPageView } = useSessionTracking(user?.id);
 
   useEffect(() => {

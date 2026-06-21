@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Loader2, Mail, User, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { useAuth as useSupabaseAuth } from '@/lib/auth-context';
 import { Icons } from '@/components/icons';
-import { useAdminActivityLog } from '@/lib/admin-utils';
+import { logAdminActivity } from '@/lib/tracker';
 
 const AUTH_ERRORS: Record<string, string> = {
   'invalid_email': 'Please enter a valid email address',
@@ -61,7 +61,7 @@ export function AuthForm({ onSuccess }: { onSuccess?: () => void }) {
   const { signIn, signUp, signInWithGoogle, resetPassword, user } = useSupabaseAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const { logAdminActivity } = useAdminActivityLog();
+  // logAdminActivity imported directly from @/lib/tracker
 
   const switchMode = (toSignUp: boolean) => {
     setIsSignUp(toSignUp);

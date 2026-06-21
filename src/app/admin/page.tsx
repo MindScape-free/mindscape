@@ -2,31 +2,38 @@
 
 import { useEffect, useState, useCallback, useMemo, lazy, Suspense, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth-context';
-import { 
-  Users, 
-  ShieldAlert, 
+import { useAuth } from '@/lib/auth-context';import {
+  Users,
+  ShieldAlert,
   Loader2,
   Brain,
   BrainCircuit,
   RefreshCw,
-  MessageSquare, 
+  MessageSquare,
   Activity,
   LogOut,
   ChevronUp,
   BarChart3,
+  ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
 import { formatDistanceToNow, format } from 'date-fns';
 import { AdminStats } from '@/types/chat';
-import { useAdminActivityLog, AdminActivityLogEntry } from '@/lib/admin-utils';
+import { AdminActivityLogEntry } from '@/lib/admin-utils';
+import { logAdminActivity, subscribeToAdminActivityLogs } from '@/lib/tracker';
 import { AdminPageSkeleton } from '@/components/admin/AdminSkeletons';
-import { AdminTab, DashboardMetrics } from '@/types/admin';
+import { AdminTab, DashboardMetrics, DEFAULT_MAP_ANALYTICS } from '@/types/admin';
 import { useAdminDashboard } from '@/hooks/use-admin-dashboard';
 import { globalListenerManager } from '@/lib/listener-manager';
 import { normalizeTimestamp, sortByTimestamp } from '@/lib/timestamp-utils';
@@ -53,6 +60,7 @@ export default function AdminDashboard() {
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [calculatedHealthScore, setCalculatedHealthScore] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isRecomputing, setIsRecomputing] = useState(false);
   
   const [userSearchTerm, setUserSearchTerm] = useState('');
   const [userSortBy, setUserSortBy] = useState<'latest' | 'oldest' | 'a-z' | 'z-a' | 'all' | 'new'>('latest');
@@ -66,7 +74,7 @@ export default function AdminDashboard() {
   const [extraUsers, setExtraUsers] = useState<any[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
 
-  const { logAdminActivity, subscribeToAdminActivityLogs } = useAdminActivityLog();
+  // logAdminActivity and subscribeToAdminActivityLogs are imported directly from @/lib/tracker
   
   const { 
     data: dashboardData, 
@@ -170,67 +178,71 @@ export default function AdminDashboard() {
   
   useEffect(() => {
     if (dashboardData) {
-      const { stats, mapAnalytics } = dashboardData;
-      const extendedData = dashboardData as any;
+      const { platform, metrics } = dashboardData;
       
-      console.log('📊 [Admin] Dashboard Data Arrived:', {
-        stats: dashboardData.stats,
-        mapAnalytics: dashboardData.mapAnalytics,
-        meta: dashboardData.meta
+      console.log('📊 [Admin] Unified Dashboard Data Arrived:', {
+        platform,
+        mapAnalytics: metrics?.mapAnalytics,
+        totalProfiles: dashboardData.meta?.totalProfiles,
       });
+
+      const platformP = platform || {};
+      const mapAnalytics = metrics?.mapAnalytics || { ...DEFAULT_MAP_ANALYTICS };
+      const dailySnapshot = platformP.daily_snapshot || [];
 
       setStats({
         date: format(new Date(), 'yyyy-MM-dd'),
-        totalUsers: stats.totalUsers,
-        totalMaps: stats.totalMindmaps,
-        totalMindmaps: stats.totalMindmaps,
-        totalMindmapsEver: extendedData.totalMindmapsEver || 0,
-        totalChats: stats.totalChats,
-        totalNodes: stats.totalNodes || 0,
-        totalNodesActive: stats.totalNodesActive || 0,
-        totalImages: stats.totalImages || 0,
-        dailyActiveUsers: stats.activeUsers,
+        totalUsers: platformP.total_users || 0,
+        totalMaps: platformP.total_maps || 0,
+        totalMindmaps: platformP.total_maps || 0,
+        totalMindmapsEver: platformP.total_maps_ever || 0,
+        totalChats: platformP.total_chats || 0,
+        totalNodes: platformP.total_nodes || 0,
+        totalNodesActive: platformP.total_nodes || 0,
+        totalImages: platformP.total_images || 0,
+        dailyActiveUsers: platformP.active_users_24h || 0,
       });
+
+      // Map daily_snapshot to heatmapDays format
+      const heatmapDays = dailySnapshot.map((d: any) => ({
+        date: d.date,
+        newUsers: d.active_users || 0,
+        newMaps: d.new_maps || d.newMaps || 0,
+        newSubMaps: 0,
+        activeUsers: d.active_users || 0,
+        publicMaps: 0,
+        privateMaps: 0,
+        totalActions: d.new_events || 0,
+      }));
 
       setMetrics({
-        newUsersToday: extendedData.newUsersToday || 0,
-        newUsersYesterday: extendedData.newUsersYesterday || 0,
-        newMapsToday: extendedData.newMapsToday || 0,
-        newMapsYesterday: extendedData.newMapsYesterday || 0,
-        activeUsers24h: extendedData.activeUsers24h || stats.activeUsers,
-        activeUsers48h: extendedData.activeUsers48h || 0,
-        engagementRate: extendedData.engagementRate || 0,
-        totalMindmapsEver: extendedData.totalMindmapsEver || 0,
-        usersThisWeek: 0,
+        newUsersToday: platformP.new_users_24h || 0,
+        newUsersYesterday: 0,
+        newMapsToday: platformP.new_maps_24h || 0,
+        newMapsYesterday: 0,
+        activeUsers24h: platformP.active_users_24h || 0,
+        activeUsers48h: 0,
+        engagementRate: platformP.engagement_rate || 0,
+        totalMindmapsEver: platformP.total_maps_ever || 0,
+        usersThisWeek: platformP.new_users_7d || 0,
         usersLastWeek: 0,
-        mapsThisWeek: 0,
+        mapsThisWeek: platformP.new_maps_7d || 0,
         mapsLastWeek: 0,
-        avgMapsPerUser: extendedData.avgMapsPerUser || 0,
-        avgChatsPerUser: extendedData.avgChatsPerUser || 0,
-        latestUsers: extendedData.latestUsers || [],
-        latestMaps: extendedData.latestMaps || [],
-        heatmapDays: extendedData.heatmapDays || [],
-        usersLast7Days: (extendedData.heatmapDays || []).slice(-7).map((d: any) => ({ date: d.date, count: (d.newUsers || 0) })),
-        mapsLast7Days: (extendedData.heatmapDays || []).slice(-7).map((d: any) => ({ date: d.date, count: (d.newMaps || 0) })),
-        topUsers: extendedData.topUsers || [],
+        avgMapsPerUser: platformP.avg_maps_per_user || 0,
+        avgChatsPerUser: platformP.total_users > 0 ? (platformP.total_chats / platformP.total_users) : 0,
+        latestUsers: metrics?.latestUsers || [],
+        latestMaps: [],
+        heatmapDays,
+        usersLast7Days: dailySnapshot.slice(-7).map((d: any) => ({ date: d.date, count: (d.active_users || 0) })),
+        mapsLast7Days: dailySnapshot.slice(-7).map((d: any) => ({ date: d.date, count: (d.new_maps || 0) })),
+        topUsers: metrics?.topUsers || [],
         topMaps: [],
-        mapAnalytics: mapAnalytics, // Pass the whole object directly
+        mapAnalytics,
       });
 
-      setTotalMindmapsEver(extendedData.totalMindmapsEver || 0);
-      setLastSyncedAt(stats.timestamp);
-      setCalculatedHealthScore(stats.healthScore);
-
-      // Auto-sync if data is older than 15 minutes
-      const lastUpdated = stats.lastUpdated;
-      if (lastUpdated) {
-        const now = Date.now();
-        const fifteenMinutes = 15 * 60 * 1000;
-        if (now - lastUpdated > fifteenMinutes && !isSyncing) {
-          console.log('🔄 [Admin] Data stale (>15m), auto-syncing...');
-          handleForceRefresh();
-        }
-      }
+      setTotalMindmapsEver(platformP.total_maps_ever || 0);
+      setLastSyncedAt(platformP.updated_at || new Date().toISOString());
+      setCalculatedHealthScore(platformP.health_score || 100);
     }
   }, [dashboardData]);
 
@@ -241,11 +253,34 @@ export default function AdminDashboard() {
   const handleForceRefresh = async () => {
     if (!session) return;
     setIsSyncing(true);
+    const startTime = Date.now();
     try {
       const token = session.access_token;
-      const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const recomputeHeaders: HeadersInit = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      };
+      const syncHeaders: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
       
-      const syncRes = await fetch('/api/admin-sync', { method: 'POST', headers });
+      // Step 1: Recompute aggregated stats from raw events
+      const recRes = await fetch('/api/admin/recompute', {
+        method: 'POST',
+        headers: recomputeHeaders,
+        body: JSON.stringify({ scope: 'all' }),
+      });
+      if (!recRes.ok) {
+        const errData = await recRes.json().catch(() => ({}));
+        console.warn('Recompute warning (continuing sync):', errData.error || recRes.status);
+      } else {
+        const recResult = await recRes.json();
+        const timingParts: string[] = [];
+        if (recResult.timing?.profiles) timingParts.push(`profiles: ${recResult.timing.profiles}ms`);
+        if (recResult.timing?.platform) timingParts.push(`platform: ${recResult.timing.platform}ms`);
+        console.log(`[Admin] Recompute done (${timingParts.join(', ')})`);
+      }
+
+      // Step 2: Sync raw data from source tables
+      const syncRes = await fetch('/api/admin-sync', { method: 'POST', headers: syncHeaders });
       const syncJson = await syncRes.json().catch(() => ({}));
       
       if (syncRes.status === 429) {
@@ -255,22 +290,82 @@ export default function AdminDashboard() {
       if (syncRes.status === 403) return;
       if (!syncRes.ok) throw new Error(syncJson.error || `Sync failed with status ${syncRes.status}`);
       setLastSyncedAt(syncJson.timestamp || new Date().toISOString());
+      
+      const elapsed = Date.now() - startTime;
       await logAdminActivity({
         type: 'FULL_REFRESH',
         targetType: 'system',
-        details: 'Manual full re-sync triggered',
+        details: `Full refresh (recompute + sync) completed in ${elapsed}ms`,
         performedBy: user?.id,
       });
+      
+      // Step 3: Refresh dashboard
       await refreshBundle(true);
     } catch (e: any) {
       console.error('Manual sync error:', e);
       toast({
         variant: 'destructive',
-        title: 'Sync Failed',
-        description: e.message || 'An unexpected error occurred during database synchronization.'
+        title: 'Refresh Failed',
+        description: e.message || 'An unexpected error occurred during database refresh.'
       });
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleRecompute = async () => {
+    if (!session) return;
+    setIsRecomputing(true);
+    const startTime = Date.now();
+    try {
+      const token = session.access_token;
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      };
+
+      const recRes = await fetch('/api/admin/recompute', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ scope: 'all' }),
+      });
+
+      if (!recRes.ok) {
+        const errData = await recRes.json().catch(() => ({}));
+        throw new Error(errData.error || `Recompute failed with status ${recRes.status}`);
+      }
+
+      const result = await recRes.json();
+
+      const elapsed = Date.now() - startTime;
+      const timingParts: string[] = [];
+      if (result.timing?.profiles) timingParts.push(`profiles: ${result.timing.profiles}ms`);
+      if (result.timing?.platform) timingParts.push(`platform: ${result.timing.platform}ms`);
+      const timingStr = timingParts.length > 0 ? ` (${timingParts.join(', ')})` : '';
+
+      await logAdminActivity({
+        type: 'FULL_REFRESH',
+        targetType: 'system',
+        details: `On-demand recompute triggered${timingStr}`,
+        performedBy: user?.id,
+      });
+
+      // Refresh the dashboard data after recompute
+      await refreshBundle(true);
+
+      toast({
+        title: 'Stats Recalculated',
+        description: `Profiles & platform stats recomputed in ${elapsed}ms${timingStr}`,
+      });
+    } catch (e: any) {
+      console.error('Recompute error:', e);
+      toast({
+        variant: 'destructive',
+        title: 'Recompute Failed',
+        description: e.message || 'An unexpected error occurred during recomputation.'
+      });
+    } finally {
+      setIsRecomputing(false);
     }
   };
 
@@ -392,16 +487,61 @@ export default function AdminDashboard() {
                   </span>
                 </div>
               </div>
-              <button 
-                onClick={handleForceRefresh}
-                disabled={isSyncing || isDashboardLoading}
-                className={cn(
-                  "p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white transition-all group",
-                  (isSyncing || isDashboardLoading) && "opacity-50 cursor-not-allowed"
-                )}
-              >
-                <RefreshCw className={cn("h-4 w-4 group-hover:rotate-180 transition-transform duration-700", (isSyncing || isDashboardLoading) && "animate-spin")} />
-              </button>
+
+              {/* Split action: Refresh (primary) + Recompute only (dropdown) */}
+              <DropdownMenu>
+                <div className="flex items-center gap-px">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={handleForceRefresh}
+                          disabled={isSyncing || isDashboardLoading}
+                          className={cn(
+                            "p-2.5 rounded-l-xl bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white transition-all group focus:outline-none",
+                            (isSyncing || isDashboardLoading) && "opacity-50 cursor-not-allowed"
+                          )}
+                        >
+                          <RefreshCw className={cn("h-4 w-4 group-hover:rotate-180 transition-transform duration-700", (isSyncing || isDashboardLoading) && "animate-spin")} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="bg-zinc-950 border-white/10 text-[11px]">
+                        Full refresh: recompute + sync source tables
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      disabled={isSyncing || isDashboardLoading}
+                      className={cn(
+                        "p-2.5 rounded-r-xl border border-l-0 border-white/10 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all focus:outline-none",
+                        (isSyncing || isDashboardLoading) && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      <ChevronDown className="h-3 w-3" />
+                    </button>
+                  </DropdownMenuTrigger>
+                </div>
+
+                <DropdownMenuContent
+                  align="end"
+                  sideOffset={6}
+                  className="bg-zinc-900 border-white/10 text-zinc-300 min-w-[180px]"
+                >
+                  <DropdownMenuItem
+                    onClick={handleRecompute}
+                    disabled={isRecomputing || isSyncing}
+                    className="cursor-pointer hover:bg-white/10 hover:text-white focus:bg-white/10 focus:text-white gap-3 py-2.5"
+                  >
+                    <RefreshCw className={cn("h-4 w-4 text-violet-400", isRecomputing && "animate-spin")} />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-semibold">Recompute Only</span>
+                      <span className="text-[10px] text-zinc-500">Rebuild stats from raw events</span>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </header>

@@ -5,7 +5,7 @@ export { MindMap } from '../mind-map';
 
 export { MindMapToolbar } from './mind-map-toolbar';
 export { MindMapAccordion } from './mind-map-accordion';
-export { MindMapRadialView } from './mind-map-radial-view';
+export { MindMapTreeView } from './mind-map-tree-view';
 export { LeafNodeCard } from './leaf-node-card';
 export { ExplanationDialog } from './explanation-dialog';
 export { TopicHeader } from './topic-header';

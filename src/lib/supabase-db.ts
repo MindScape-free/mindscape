@@ -1,17 +1,16 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { getEnv } from './env';
 
 let clientInstance: SupabaseClient | null = null;
 
+function getSupabaseConfig() {
+  const { supabaseUrl, supabaseAnonKey } = getEnv();
+  return { url: supabaseUrl, key: supabaseAnonKey };
+}
+
 export function getSupabaseClient(): SupabaseClient {
   if (clientInstance) return clientInstance;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-
-  if (!url || !key) {
-    throw new Error(
-      '[Supabase] Missing required environment variables: NEXT_PUBLIC_SUPABASE_URL and/or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are not set.'
-    );
-  }
+  const { url, key } = getSupabaseConfig();
 
   console.log('[Supabase] Initializing client with:', url);
   clientInstance = createClient(url, key, {
@@ -23,17 +22,9 @@ export function getSupabaseClient(): SupabaseClient {
   return clientInstance;
 }
 
-// Export for use in auth context
 export function getSupabaseClientWithOptions(options?: { persistSession?: boolean }) {
   if (clientInstance) return clientInstance;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-
-  if (!url || !key) {
-    throw new Error(
-      '[Supabase] Missing required environment variables: NEXT_PUBLIC_SUPABASE_URL and/or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are not set.'
-    );
-  }
+  const { url, key } = getSupabaseConfig();
 
   clientInstance = createClient(url, key, {
     auth: {

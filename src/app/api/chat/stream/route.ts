@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
         const supabase = getSupabaseAdmin();
         const { data: { user } } = await supabase.auth.getUser(token);
         if (user) {
-          const { trackChat } = await import('@/lib/activity-tracker');
+          const { trackChat } = await import('@/lib/tracker');
           await trackChat(supabase, user.id);
           console.log(`💬 [ChatStream] Tracked chat for user: ${user.id}`);
         }

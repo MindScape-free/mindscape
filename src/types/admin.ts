@@ -62,6 +62,117 @@ export interface PrecomputedStats {
   lastUpdated: string | number;
 }
 
+// ─── Unified Event Log & Profile Types ──────────────────────────
+
+export type UserEventType =
+  | 'map_created'
+  | 'map_deleted'
+  | 'map_shared'
+  | 'map_exported'
+  | 'chat_sent'
+  | 'image_generated'
+  | 'node_expanded'
+  | 'login'
+  | 'logout'
+  | 'study_time'
+  | 'quiz_generated'
+  | 'explanation_requested'
+  | 'feedback_submitted';
+
+export interface UserEvent {
+  id: number;
+  user_id: string;
+  event_type: UserEventType;
+  event_data: Record<string, any>;
+  source?: string;
+  ip_address?: string;
+  user_agent?: string;
+  session_id?: string;
+  created_at: string;
+}
+
+export interface UserProfile {
+  user_id: string;
+  email?: string;
+  display_name?: string;
+  photo_url?: string;
+  created_at?: string;
+
+  // Aggregate counters
+  total_maps: number;
+  total_compare_maps: number;
+  total_multi_maps: number;
+  total_chats: number;
+  total_nodes: number;
+  total_images: number;
+  total_expansions: number;
+  study_time_minutes: number;
+
+  // Streak
+  current_streak: number;
+  longest_streak: number;
+  last_active_date?: string;
+
+  // Breakdowns
+  mode_breakdown: Record<string, number>;
+  depth_breakdown: Record<string, number>;
+  source_breakdown: Record<string, number>;
+  persona_breakdown: Record<string, number>;
+
+  // Activity heatmap data: { "2026-06-20": { maps: 3, chats: 5, ... } }
+  daily_activity: Record<string, Record<string, number>>;
+
+  unlocked_achievements?: string[];
+  updated_at: string;
+}
+
+export interface PlatformStats {
+  total_users: number;
+  total_maps: number;
+  total_maps_ever: number;
+  total_chats: number;
+  total_nodes: number;
+  total_images: number;
+  total_events: number;
+
+  new_users_24h: number;
+  new_maps_24h: number;
+  active_users_24h: number;
+  active_users_7d: number;
+  new_users_7d: number;
+  new_maps_7d: number;
+
+  health_score: number;
+  engagement_rate: number;
+
+  top_persona: string;
+  top_source_type: string;
+  avg_maps_per_user: number;
+  avg_nodes_per_map: number;
+
+  // 31-day rolling heatmap
+  daily_snapshot: {
+    date: string;
+    new_events: number;
+    new_maps: number;
+    active_users: number;
+  }[];
+
+  updated_at: string;
+}
+
+export interface UnifiedAdminResponse {
+  platform: PlatformStats;
+  user?: {
+    profile: UserProfile;
+    recent_events: UserEvent[];
+  };
+  meta: {
+    cached: boolean;
+    source: string;
+  };
+}
+
 export interface DashboardMetrics {
   newUsersToday: number;
   newUsersYesterday: number;

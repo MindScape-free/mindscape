@@ -3,23 +3,24 @@
  */
 
 import { AIProviderSystemConfig } from './types';
+import { getEnv } from '@/lib/env';
 
 let _cachedConfig: AIProviderSystemConfig | null = null;
 
 export function loadAIConfig(): AIProviderSystemConfig {
   if (_cachedConfig) return _cachedConfig;
 
-  const defaultTimeout = parseInt(process.env.AI_PROVIDER_TIMEOUT || '120000', 10);
+  const { pollinationsApiKey, aiProviderTimeout } = getEnv();
 
   _cachedConfig = {
     multiProviderEnabled: false,
     providerPriorities: ['pollinations'],
-    defaultTimeout,
+    defaultTimeout: aiProviderTimeout,
     providers: {
       pollinations: {
         name: 'pollinations',
         baseUrl: 'https://gen.pollinations.ai/v1',
-        apiKey: process.env.POLLINATIONS_API_KEY || '',
+        apiKey: pollinationsApiKey || '',
         defaultModel: 'openai',
         capabilities: ['fast', 'creative', 'reasoning', 'coding'],
       },

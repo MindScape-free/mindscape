@@ -40,7 +40,7 @@ import {
     syncUserStatisticsAction, 
     checkPollenBalanceAction,
 } from '@/app/actions';
-import { trackStudyTime, updateUserStatistics } from '@/lib/activity-tracker';
+import { trackStudyTime, updateUserStatistics } from '@/lib/tracker';
 import { ModelSelector } from '@/components/model-selector';
 import { Eye, EyeOff, Menu } from 'lucide-react';
 import { getUserImageSettings, saveUserApiKey, deleteUserApiKey } from '@/lib/supabase-db';

@@ -1,8 +1,10 @@
 import useSWR, { mutate } from 'swr';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { DEFAULT_MAP_ANALYTICS } from '@/types/admin';
+import { sortByTimestamp } from '@/lib/timestamp-utils';
 
-const API_BASE = '/api/admin/dashboard';
+const API_BASE = '/api/admin/unified';
 
 async function fetcherWithAuth(url: string, getToken: () => string | null): Promise<any> {
   const token = getToken();
@@ -17,7 +19,7 @@ async function fetcherWithAuth(url: string, getToken: () => string | null): Prom
   };
 
   const res = await fetch(url, { headers });
-  
+
   if (res.status === 403) {
     console.warn('[AdminDashboard] 403 - User is not admin or session expired');
     return null;
@@ -30,92 +32,70 @@ async function fetcherWithAuth(url: string, getToken: () => string | null): Prom
   return res.json();
 }
 
+/** Shape returned by the new unified endpoint with scope=full */
+interface UnifiedFullResponse {
+  platform: {
+    total_users: number;
+    total_maps: number;
+    total_maps_ever: number;
+    total_chats: number;
+    total_nodes: number;
+    total_images: number;
+    total_events: number;
+    new_users_24h: number;
+    new_maps_24h: number;
+    active_users_24h: number;
+    active_users_7d: number;
+    new_users_7d: number;
+    new_maps_7d: number;
+    health_score: number;
+    engagement_rate: number;
+    top_persona: string;
+    top_source_type: string;
+    avg_maps_per_user: number;
+    avg_nodes_per_map: number;
+    daily_snapshot: { date: string; new_events: number; new_maps: number; active_users: number }[];
+    updated_at: string;
+  };
+  profiles: any[];
+  events: any[];
+  metrics: {
+    mapAnalytics: typeof DEFAULT_MAP_ANALYTICS;
+    topUsers: any[];
+    latestUsers: any[];
+  };
+  bundles: {
+    feedback: any[];
+    aiCalls: any[];
+  };
+  meta: {
+    cached: boolean;
+    source: string;
+    totalProfiles: number;
+    totalEvents: number;
+  };
+}
+
 interface AdminBundle {
   users: any[];
   logs: any[];
   feedback: any[];
   aiCalls: any[];
   serverTime: string;
-  isIncremental: boolean;
 }
 
-interface DashboardStats {
-  stats: {
-    totalUsers: number;
-    totalMindmaps: number;
-    totalChats: number;
-    totalNodes?: number;
-    totalNodesActive?: number;
-    totalImages?: number;
-    activeUsers: number;
-    healthScore: number;
-    lastUpdated: number | null;
-    timestamp: string | null;
-  };
-  mapAnalytics: any;
-  bundle: AdminBundle;
-  meta: {
-    cached: boolean;
-    cacheAge: number | null;
-    source: string;
-  };
-  totalMindmapsEver?: number;
-  newUsersToday?: number;
-  newMapsToday?: number;
-  [key: string]: any;
-}
-
-const STABLE_URL = `${API_BASE}?range=all`;
+const STABLE_URL = `${API_BASE}?scope=full`;
 
 export function useAdminDashboard() {
-  const { user, session, supabase } = useAuth();
-  const [persistentBundle, setPersistentBundle] = useState<{
-    users: any[];
-    logs: any[];
-    feedback: any[];
-    aiCalls: any[];
-    lastFetchTime: string | null;
-  }>({
+  const { user, session } = useAuth();
+  const [persistentBundle, setPersistentBundle] = useState<AdminBundle>({
     users: [],
     logs: [],
     feedback: [],
     aiCalls: [],
-    lastFetchTime: null,
+    serverTime: new Date().toISOString(),
   });
-
   const [isSyncing, setIsSyncing] = useState(false);
-
-  const mergeData = useCallback((newData: DashboardStats | null) => {
-    if (!newData?.bundle) return;
-
-    setPersistentBundle(prev => {
-      const { users, logs, feedback, aiCalls, serverTime, isIncremental } = newData.bundle;
-
-      if (!isIncremental || !prev.lastFetchTime) {
-        return { users, logs, feedback, aiCalls: aiCalls || [], lastFetchTime: serverTime };
-      }
-
-      const userMap = new Map(prev.users.map(u => [u.id, u]));
-      users.forEach((u: any) => userMap.set(u.id, { ...userMap.get(u.id), ...u }));
-
-      const logMap = new Map(prev.logs.map(l => [l.id, l]));
-      logs.forEach((l: any) => logMap.set(l.id, l));
-
-      const feedbackMap = new Map(prev.feedback.map(f => [f.id, f]));
-      feedback.forEach((f: any) => feedbackMap.set(f.id, f));
-
-      const aiCallMap = new Map(prev.aiCalls.map(c => [c.id, c]));
-      (aiCalls || []).forEach((c: any) => aiCallMap.set(c.id, c));
-
-      return {
-        users: Array.from(userMap.values()).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()),
-        logs: Array.from(logMap.values()).sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()),
-        feedback: Array.from(feedbackMap.values()).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()),
-        aiCalls: Array.from(aiCallMap.values()).sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()),
-        lastFetchTime: serverTime,
-      };
-    });
-  }, []);
 
   const getToken = useCallback((): string | null => {
     return session?.access_token ?? null;
@@ -123,7 +103,7 @@ export function useAdminDashboard() {
 
   const swrKey = user?.id ? [STABLE_URL, user.id] : null;
 
-  const { data, error, isLoading, isValidating } = useSWR<DashboardStats>(
+  const { data, error, isLoading, isValidating } = useSWR<UnifiedFullResponse>(
     swrKey,
     () => fetcherWithAuth(STABLE_URL, getToken),
     {
@@ -132,8 +112,14 @@ export function useAdminDashboard() {
       dedupingInterval: 60000,
       shouldRetryOnError: false,
       onSuccess: (newData) => {
-        if (!newData?.bundle) return;
-        mergeData(newData);
+        if (!newData) return;
+        setPersistentBundle({
+          users: newData.profiles || [],
+          logs: newData.events || [],
+          feedback: newData.bundles?.feedback || [],
+          aiCalls: newData.bundles?.aiCalls || [],
+          serverTime: new Date().toISOString(),
+        });
       },
       onError: (err) => {
         console.error('[AdminDashboard] Fetch error:', err);
@@ -145,10 +131,7 @@ export function useAdminDashboard() {
     if (isSyncing || !session) return;
     setIsSyncing(true);
     try {
-      const url = (!forceFullRefresh && persistentBundle.lastFetchTime)
-        ? `${STABLE_URL}&since=${persistentBundle.lastFetchTime}`
-        : STABLE_URL;
-
+      const url = STABLE_URL;
       const token = getToken();
       if (!token) {
         console.warn('[AdminDashboard] No token, cannot refresh');
@@ -170,31 +153,30 @@ export function useAdminDashboard() {
         return;
       }
 
-      const newData = await response.json();
-      if (forceFullRefresh) {
-        setPersistentBundle({
-          users: newData.bundle?.users || [],
-          logs: newData.bundle?.logs || [],
-          feedback: newData.bundle?.feedback || [],
-          aiCalls: newData.bundle?.aiCalls || [],
-          lastFetchTime: newData.bundle?.serverTime || null,
-        });
-      } else {
-        mergeData(newData);
-      }
+      const newData: UnifiedFullResponse = await response.json();
+      setPersistentBundle({
+        users: newData.profiles || [],
+        logs: newData.events || [],
+        feedback: newData.bundles?.feedback || [],
+        aiCalls: newData.bundles?.aiCalls || [],
+        serverTime: new Date().toISOString(),
+      });
       mutate([STABLE_URL, user?.id], newData, false);
     } catch (err) {
       console.error('Bundle refresh error:', err);
     } finally {
       setIsSyncing(false);
     }
-  }, [isSyncing, persistentBundle.lastFetchTime, mergeData, session, user, getToken]);
+  }, [isSyncing, session, user, getToken]);
+
+  // Sort users by createdAt desc for the UI
+  const sortedUsers = sortByTimestamp(persistentBundle.users || [], u => u.createdAt, 'desc');
 
   return {
     data,
     isLoading: isLoading || (isSyncing && persistentBundle.users.length === 0),
     isValidating: isValidating || isSyncing,
-    bundle: persistentBundle,
+    bundle: { ...persistentBundle, users: sortedUsers },
     error,
     refreshBundle,
   };

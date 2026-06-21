@@ -409,7 +409,7 @@ export function NestedMapsDialog({
                                                 const createdAt = getDisplayDate(expansion.createdAt);
 
                                                 const mapDataForUrl = expansion.fullData || expansion;
-                                                const fallbackImage = `https://gen.pollinations.ai/image/${encodeURIComponent(`${expansion.topic}, concept visualization, abstract representation, professional illustration, clean design, high quality`)}?width=512&height=288&model=flux&enhance=true`;
+                                                const fallbackImage = `https://gen.pollinations.ai/image/${encodeURIComponent(`Cinematic educational documentary scene representing ${expansion.topic}, detailed richly textured environment with visual elements directly related to the subject, dramatic professional lighting, warm amber and cool teal color grading, foreground subject in sharp focus with beautiful background bokeh, 8k resolution, National Geographic quality photography, no text, no watermarks`)}?width=512&height=288&model=flux&enhance=true`;
                                                 const thumbnailUrl = (expansion as any).thumbnailUrl || (mapDataForUrl as any).thumbnailUrl || fallbackImage;
 
                                                 return (

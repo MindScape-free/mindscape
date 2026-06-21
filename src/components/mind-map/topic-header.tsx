@@ -116,6 +116,26 @@ export const TopicHeader = ({
         }
     };
 
+    // Responsive font-size scaling based on title length
+    const titleText = mindMap.shortTitle || mindMap.topic;
+    const titleLen = titleText?.length || 0;
+
+    const titleSizeClass = isMinimal
+        ? titleLen > 80
+            ? "text-3xl md:text-5xl"
+            : titleLen > 50
+                ? "text-4xl md:text-6xl"
+                : titleLen > 30
+                    ? "text-5xl md:text-7xl"
+                    : "text-5xl md:text-8xl"
+        : titleLen > 90
+            ? "text-xl md:text-3xl"
+            : titleLen > 55
+                ? "text-2xl md:text-4xl"
+                : titleLen > 30
+                    ? "text-3xl md:text-5xl"
+                    : "text-4xl md:text-6xl";
+
     return (
         <div className={cn(
             "relative animate-in fade-in slide-in-from-top-4 duration-1000 mt-8",
@@ -194,12 +214,12 @@ export const TopicHeader = ({
                     )}
 
                     <h1 className={cn(
-                        "font-black text-white tracking-tighter transition-transform duration-500",
+                        "font-black text-white tracking-tighter transition-transform duration-500 break-words text-balance",
                         isMinimal
-                            ? "text-5xl md:text-8xl leading-[0.8] mb-2 uppercase font-orbitron bg-clip-text text-transparent bg-gradient-to-b from-white via-white/90 to-white/40"
-                            : cn("text-4xl md:text-6xl leading-[0.9]", !centered && "group-hover:-translate-x-1")
+                            ? cn(titleSizeClass, "leading-[0.8] mb-2 uppercase font-orbitron bg-clip-text text-transparent bg-gradient-to-b from-white via-white/90 to-white/40")
+                            : cn(titleSizeClass, "leading-[1.1]", !centered && "group-hover:-translate-x-1")
                     )}>
-                        {truncateText(mindMap.shortTitle || mindMap.topic, 80)}
+                        {titleText}
                     </h1>
 
                     {/* Mission Objective Subtitle */}
@@ -207,8 +227,8 @@ export const TopicHeader = ({
                         <div className="p-1 rounded-full bg-white/5 border border-white/10">
                             <Search className="w-3 h-3 text-zinc-500" />
                         </div>
-                        <span className="text-sm font-bold text-zinc-500 uppercase tracking-widest font-orbitron">
-                            {truncateText(mindMap.topic, 45)}
+                        <span className="text-sm font-bold text-zinc-500 uppercase tracking-widest font-orbitron break-words">
+                            {mindMap.topic}
                         </span>
                     </div>
 

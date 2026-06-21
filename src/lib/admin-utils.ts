@@ -1,6 +1,5 @@
 'use client';
 
-import { getSupabaseClient } from '@/lib/supabase-db';
 import { UserPlus, UserMinus, UserCheck, Shield, Ban, Unlock, Trash2, Edit, Eye, Star, Flag, Settings, Database, RefreshCw, Download, LogIn, LogOut, Key, AlertTriangle, CheckCircle, XCircle, Activity as ActivityIcon, Brain, Share2, Copy, FileDown, Image, Zap, MessageSquare, Clock, Search, Bookmark, EyeOff, Loader2, Send, Sparkles, Wand2 } from 'lucide-react';
 
 export type ActivityType =
@@ -210,63 +209,9 @@ export const FILTER_CATEGORIES: { label: string; value: ActivityCategory | 'all'
   { label: 'Moderation', value: 'moderation', types: Object.entries(ACTIVITY_CONFIG).filter(([, config]) => config.category === 'moderation').map(([type]) => type as ActivityType) },
 ];
 
-export function useAdminActivityLog() {
-  const logAdminActivity = async (entry: Omit<AdminActivityLogEntry, 'timestamp'>): Promise<void> => {
-    try {
-      const { logAdminActivityAction } = await import('@/app/actions');
-      await logAdminActivityAction(entry);
-    } catch (error) {
-      console.error('Error logging activity via server action:', error);
-    }
-  };
-
-  const getAdminActivityLogs = async (
-    filterType?: ActivityType | ActivityCategory | 'all',
-    maxEntries: number = 100
-  ): Promise<AdminActivityLogEntry[]> => {
-    try {
-      const supabase = getSupabaseClient();
-      const { data, error } = await supabase
-        .from('admin_activity_log')
-        .select('*')
-        .order('timestamp', { ascending: false })
-        .limit(maxEntries);
-
-      if (error || !data) return [];
-      let entries = data.map(row => ({ id: row.id, ...row } as AdminActivityLogEntry));
-
-      if (filterType && filterType !== 'all') {
-        const typesToFilter = typeof filterType === 'string' && FILTER_CATEGORIES.find(c => c.value === filterType)
-          ? FILTER_CATEGORIES.find(c => c.value === filterType)!.types
-          : [filterType];
-        entries = entries.filter(log => typesToFilter.includes(log.type));
-      }
-
-      return entries;
-    } catch (error) {
-      console.error('Error fetching activity logs:', error);
-      return [];
-    }
-  };
-
-  const subscribeToAdminActivityLogs = (
-    callback: (entries: AdminActivityLogEntry[]) => void,
-    filterType?: ActivityType | ActivityCategory | 'all',
-    maxEntries: number = 100
-  ): (() => void) => {
-    const supabase = getSupabaseClient();
-    const channel = supabase
-      .channel('admin-activity-log')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_activity_log' }, async () => {
-        const logs = await getAdminActivityLogs(filterType, maxEntries);
-        callback(logs);
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  };
-
-  return { logAdminActivity, getAdminActivityLogs, subscribeToAdminActivityLogs };
-}
+// NOTE: Consumers should import logAdminActivity, fetchAdminActivityLogs,
+// and subscribeToAdminActivityLogs directly from '@/lib/tracker'.
+// This file now only provides UI helpers (ACTIVITY_CONFIG, formatRelativeTime, etc.).
 
 export function formatRelativeTime(timestamp: string): string {
   const now = new Date();
@@ -318,11 +263,3 @@ export function groupLogsByDate(logs: AdminActivityLogEntry[]): { title: string;
   return groups;
 }
 
-export function getSeverityColor(severity?: 'info' | 'warning' | 'error' | 'success'): string {
-  switch (severity) {
-    case 'error': return 'text-red-400';
-    case 'warning': return 'text-amber-400';
-    case 'success': return 'text-emerald-400';
-    default: return 'text-zinc-400';
-  }
-}

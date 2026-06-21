@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { MindMapData } from '@/types/mind-map';
 import { useToast } from '@/hooks/use-toast';
-import { trackMapCreated, trackStudyTime, trackNodesAdded, trackNestedExpansion } from '@/lib/activity-tracker';
+import { trackMapCreated, trackStudyTime, trackNodesAdded, trackNestedExpansion } from '@/lib/tracker';
 import { Achievement } from '@/lib/achievements';
 import { saveMindMap, updateMindMapField, getUserProfile, updateUserField } from '@/lib/supabase-db';
 
@@ -164,19 +164,42 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
             
             const { enhanceImagePromptAction } = await import('@/app/actions');
             
+            // Determine best mood and composition based on topic type for richer enhancement
+            const t = safeTopic.toLowerCase();
+            let mood = 'dramatic';
+            let composition = 'close-up';
+            let style = 'cinematic';
+            
+            if (/\b(nature|forest|ocean|mountain|landscape|sunset|cosmos|space|universe|galaxy|planet|astronomy)\b/i.test(t)) {
+              mood = 'golden-hour';
+              composition = 'wide-shot';
+            } else if (/\b(person|people|leader|scientist|artist|inventor|biography|figure|portrait)\b/i.test(t)) {
+              mood = 'dramatic';
+              composition = 'close-up';
+            } else if (/\b(ai|neural|machine learning|deep learning|algorithm|programming|code|software|data|quantum)\b/i.test(t)) {
+              mood = 'neon';
+              composition = 'bird-eye';
+            } else if (/\b(cell|dna|biology|microscope|molecule|chemistry|genetics|microbiology)\b/i.test(t)) {
+              mood = 'mystical';
+              composition = 'macro';
+            } else if (/\b(history|roman|greek|ancient|medieval|renaissance|war|empire)\b/i.test(t)) {
+              mood = 'golden-hour';
+              composition = 'wide-shot';
+            }
+            
             // 1. Enhance the prompt based on the topic
             const enhancement = await enhanceImagePromptAction({
               prompt: safeTopic,
-              style: 'cinematic',
-              mood: 'mystical',
-              composition: 'wide-shot'
+              style,
+              mood,
+              composition
             }, { 
               apiKey: options.userApiKey, 
               userId: user.id 
             });
 
             const finalPrompt = enhancement.enhancedPrompt?.enhancedPrompt || 
-                               `Cinematic professional conceptual illustration of ${safeTopic}, dark premium background, purple and gold accents, 8k quality, sharp focus, no text, no watermarks`;
+                               `Cinematic educational documentary scene representing "${safeTopic}", detailed richly textured environment with visual elements directly related to the subject, dramatic professional lighting, warm amber and cool teal color grading, foreground subject in sharp focus with beautiful background bokeh, 8k resolution, National Geographic quality photography, no text, no watermarks`;
 
             // 2. Generate the image
             const response = await fetch('/api/generate-image', {

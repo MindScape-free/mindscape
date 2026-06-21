@@ -7,7 +7,7 @@ import { PointEventType } from '@/types/points';
 import { AwardResult } from '@/lib/points-engine';
 import { XPToastStack, XPToastItem } from '@/components/points/xp-toast';
 import { getSupabaseClient } from '@/lib/supabase-db';
-import { trackLogin } from '@/lib/activity-tracker';
+import { trackLogin } from '@/lib/tracker';
 import { LevelUpOverlay } from '@/components/points/LevelUpOverlay';
 
 const EVENT_LABELS: Record<PointEventType, string> = {

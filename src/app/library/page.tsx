@@ -31,7 +31,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFo
 import { useNotifications } from '@/contexts/notification-context';
 import { useAIConfig } from '@/contexts/ai-config-context';
 import { categorizeMindMapAction, suggestRelatedTopicsAction } from '@/app/actions/community';
-import { enhanceImagePromptAction } from '@/app/actions';
+import { enhanceImagePromptAction, generateThumbnailAction } from '@/app/actions';
 import { RefreshCw, Zap, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { jsPDF } from 'jspdf';
@@ -47,29 +47,79 @@ import { useMindMapPersistence } from '@/hooks/use-mind-map-persistence';
 function buildThumbnailPrompt(topic: string): string {
   const t = topic.toLowerCase();
   
-  // Person/Biography
+  // Person/Biography — show the person in an iconic setting related to their work
   if (/\b(einstein|newton|tesla|darwin|freud|curie|hawking|turing|jobs|gates|musk|gandhi|lincoln|napoleon|aristotle|plato|socrates|shakespeare|beethoven|picasso|van gogh|obama|zuckerberg|lovelace|feynman|galileo|torvalds)\b/i.test(t) ||
       /\b(scientist|mathematician|philosopher|artist|founder|engineer|architect|designer|leader|inventor|expert|author|figure)\b/i.test(t)) {
-    return `Cinematic professional portrait of ${topic}, dramatic studio lighting, 8k resolution, photorealistic, sharp focus, dark elegant background, purple rim lighting, high detail`;
+    return `Cinematic portrait of ${topic} in their natural environment, dramatic Rembrandt lighting, deep shadows and warm highlights, sharp focus on face and hands, environment tells their story, 8k resolution, photorealistic, rich texture and detail, museum-quality composition`;
   }
   
-  // Technology/Digital
-  if (/\b(ai|machine learning|deep learning|neural|algorithm|programming|software|code|data|cloud|blockchain|crypto|quantum|computing|database|api|framework|javascript|python|react|typescript|linux|cybersecurity|devops|digital|internet)\b/i.test(t)) {
-    return `Futuristic digital visualization of ${topic}, glowing circuit paths, holographic data streams, deep space indigo background, vibrant neon purple and blue accents, ultra-detailed 3D render, 8k quality, no text`;
+  // Artificial Intelligence / Neural Networks
+  if (/\b(ai|artificial intelligence|machine learning|deep learning|neural network|neural|llm|transformer|gpt|large language model|computer vision|nlp)\b/i.test(t)) {
+    return `Inside a vast digital dimension, a luminous neural network with interconnected glowing nodes and synapses pulses with electric blue and purple light, cascading streams of data flow like waterfalls through transparent layers, a human brain silhouette merges with circuit patterns, volumetric god rays pierce through the digital void, cinematic wide shot, 8k, sharp focus, no text`;
   }
   
-  // Science/Nature
-  if (/\b(physics|chemistry|biology|astronomy|neuroscience|genetics|evolution|thermodynamics|relativity|cosmology|ecology|geology|mathematics|calculus|biochemistry|molecular|astrophysics|space|ocean|forest|animal)\b/i.test(t)) {
-    return `Cinematic scientific visualization of ${topic}, stunning professional photography style, macro or cosmic perspective, rich color gradients, atmospheric lighting, 8k resolution, sharp focus, award-winning composition`;
+  // Programming / Software / Code
+  if (/\b(programming|software|code|coding|algorithm|javascript|python|react|typescript|linux|api|framework|docker|kubernetes|git|database|sql)\b/i.test(t)) {
+    return `Looking through a transparent holographic interface displaying ${topic}, lines of glowing code cascade down a dark screen with syntax highlighting in green and blue, mechanical keyboard in soft focus foreground, warm ambient backlight from multiple monitors, cyberpunk-inspired desk setup, volumetric rim lighting, cinematic close-up, 8k, sharp focus, no text`;
   }
   
-  // Business/Strategy/Productivity
-  if (/\b(business|strategy|marketing|finance|economy|startup|growth|productivity|leadership|management|success|money|market|trade|investment)\b/i.test(t)) {
-    return `Elegant minimalist conceptual art for ${topic}, abstract geometric shapes, gold and purple corporate color palette, clean negative space, premium high-end aesthetic, cinematic lighting, 8k quality`;
+  // Quantum / Computing
+  if (/\b(quantum|computing|computer|data|cloud|cybersecurity|blockchain|crypto|devops|digital)\b/i.test(t)) {
+    return `Futuristic visualization of ${topic} inside a glowing digital matrix, intricate geometric patterns and data streams flow through a dark indigo space, holographic projections hover above polished metal surfaces, cold blue and purple neon lighting, reflective chrome accents, volumetric light beams, cinematic wide shot, 8k, sharp focus, no text`;
+  }
+  
+  // Physics / Astronomy / Space
+  if (/\b(physics|astronomy|cosmology|astrophysics|space|relativity|quantum|gravity|black hole|galaxy|star|planet|universe|big bang|string theory|dark matter|dark energy)\b/i.test(t)) {
+    return `Breathtaking cosmic scene depicting ${topic}, a swirling galaxy of stars and nebula gases in deep indigo and violet, gravitational lensing warps the fabric of spacetime around a distant black hole, distant galaxies dot the cosmic background, ethereal volumetric starlight illumination, Hubble Space Telescope ultra-wide perspective, 8k, sharp focus, no text`;
+  }
+  
+  // Biology / Life Sciences
+  if (/\b(biology|genetics|evolution|dna|cell|molecular|biochemistry|neuroscience|brain|ecology|organism|species|anatomy|physiology|microbiology)\b/i.test(t)) {
+    return `Magnified view of ${topic} at cellular or microscopic level, intricate biological structures in vivid natural colors, translucent membranes and organic textures glow with bioluminescent light, soft diffused scientific lighting, macro extreme close-up perspective, National Geographic scientific photography style, 8k, ultra-detailed, sharp focus, no text`;
+  }
+  
+  // Chemistry / Biochemistry
+  if (/\b(chemistry|chemical|element|molecule|compound|reaction|periodic|biochemistry|organic chemistry|acid|base|pH|catalyst)\b/i.test(t)) {
+    return `A dramatic laboratory scene showing ${topic}, glowing chemical solutions in pristine glass beakers and flasks, colorful molecular structures float in mid-air above the experiment, steam and vapor catch the light, bright clean studio lighting from above, macro flat lay perspective on a reflective white surface, 8k, sharp focus, National Geographic quality, no text`;
+  }
+  
+  // Mathematics
+  if (/\b(mathematics|math|calculus|algebra|geometry|trigonometry|statistics|probability|equation|theorem|fractal|algorithm|number)\b/i.test(t)) {
+    return `Elegant visualization of ${topic}, intricate fractal patterns and geometric shapes in gold and deep blue, mathematical equations glow like constellations in a dark academic space, a chalkboard with elegant handwritten formulas fades into the background, warm dramatic library lighting from a single source, cinematic wide shot, 8k, sharp focus, no text`;
+  }
+  
+  // History / Ancient Civilizations
+  if (/\b(history|ancient|roman|greek|egypt|medieval|renaissance|empire|civilization|war|revolution|colonial|prehistoric|dynasty)\b/i.test(t)) {
+    return `Cinematic historical reenactment scene of ${topic}, authentic period-accurate architecture and artifacts dominate the frame, figures in traditional clothing engage in daily life, warm golden hour sunlight casts long dramatic shadows across ancient stone, dust particles float in the warm air, film grain texture adds authenticity, wide cinematic angle, 8k, sharp focus, no text`;
+  }
+  
+  // Philosophy / Literature
+  if (/\b(philosophy|literature|poetry|existential|ethics|logic|consciousness|mind|knowledge|truth|reality|metaphysics)\b/i.test(t)) {
+    return `A contemplative scene representing ${topic}, an ancient library with towering shelves of leather-bound books, shafts of warm dusty light pierce through tall arched windows, a single open book rests on a wooden desk with handwritten margin notes, pensive quiet atmosphere, warm amber natural lighting, cinematic medium shot, 8k, sharp focus, no text`;
+  }
+  
+  // Music / Arts
+  if (/\b(music|art|painting|sculpture|dance|theater|film|photography|design|fashion|architecture|musical|symphony|orchestra|canvas)\b/i.test(t)) {
+    return `Artistic interpretation of ${topic}, a masterfully lit studio or performance space, rich textures and materials in the frame — canvas, wood, fabric, or instrument surfaces, dramatic chiaroscuro lighting creates depth and emotion, hand-crafted aesthetic with visible texture, warm natural side lighting, cinematic close-up, 8k, sharp focus, gallery-quality composition, no text`;
+  }
+  
+  // Business / Economics
+  if (/\b(business|strategy|marketing|finance|economy|startup|growth|productivity|leadership|management|success|money|market|trade|investment|entrepreneur|corporate)\b/i.test(t)) {
+    return `A sophisticated executive scene representing ${topic}, polished glass and steel corporate environment with warm amber accent lighting, elegant data visualizations float above a minimalist wooden desk, rich mahogany and leather textures, soft natural light through floor-to-ceiling windows combined with premium warm studio lighting, cinematic medium shot, 8k, sharp focus, no text`;
+  }
+  
+  // Nature / Environment
+  if (/\b(nature|forest|ocean|mountain|river|lake|desert|rainforest|coral|ecosystem|wildlife|conservation|climate|weather|environment)\b/i.test(t)) {
+    return `Breathtaking natural landscape showcasing ${topic}, pristine wilderness with incredible detail from foreground foliage to distant horizon, golden hours lighting paints the scene in warm amber and soft purple hues, atmospheric haze adds depth, mist rises from the landscape, National Geographic award-winning nature photography, ultra-wide angle, 8k, sharp focus, no text`;
+  }
+  
+  // Health / Medicine
+  if (/\b(health|medicine|medical|disease|treatment|surgery|diagnosis|therapy|wellness|nutrition|fitness|anatomy|clinical|hospital|drug|vaccine)\b/i.test(t)) {
+    return `State-of-the-art medical scene representing ${topic}, pristine white clinical environment with soft blue accent lighting, advanced medical technology and holographic diagnostic displays float in the sterile air, anatomical cross-sections glow with translucent color, clean bright diffused overhead lighting, cinematic medium shot, 8k, sharp focus, ultra-detailed, no text`;
   }
 
-  // Default Fallback
-  return `Cinematic conceptual illustration of ${topic}, professional digital art, dramatic lighting, dark premium background with purple and gold accents, 8k quality, sharp focus, no text, no watermarks`;
+  // Default Fallback — concrete scene that represents the topic
+  return `Cinematic educational documentary scene representing "${topic}", a detailed and richly textured environment with visual elements that directly relate to the subject, dramatic professional lighting creates depth and atmosphere, warm amber and cool teal color grading, foreground subject in sharp focus with beautiful background bokeh, 8k resolution, National Geographic quality photography, sharp focus, no text, no watermarks`;
 }
 
 
@@ -885,33 +935,28 @@ export default function DashboardPage() {
       return next;
     });
 
-    const prompt = buildThumbnailPrompt(mapToUpdate.topic);
-
     toast({
-      title: 'Generating Thumbnail...',
-      description: `Creating silent thumbnail for ${mapToUpdate.topic}`,
+      title: 'Generating AI Thumbnail...',
+      description: `Creating topic-specific thumbnail for ${mapToUpdate.topic}`,
     });
 
     try {
-      const response = await fetch('/api/generate-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt,
-          model: config.imageModel || config.pollinationsModel || 'flux',
-          width: 512,
-          height: 288,
-          userId: user.id,
-          userApiKey: config.pollinationsApiKey,
-        })
+      // Use the dedicated server action that AI-enhances the prompt + generates the image
+      const { imageUrl, enhancedPrompt, error } = await generateThumbnailAction({
+        topic: mapToUpdate.topic,
+        context: mapToUpdate.summary,
+        width: 512,
+        height: 288,
+      }, {
+        apiKey: config.pollinationsApiKey,
+        userId: user.id,
       });
 
-      if (!response.ok) {
-        throw new Error('Image generation failed');
+      if (error || !imageUrl) {
+        throw new Error(error || 'Thumbnail generation returned no image');
       }
 
-      const data = await response.json();
-      const finalImageUrl = data.imageUrl;
+      const finalImageUrl = imageUrl;
 
       if (supabase && user) {
         await supabase.from('mindmaps').update({ 
@@ -927,7 +972,7 @@ export default function DashboardPage() {
 
       toast({
         title: "Thumbnail Updated!",
-        description: "Your new AI-crafted thumbnail is ready.",
+        description: "Your AI-crafted topic-specific thumbnail is ready.",
       });
     } catch (err: any) {
       setImageErrorMapIds(prev => new Set(prev).add(mapId));
@@ -1777,7 +1822,7 @@ export default function DashboardPage() {
           onGenerate={handleRegenerateImageWithSettings}
           nodeName={mapForImageLab.topic}
           nodeDescription={`Updating thumbnail for your mind map: ${mapForImageLab.topic}`}
-          initialPrompt={mapForImageLab.topic}
+          initialPrompt={`${mapForImageLab.topic}${mapForImageLab.summary ? `: ${mapForImageLab.summary}` : ''}`}
           onEnhancePrompt={handleEnhancePrompt}
           isEnhancing={isEnhancingPrompt}
         />

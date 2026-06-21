@@ -1,19 +1,14 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { getEnv } from './env';
 
 let cachedAdmin: SupabaseClient | null = null;
 
 export function getSupabaseAdmin(): SupabaseClient {
   if (cachedAdmin) return cachedAdmin;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const { supabaseUrl, supabaseServiceRoleKey, supabaseAnonKey } = getEnv();
+  const key = supabaseServiceRoleKey || supabaseAnonKey;
 
-  if (!url || !key) {
-    throw new Error(
-      '[Supabase Admin] Missing required environment variables: NEXT_PUBLIC_SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY are not set.'
-    );
-  }
-
-  cachedAdmin = createClient(url, key, { auth: { persistSession: false } });
+  cachedAdmin = createClient(supabaseUrl, key, { auth: { persistSession: false } });
   return cachedAdmin;
 }
 

@@ -1496,6 +1496,107 @@ export async function synthesizeNodesAction(
  * Server action to synchronize and recalculate a user's statistics.
  * This ensures the profile dashboard reflects actual database content.
  */
+/**
+ * Server action to generate an AI-enhanced thumbnail for a mind map topic.
+ * Always uses AI to create a topic-specific prompt instead of static templates.
+ * @param input.topic - The mind map topic to generate a thumbnail for
+ * @param input.context - Optional summary/description for richer prompt context
+ * @param input.width - Image width (default 512)
+ * @param input.height - Image height (default 288)
+ * @returns The generated image as a data URL and the enhanced prompt text
+ */
+export async function generateThumbnailAction(
+  input: {
+    topic: string;
+    context?: string;
+    width?: number;
+    height?: number;
+  },
+  options: AIActionOptions = {}
+): Promise<{
+  imageUrl: string | null;
+  enhancedPrompt: string | null;
+  error: string | null;
+}> {
+  try {
+    const effectiveApiKey = await resolveApiKey(options);
+
+    if (!input.topic || input.topic.trim().length === 0) {
+      return { imageUrl: null, enhancedPrompt: null, error: 'Topic is required' };
+    }
+
+    // 1. AI-enhance the prompt with topic-specific visual description
+    const promptInput = input.context
+      ? `${input.topic}: ${input.context}`
+      : input.topic;
+
+    const enhancement = await enhanceImagePrompt({
+      prompt: promptInput,
+      style: 'cinematic',
+      composition: 'close-up',
+      mood: 'dramatic',
+      apiKey: effectiveApiKey,
+    });
+
+    const enhancedPrompt = enhancement?.enhancedPrompt || null;
+
+    // 2. Fallback prompt if AI enhancement fails — still topic-specific
+    const finalPrompt = enhancedPrompt || `Cinematic educational documentary scene representing "${input.topic}", a detailed richly textured environment with visual elements directly related to the subject, dramatic professional lighting, warm amber and cool teal color grading, foreground subject in sharp focus with beautiful background bokeh, 8k resolution, National Geographic quality photography, sharp focus, no text, no watermarks`;
+
+    // 3. Generate the image via Pollinations API
+    const width = Math.min(Math.max(input.width || 512, 256), 1280);
+    const height = Math.min(Math.max(input.height || 288, 256), 1280);
+
+    const baseUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(finalPrompt)}`;
+    const params = new URLSearchParams({
+      model: 'flux',
+      width: width.toString(),
+      height: height.toString(),
+      seed: Math.floor(Math.random() * 1000000).toString(),
+      nologo: 'true',
+      enhance: 'false',
+    });
+
+    const imageUrl = `${baseUrl}?${params}`;
+
+    const response = await fetch(imageUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${effectiveApiKey || process.env.POLLINATIONS_API_KEY || ''}`,
+        'Accept': 'image/jpeg, image/png',
+      },
+      signal: AbortSignal.timeout(60000),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      throw new Error(`Image generation failed (${response.status}): ${errorText.substring(0, 200)}`);
+    }
+
+    // Convert to base64 data URL
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64Image = buffer.toString('base64');
+    const dataUrl = `data:${contentType};base64,${base64Image}`;
+
+    console.log(`✅ Thumbnail generated for "${input.topic}" (${Math.round(buffer.length / 1024)} KB)`);
+
+    return {
+      imageUrl: dataUrl,
+      enhancedPrompt: finalPrompt,
+      error: null,
+    };
+  } catch (error: any) {
+    console.error('❌ generateThumbnailAction failed:', error.message);
+    return {
+      imageUrl: null,
+      enhancedPrompt: null,
+      error: error.message || 'Failed to generate thumbnail',
+    };
+  }
+}
+
 export async function syncUserStatisticsAction(userId: string) {
   try {
     const { getSupabaseAdmin } = await import('@/lib/supabase-server');
