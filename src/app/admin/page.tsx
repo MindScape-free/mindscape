@@ -67,7 +67,7 @@ export default function AdminDashboard() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isUserDetailOpen, setIsUserDetailOpen] = useState(false);
   const [logFilter, setLogFilter] = useState<AdminActivityLogEntry['type'] | 'all'>('all');
-  const [feedbackData, setFeedbackData] = useState<Feedback[]>(() => bundle?.feedback || []);
+  const [feedbackData, setFeedbackData] = useState<Feedback[]>([]);
 
   const [topContributorsStatFilter, setTopContributorsStatFilter] = useState<string>('totalMapsCreated');
   const [liveLogs, setLiveLogs] = useState<any[]>([]);
@@ -83,6 +83,14 @@ export default function AdminDashboard() {
     bundle,
     refreshBundle
   } = useAdminDashboard();
+
+  // Sync feedback data from bundle once available (avoids TDZ from using bundle in useState initializer)
+  useEffect(() => {
+    if (bundle?.feedback && bundle.feedback !== feedbackData) {
+      setFeedbackData(bundle.feedback);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bundle?.feedback]);
 
   const listenerIdsRef = useRef<string[]>([]);
 
