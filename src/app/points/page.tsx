@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils';
 import { RANKS, POINT_VALUES, DAILY_CAPS, PointEventType } from '@/types/points';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { FAQSection } from '@/components/faq-section';
+import { POINTS_FAQS } from '@/data/faq';
 
 const fade = (delay = 0) => ({
   initial: { opacity: 0, y: 14 },
@@ -88,13 +90,7 @@ const MULTIPLIERS = [
   { condition: '100+ day streak', multiplier: '2.0×', color: 'text-rose-400' },
 ];
 
-const FAQS = [
-  { q: 'Do I lose points?', a: 'No. Points only go up. Breaking a streak removes the multiplier bonus but never deducts earned XP.' },
-  { q: 'What do points unlock?', a: 'Right now, ranks and badges. Future updates will add profile customization, early feature access, and community perks.' },
-  { q: 'Why are there daily caps?', a: 'Caps keep the system fair. Without them, someone could spam 500 maps in a day and skip 10 levels. Caps mean consistent daily use beats one-day farming.' },
-  { q: 'Can I see my full history?', a: 'Yes — your profile page shows a 90-day XP chart and daily breakdown by category.' },
-  { q: 'When do streak bonuses apply?', a: 'The multiplier applies to every point you earn while the streak is active, not just login points.' },
-];
+
 
 export default function PointsPage() {
   return (
@@ -215,21 +211,12 @@ export default function PointsPage() {
         </motion.div>
       </section>
 
-      {/* FAQ */}
-      <section className="max-w-4xl mx-auto px-6 pb-20">
-        <motion.div {...fade(0.3)}>
-          <p className="font-orbitron text-[10px] uppercase tracking-[0.2em] text-zinc-600 mb-3">Questions</p>
-          <h2 className="text-3xl font-black mb-8">FAQ</h2>
-          <div className="space-y-px">
-            {FAQS.map((faq, i) => (
-              <div key={i} className="p-5 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.03] transition-colors space-y-2">
-                <p className="text-sm font-bold text-white">{faq.q}</p>
-                <p className="text-sm text-zinc-500 leading-relaxed">{faq.a}</p>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-      </section>
+      <FAQSection
+        title="FAQ"
+        subtitle="Common questions about the XP and points system."
+        items={POINTS_FAQS}
+        showSearch={false}
+      />
 
       {/* CTA */}
       <section className="max-w-4xl mx-auto px-6 pb-24">

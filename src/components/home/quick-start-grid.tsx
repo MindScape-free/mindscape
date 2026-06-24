@@ -89,23 +89,21 @@ export function QuickStartGrid({ onSelectTopic, visible = true }: QuickStartGrid
               transition={{ duration: 0.3, delay: index * 0.04 }}
               onClick={() => onSelectTopic(topic.label)}
               className={cn(
-                "group relative flex items-center gap-3 p-3 sm:p-4 rounded-2xl border transition-all duration-300",
-                "hover:scale-[1.03] hover:shadow-lg active:scale-95 cursor-pointer text-left",
-                topic.borderColor,
-                topic.bgColor,
-                "hover:brightness-125"
+                "group relative flex items-center gap-4 p-4 rounded-2xl border transition-all duration-300",
+                "bg-zinc-900/40 hover:bg-zinc-800/80 border-white/5 hover:border-white/10",
+                "hover:-translate-y-1 hover:shadow-2xl active:scale-[0.98] cursor-pointer text-left backdrop-blur-sm"
               )}
             >
               <div className={cn(
-                "w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0",
-                "bg-zinc-950 border border-white/5 shadow-inner transition-transform group-hover:rotate-6",
+                "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300",
+                "bg-zinc-950 border border-white/5 shadow-inner group-hover:scale-110",
                 topic.color
               )}>
-                <topic.icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                <topic.icon className="w-5 h-5" />
               </div>
-              <div className="min-w-0">
-                <span className="text-xs sm:text-sm font-bold text-white leading-tight block line-clamp-2">
-                  {topic.emoji} {topic.label}
+              <div className="min-w-0 flex-1">
+                <span className="text-sm font-medium text-zinc-300 group-hover:text-white transition-colors leading-snug block">
+                  {topic.label}
                 </span>
               </div>
             </motion.button>

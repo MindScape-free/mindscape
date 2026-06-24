@@ -17,32 +17,30 @@ export async function GET(req: Request) {
     try {
       console.log('🌐 Fetching latest models from Pollinations...');
       
-      // Fetch both simultaneously
-      const [textRes, imageRes] = await Promise.all([
-        fetch('https://gen.pollinations.ai/v1/models').then(r => r.json()),
-        fetch('https://gen.pollinations.ai/image/models').then(r => r.json())
-      ]);
+      // Fetch unified models list
+      const allModelsRes = await fetch('https://gen.pollinations.ai/models').then(r => r.json());
 
-      // Process Text Models — only non-paid, text-capable (allow multimodal models too)
-      if (Array.isArray(textRes.data)) {
-        textCache = textRes.data
-          .filter((m: any) => !m.paid_only && m.output_modalities?.includes('text'))
-          .map((m: any) => ({
-            id: m.id,
-            description: m.description || m.id,
-            feature: m.reasoning ? 'reasoning' : m.tools ? 'creative' : 'fast',
-            isFree: true
-          }));
-      }
-
-      // Process Image Models — only image-output, non-paid
-      if (Array.isArray(imageRes)) {
-        imageCache = imageRes
-          .filter((m: any) => !m.paid_only && m.output_modalities?.includes('image'))
+      if (Array.isArray(allModelsRes)) {
+        // Process Text Models — text-capable (use paid_only from API)
+        textCache = allModelsRes
+          .filter((m: any) => m.output_modalities?.includes('text') && m.category === 'text')
           .map((m: any) => ({
             id: m.name,
+            name: m.title || m.name,
             description: m.description || m.name,
-            cost: parseFloat(m.pricing?.completionImageTokens ?? '0.04'),
+            feature: m.reasoning ? 'reasoning' : m.tools ? 'creative' : 'fast',
+            cost: m.pricing?.completionTextTokens ? parseFloat(m.pricing.completionTextTokens) : 0,
+            isFree: !m.paid_only
+          }));
+
+        // Process Image Models — only image-output, non-paid
+        imageCache = allModelsRes
+          .filter((m: any) => !m.paid_only && m.output_modalities?.includes('image') && m.category === 'image')
+          .map((m: any) => ({
+            id: m.name,
+            name: m.title || m.name,
+            description: m.description || m.name,
+            cost: m.pricing?.completionImageTokens ? parseFloat(m.pricing.completionImageTokens) : 0.04,
             quality: 'high',
             isFree: true
           }));

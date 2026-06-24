@@ -26,6 +26,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { FAQSection } from '@/components/faq-section';
+import { ADMIN_FAQS } from '@/data/faq';
 import { useToast } from '@/hooks/use-toast';
 
 import { formatDistanceToNow, format } from 'date-fns';
@@ -654,6 +656,13 @@ export default function AdminDashboard() {
           />
         )}
       </AnimatePresence>
+
+      <FAQSection
+        title="Admin FAQ"
+        subtitle="Manage your platform, users, and monitor system health."
+        items={ADMIN_FAQS}
+        showSearch={true}
+      />
     </div>
   );
 }

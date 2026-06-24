@@ -34,6 +34,8 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useToast } from '@/hooks/use-toast';
+import { FAQSection } from '@/components/faq-section';
+import { PROFILE_FAQS } from '@/data/faq';
 import { languages } from '@/lib/languages';
 import { format } from 'date-fns';
 import { 
@@ -41,7 +43,7 @@ import {
     checkPollenBalanceAction,
 } from '@/app/actions';
 import { trackStudyTime } from '@/lib/tracker';
-import { ModelSelector } from '@/components/model-selector';
+import { ModelSelector, CompactModelSelector } from '@/components/model-selector';
 import { Eye, EyeOff, Menu } from 'lucide-react';
 import { getUserImageSettings, saveUserApiKey, deleteUserApiKey } from '@/lib/supabase-db';
 import { useAIConfig } from '@/contexts/ai-config-context';
@@ -1312,112 +1314,112 @@ function ProfileContent() {
 
                         {activeTab === 'preferences' && (
                             <div className="max-w-6xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                                {/* Settings Grid: Localization, AI Soul, Vision Engine */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {/* Connectivity & Localization */}
-                                    <div className="group relative rounded-[1.5rem] p-6 bg-zinc-900/40 backdrop-blur-xl border border-white/5 transition-all duration-300">
-                                        <div className="flex items-center gap-4 mb-6">
-                                            <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
-                                                <Globe className="h-4 w-4 text-blue-400" />
-                                            </div>
-                                            <div className="min-w-0">
-                                                <h3 className="text-sm font-black text-white truncate">Localization</h3>
-                                                <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest">Interface Culture</p>
-                                            </div>
+                                {/* Settings List: Localization, AI Soul, Vision Engine */}
+                                <div className="max-w-3xl mx-auto">
+                                    <div className="rounded-2xl bg-zinc-900/60 border border-white/5 overflow-hidden">
+                                        <div className="px-6 py-4 border-b border-white/5">
+                                            <p className="text-sm font-black text-white">System Preferences</p>
+                                            <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">Manage your neural interface settings</p>
                                         </div>
-
-                                        <div className="space-y-4 relative z-10">
-                                            <Label className="text-[8px] font-black uppercase tracking-widest text-zinc-600 px-1">System Language</Label>
-                                            <Select value={profile.preferences.preferredLanguage} onValueChange={(v) => savePreference('preferredLanguage', v)}>
-                                                <SelectTrigger className="w-full h-11 bg-black/40 border-white/5 rounded-xl px-4 text-xs font-bold transition-colors">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent className="bg-zinc-900 border-zinc-800 rounded-xl">
-                                                    {languages.map(l => (
-                                                        <SelectItem key={l.code} value={l.code} className="py-2.5 text-xs font-bold">{l.name}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    </div>
-
-                                    {/* Cognitive Persona */}
-                                    <div className="group relative rounded-[1.5rem] p-6 bg-zinc-900/40 backdrop-blur-xl border border-white/5 transition-all duration-300">
-                                        <div className="flex items-center gap-4 mb-6">
-                                            <div className="p-3 bg-violet-500/10 rounded-xl border border-violet-500/20">
-                                                <Brain className="h-4 w-4 text-violet-400" />
+                                        <div className="divide-y divide-white/5">
+                                            {/* Localization */}
+                                            <div className="flex items-center justify-between p-5 hover:bg-white/[0.02] transition-colors">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-2.5 bg-blue-500/10 rounded-xl border border-blue-500/15">
+                                                        <Globe className="h-4 w-4 text-blue-400" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-black text-white">Localization</p>
+                                                        <p className="text-[10px] text-zinc-500 font-bold">Interface Culture</p>
+                                                    </div>
+                                                </div>
+                                                <div className="w-56">
+                                                    <Select value={profile.preferences.preferredLanguage} onValueChange={(v) => savePreference('preferredLanguage', v)}>
+                                                        <SelectTrigger className="w-full h-9 bg-black/40 border-white/5 rounded-lg px-3 text-xs font-bold transition-colors">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent className="bg-zinc-900 border-zinc-800 rounded-xl">
+                                                            {languages.map(l => (
+                                                                <SelectItem key={l.code} value={l.code} className="py-2.5 text-xs font-bold">{l.name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
                                             </div>
-                                            <div className="min-w-0">
-                                                <h3 className="text-sm font-black text-white truncate">AI Personality</h3>
-                                                <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest">Cognitive Flow</p>
-                                            </div>
-                                        </div>
 
-                                        <div className="space-y-6 relative z-10">
-                                            <div className="space-y-3">
-                                                <Label className="text-[8px] font-black uppercase tracking-widest text-zinc-600 px-1">Active Persona</Label>
-                                                <Select value={profile.preferences.defaultAIPersona?.toLowerCase() || 'concise'} onValueChange={(v) => savePreference('defaultAIPersona', v)}>
-                                                    <SelectTrigger className="w-full h-11 bg-black/40 border-white/5 rounded-xl px-4 text-xs font-bold transition-colors">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent className="bg-zinc-900 border-zinc-800 rounded-xl">
-                                                        {[
-                                                            { id: 'teacher', label: 'Teacher' },
-                                                            { id: 'concise', label: 'Concise' },
-                                                            { id: 'creative', label: 'Creative' },
-                                                            { id: 'sage', label: 'Cognitive Sage' },
-                                                        ].map(({ id, label }) => (
-                                                            <SelectItem key={id} value={id} className="py-2.5 text-xs font-bold">{label}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                            {/* AI Personality */}
+                                            <div className="flex items-center justify-between p-5 hover:bg-white/[0.02] transition-colors">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-2.5 bg-violet-500/10 rounded-xl border border-violet-500/15">
+                                                        <Brain className="h-4 w-4 text-violet-400" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-black text-white">AI Personality</p>
+                                                        <p className="text-[10px] text-zinc-500 font-bold">Cognitive Flow</p>
+                                                    </div>
+                                                </div>
+                                                <div className="w-56">
+                                                    <Select value={profile.preferences.defaultAIPersona?.toLowerCase() || 'concise'} onValueChange={(v) => savePreference('defaultAIPersona', v)}>
+                                                        <SelectTrigger className="w-full h-9 bg-black/40 border-white/5 rounded-lg px-3 text-xs font-bold transition-colors">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent className="bg-zinc-900 border-zinc-800 rounded-xl">
+                                                            {[
+                                                                { id: 'teacher', label: 'Teacher' },
+                                                                { id: 'concise', label: 'Concise' },
+                                                                { id: 'creative', label: 'Creative' },
+                                                                { id: 'sage', label: 'Cognitive Sage' },
+                                                            ].map(({ id, label }) => (
+                                                                <SelectItem key={id} value={id} className="py-2.5 text-xs font-bold">{label}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
                                             </div>
-                                        </div>
-                                    </div>
 
-                                    {/* Intelligence Engine */}
-                                    <div className="group relative rounded-[1.5rem] p-6 bg-zinc-900/40 backdrop-blur-xl border border-white/5 transition-all duration-300">
-                                        <div className="flex items-center gap-4 mb-6">
-                                            <div className="p-3 bg-violet-500/10 rounded-xl border border-violet-500/20">
-                                                <BrainCircuit className="h-4 w-4 text-violet-400" />
+                                            {/* Intelligence Engine */}
+                                            <div className="flex items-center justify-between p-5 hover:bg-white/[0.02] transition-colors">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-2.5 bg-indigo-500/10 rounded-xl border border-indigo-500/15">
+                                                        <BrainCircuit className="h-4 w-4 text-indigo-400" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-black text-white">Intelligence Engine</p>
+                                                        <p className="text-[10px] text-zinc-500 font-bold">Reasoning Model</p>
+                                                    </div>
+                                                </div>
+                                                <div className="w-56 flex justify-end">
+                                                    <CompactModelSelector
+                                                        type="text"
+                                                        value={preferredTextModel}
+                                                        onChange={handleSaveTextModelPreference}
+                                                        freeOnly={true}
+                                                        className="w-full h-9 bg-black/40 border-white/5 rounded-lg px-3 text-xs font-bold truncate"
+                                                    />
+                                                </div>
                                             </div>
-                                            <div className="min-w-0">
-                                                <h3 className="text-sm font-black text-white truncate">Intelligence Engine</h3>
-                                                <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest">Cognitive Core</p>
-                                            </div>
-                                        </div>
 
-                                        <div className="space-y-4 relative z-10">
-                                            <Label className="text-[8px] font-black uppercase tracking-widest text-zinc-600 px-1">Reasoning Model</Label>
-                                            <ModelSelector
-                                                type="text"
-                                                value={preferredTextModel}
-                                                onChange={handleSaveTextModelPreference}
-                                                className="w-full h-11 bg-black/40 border-white/5 rounded-xl px-4 text-xs font-bold truncate"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Vision Engine */}
-                                    <div className="group relative rounded-[1.5rem] p-6 bg-zinc-900/40 backdrop-blur-xl border border-white/5 transition-all duration-300">
-                                        <div className="flex items-center gap-4 mb-6">
-                                            <div className="p-3 bg-pink-500/10 rounded-xl border border-pink-500/20">
-                                                <Wand2 className="h-4 w-4 text-pink-400" />
+                                            {/* Vision Engine */}
+                                            <div className="flex items-center justify-between p-5 hover:bg-white/[0.02] transition-colors">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-2.5 bg-pink-500/10 rounded-xl border border-pink-500/15">
+                                                        <Wand2 className="h-4 w-4 text-pink-400" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-black text-white">Vision Engine</p>
+                                                        <p className="text-[10px] text-zinc-500 font-bold">Image Model</p>
+                                                    </div>
+                                                </div>
+                                                <div className="w-56 flex justify-end">
+                                                    <CompactModelSelector
+                                                        type="image"
+                                                        value={preferredModel}
+                                                        onChange={handleSaveImageModelPreference}
+                                                        freeOnly={true}
+                                                        className="w-full h-9 bg-black/40 border-white/5 rounded-lg px-3 text-xs font-bold truncate"
+                                                    />
+                                                </div>
                                             </div>
-                                            <div className="min-w-0">
-                                                <h3 className="text-sm font-black text-white truncate">Vision Engine</h3>
-                                                <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest">Creative Hub</p>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-4 relative z-10">
-                                            <Label className="text-[8px] font-black uppercase tracking-widest text-zinc-600 px-1">Synthesis Model</Label>
-                                            <ModelSelector
-                                                type="image"
-                                                value={preferredModel}
-                                                onChange={handleSaveImageModelPreference}
-                                                className="w-full h-11 bg-black/40 border-white/5 rounded-xl px-4 text-xs font-bold truncate"
-                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -2056,6 +2058,13 @@ function SourceViewerDialog({ map: m, onClose }: { map: any; onClose: () => void
                     </div>
                 )}
             </div>
+
+            <FAQSection
+                title="Profile FAQ"
+                subtitle="Manage your account, track your progress, and configure AI settings."
+                items={PROFILE_FAQS}
+                showSearch={true}
+            />
         </div>
     );
 }

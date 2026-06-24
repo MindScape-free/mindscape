@@ -74,19 +74,18 @@ export async function publishMindMapAction(mapId: string, publicData: any, userI
     if (!isAuthor && !isAdmin) return { success: false, error: 'Unauthorized' };
 
     // Update original map
+    const content = publicData.content || {};
+
     await supabase.from('mindmaps').update({ is_public: true, updated_at: new Date().toISOString() }).eq('id', mapId).eq('user_id', targetAuthorId);
 
-    // Fetch full map content from mindmaps table
-    const { data: fullMap } = await supabase.from('mindmaps').select('content').eq('id', mapId).single();
-
-    // Save to public_mindmaps
+    // Save to public_mindmaps (content already provided in publicData from client)
     await supabase.from('public_mindmaps').upsert({
       id: mapId,
       original_author_id: targetAuthorId,
       author_name: publicData.authorName || 'Anonymous',
       topic: publicData.topic,
       summary: publicData.summary,
-      content: fullMap?.content || {},
+      content,
       public_categories: publicData.publicCategories || [],
       is_public: true,
       published_at: new Date().toISOString(),
@@ -94,7 +93,7 @@ export async function publishMindMapAction(mapId: string, publicData: any, userI
     }, { onConflict: 'id' });
 
     awardPoints(userId, 'MAP_PUBLISHED', { mapId, topic: publicData.topic }).catch(() => {});
-    await logActivityAdmin({ type: 'MAP_PUBLISHED', targetId: mapId, targetType: 'mindmap', details: `Map "${publicData.topic || 'Untitled'}" published`, performedBy: userId });
+    logActivityAdmin({ type: 'MAP_PUBLISHED', targetId: mapId, targetType: 'mindmap', details: `Map "${publicData.topic || 'Untitled'}" published`, performedBy: userId }).catch(() => {});
 
     return { success: true, error: null };
   } catch (error: any) {

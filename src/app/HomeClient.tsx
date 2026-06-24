@@ -89,7 +89,6 @@ const getTrackerDepth = (d: string): 'low' | 'medium' | 'deep' => {
 
 // Home page section components
 import { QuickStartGrid } from '@/components/home/quick-start-grid';
-import { CommunityShowcase } from '@/components/home/community-showcase';
 import { RecentMaps } from '@/components/home/recent-maps';
 import { StatsCounter } from '@/components/home/stats-counter';
 import { SourceTypeCards } from '@/components/home/source-type-cards';
@@ -793,8 +792,6 @@ export default function Home() {
         {/* Recent Maps - For logged-in returning users */}
         <RecentMaps />
 
-        {/* Community Showcase - Live public maps */}
-        <CommunityShowcase />
 
         {/* Source Type Cards - Action-oriented entry points */}
         <SourceTypeCards 

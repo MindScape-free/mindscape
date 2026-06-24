@@ -29,6 +29,8 @@ import { CommunityCard } from '@/components/community/community-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { FAQSection } from '@/components/faq-section';
+import { COMMUNITY_FAQS } from '@/data/faq';
 
 type SortOption = 'recent' | 'views';
 
@@ -225,6 +227,13 @@ export default function CommunityPage() {
                     </div>
                 )}
             </div>
+
+            <FAQSection
+                title="Community FAQ"
+                subtitle="Learn how to publish, discover, and manage community mind maps."
+                items={COMMUNITY_FAQS}
+                showSearch={true}
+            />
         </div>
     );
 }

@@ -9,6 +9,8 @@ import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { useState, useEffect } from 'react';
 import { Feedback } from '@/types/feedback';
+import { FAQSection } from '@/components/faq-section';
+import { FEEDBACK_FAQS } from '@/data/faq';
 
 export default function FeedbackPage() {
     const { user, supabase, isUserLoading } = useAuth();
@@ -93,6 +95,13 @@ export default function FeedbackPage() {
                         </section>
                     </div>
                 </div>
+
+                <FAQSection
+                    title="Feedback FAQ"
+                    subtitle="How to submit feedback, report bugs, and suggest features."
+                    items={FEEDBACK_FAQS}
+                    showSearch={false}
+                />
             </main>
         </div>
     );

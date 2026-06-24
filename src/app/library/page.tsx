@@ -34,6 +34,8 @@ import { categorizeMindMapAction, suggestRelatedTopicsAction } from '@/app/actio
 import { enhanceImagePromptAction, generateThumbnailAction } from '@/app/actions';
 import { RefreshCw, Zap, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { FAQSection } from '@/components/faq-section';
+import { LIBRARY_FAQS } from '@/data/faq';
 import { jsPDF } from 'jspdf';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DepthBadge } from '@/components/mind-map/depth-badge';
@@ -680,20 +682,11 @@ export default function DashboardPage() {
 
       if (catError) throw new Error(catError);
 
-      const { data: fullData, error: fetchError } = await supabase
-        .from('mindmaps')
-        .select('*')
-        .eq('id', map.id)
-        .eq('user_id', user.id)
-        .single();
-
-      if (fetchError || !fullData) throw new Error("Mind map data not found.");
-
       const publicData: any = {
         id: map.id,
         topic: map.topic,
         summary: map.summary,
-        content: fullData.content || {},
+        content: (map as any).content || {},
         is_public: true,
         public_categories: categories,
         original_map_id: map.id,
@@ -1826,6 +1819,13 @@ export default function DashboardPage() {
           isEnhancing={isEnhancingPrompt}
         />
       )}
+
+      <FAQSection
+        title="Library FAQ"
+        subtitle="Manage, organize, and share your saved mind maps."
+        items={LIBRARY_FAQS}
+        showSearch={true}
+      />
     </TooltipProvider >
 
   );

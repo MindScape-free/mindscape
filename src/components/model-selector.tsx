@@ -23,6 +23,7 @@ export type ModelItem = {
     isNew: boolean;
     pollenApprox: string;
     type: 'text' | 'image';
+    isFree: boolean;
 };
 
 /**
@@ -68,8 +69,11 @@ function mapModelsToUI(apiModels: any[], type: 'text' | 'image'): ModelItem[] {
             icon: Icon,
             description: m.description || `${label} - Pollinations AI Model`,
             isNew: m.isNew ?? false,
-            pollenApprox: type === 'text' ? 'Free' : (cost > 0 ? formatPollenCount(cost) : 'Free'),
-            type
+            pollenApprox: type === 'text' 
+              ? (m.isFree ? 'Free' : 'Paid') 
+              : (cost > 0 ? formatPollenCount(cost) : 'Free'),
+            type,
+            isFree: m.isFree !== false
         };
     });
 }
@@ -113,7 +117,10 @@ export function ModelSelector({
         loadModels();
     }, [type]);
 
-    const models = freeOnly ? availableModels.filter(m => m.cost < 0.005) : availableModels;
+    // freeOnly: for text models use isFree flag; for image models use cost threshold
+    const models = freeOnly 
+      ? availableModels.filter(m => m.type === 'text' ? m.isFree : m.cost < 0.005) 
+      : availableModels;
     
     // If loading or no models, show placeholder
     if (isLoading && models.length === 0) {
@@ -174,11 +181,14 @@ export function ModelSelector({
                                 {type === 'text' && <div />}
 
                                 <div className="flex justify-end pr-1">
-                                    <div className="nm-inset-glow px-2 py-0.5 rounded-lg bg-zinc-900/50 border border-white/5">
-                                        <span className="text-[11px] font-mono text-violet-400 font-bold whitespace-nowrap">
-                                            {model.type === 'text' ? 'FREE' : `$${model.cost < 0.01 ? model.cost.toFixed(4) : model.cost.toFixed(2)}`}
+                                    <div className={`nm-inset-glow px-2 py-0.5 rounded-lg border ${model.isFree ? 'bg-emerald-900/20 border-emerald-500/20' : 'bg-amber-900/20 border-amber-500/20'}`}>
+                                        <span className={`text-[11px] font-mono font-bold whitespace-nowrap ${model.isFree ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                            {model.type === 'text' 
+                                              ? (model.isFree ? 'FREE' : 'PAID') 
+                                              : `$${model.cost < 0.01 ? model.cost.toFixed(4) : model.cost.toFixed(2)}`}
                                         </span>
                                         {model.type === 'image' && <span className="text-[8px] text-zinc-600 ml-0.5 uppercase tracking-tighter">/img</span>}
+                                        {model.type === 'text' && !model.isFree && <span className="text-[8px] text-zinc-500 ml-0.5 uppercase tracking-tighter">🌸</span>}
                                     </div>
                                 </div>
                             </div>
@@ -215,7 +225,10 @@ export function CompactModelSelector({ value, onChange, className, freeOnly = fa
         loadModels();
     }, [type]);
 
-    const models = freeOnly ? availableModels.filter(m => m.cost < 0.005) : availableModels;
+    // freeOnly: for text models use isFree flag; for image models use cost threshold
+    const models = freeOnly 
+      ? availableModels.filter(m => m.type === 'text' ? m.isFree : m.cost < 0.005) 
+      : availableModels;
     if (isLoading && models.length === 0) return <div className={cn("h-9 w-24 bg-white/5 animate-pulse rounded-lg", className)} />;
     
     const selectedModel = models.find(m => m.value === value) || models[0];
@@ -236,8 +249,12 @@ export function CompactModelSelector({ value, onChange, className, freeOnly = fa
                         <div className="grid grid-cols-[16px_1fr_60px] items-center w-full gap-2 py-1">
                             <model.icon className="w-3 h-3 text-zinc-400 group-hover:text-violet-400" />
                             <span className="text-xs truncate">{model.label}</span>
-                            <div className="flex justify-end pr-1 text-[9px] font-mono text-zinc-500 uppercase">
-                                {type === 'text' ? 'Free' : model.cost.toFixed(4)}
+                            <div className="flex justify-end pr-1">
+                                <span className={`text-[9px] font-mono uppercase ${model.isFree ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                    {type === 'text' 
+                                      ? (model.isFree ? 'Free' : 'Paid') 
+                                      : model.cost.toFixed(4)}
+                                </span>
                             </div>
                         </div>
                     </SelectItem>

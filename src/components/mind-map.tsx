@@ -1496,7 +1496,9 @@ export const MindMap = React.memo(({
                          (targetUid !== user.id ? 'Explorer' : (user.displayName || 'Anonymous'));
       
       const publicData: any = {
-        ...toPlainObject(data),
+        topic: data.topic,
+        summary: data.summary,
+        content: data,
         isPublic: true,
         publicCategories: categories,
         originalMapId: data.id,

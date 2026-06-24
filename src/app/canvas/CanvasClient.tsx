@@ -5,6 +5,8 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { MindMap } from '@/components/mind-map';
 import { MindMapData, NestedExpansionItem, MindMapWithId } from '@/types/mind-map';
+import { FAQSection } from '@/components/faq-section';
+import { CANVAS_FAQS } from '@/data/faq';
 import { NeuralLoader } from '@/components/loading/neural-loader';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { safeGetItem } from '@/lib/storage';
@@ -1540,6 +1542,12 @@ function MindMapPageContent() {
         }}
       />
 
+      <FAQSection
+        title="Canvas FAQ"
+        subtitle="Everything about exploring and interacting with your mind maps."
+        items={CANVAS_FAQS}
+        showSearch={true}
+      />
     </>
   );
 }
