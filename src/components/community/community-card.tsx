@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { DepthBadge } from '@/components/mind-map/depth-badge';
+import { TextOverflowTooltip } from '@/components/ui/text-overflow-tooltip';
 
 import {
     DropdownMenu,
@@ -222,18 +223,22 @@ export const CommunityCard = ({ map, onClick, variant = 'default' }: CommunityCa
                         {/* Content Container (z-10 to stay above background image) */}
                         <div className="relative z-10 flex flex-col h-full w-full">
                             <div className="flex items-start justify-between gap-3 mb-2">
-                                <h3 className="font-bold text-lg text-white group-hover:text-purple-400 transition-colors font-orbitron tracking-tight pb-1 leading-snug line-clamp-2">
-                                    {map.shortTitle || map.topic}
-                                </h3>
+                                <TextOverflowTooltip
+                                    as="h3"
+                                    text={map.shortTitle || map.topic}
+                                    className="font-bold text-lg text-white group-hover:text-purple-400 transition-colors font-orbitron tracking-tight pb-1 leading-snug line-clamp-2"
+                                />
                                 <div className="shrink-0 mt-1">
                                     <DepthBadge depth={map.depth} className="backdrop-blur-md bg-black/40 border-white/10 text-[9px]" />
                                 </div>
                             </div>
 
                             {map.summary && (
-                                <p className="text-xs text-zinc-400 line-clamp-3 mb-6 leading-relaxed">
-                                    {map.summary}
-                                </p>
+                                <TextOverflowTooltip
+                                    as="p"
+                                    text={map.summary}
+                                    className="text-xs text-zinc-400 line-clamp-3 mb-6 leading-relaxed"
+                                />
                             )}
 
                             <div className="mt-auto pt-4 border-t border-white/5 flex items-center justify-between">
@@ -291,7 +296,11 @@ export const CommunityCard = ({ map, onClick, variant = 'default' }: CommunityCa
                             </div>
                         </div>
 
-                        <h3 className="font-bold text-lg text-white mb-2 line-clamp-2 group-hover:text-purple-400 transition-colors font-orbitron tracking-tight pb-1 leading-snug">{map.shortTitle || map.topic}</h3>
+                        <TextOverflowTooltip
+                            as="h3"
+                            text={map.shortTitle || map.topic}
+                            className="font-bold text-lg text-white mb-2 line-clamp-2 group-hover:text-purple-400 transition-colors font-orbitron tracking-tight pb-1 leading-snug"
+                        />
 
                         <div className="mt-auto pt-4 border-t border-white/5 flex items-center justify-between">
                             <div className="flex items-center gap-2">

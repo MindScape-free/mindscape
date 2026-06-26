@@ -36,7 +36,7 @@ export function useMapSharing() {
 
       if (result.success) {
         const supabase = getSupabaseClient();
-        await updateMindMapField(supabase, options.mapId, { is_public: true });
+        await updateMindMapField(supabase, options.mapId, { is_public: true }, user.id);
       }
       return { success: result.success, error: result.error ?? undefined };
     } catch (error) {
@@ -54,7 +54,7 @@ export function useMapSharing() {
       const result = await removeFromCommunityAction(mapId, user.id);
       if (result.success) {
         const supabase = getSupabaseClient();
-        await updateMindMapField(supabase, mapId, { is_public: false });
+        await updateMindMapField(supabase, mapId, { is_public: false }, user.id);
       }
       return { success: result.success, error: result.error ?? undefined };
     } catch (error) {

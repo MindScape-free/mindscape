@@ -22,7 +22,7 @@ import { SearchReferencesPanel, SourceFileModal } from '@/components/canvas';
 
 import { Button } from '@/components/ui/button';
 import {
-  Scale, RefreshCw, Sparkles, Loader2, ZapOff, List, UserRound, Zap as ZapIcon, Globe, Palette, Brain, FileText, Image as ImageIcon, Youtube, Key
+  Scale, RefreshCw, Sparkles, Loader2, ZapOff, List, UserRound, Zap as ZapIcon, Globe, Palette, Brain, FileText, Image as ImageIcon, Youtube, Key, Trash2
 } from 'lucide-react';
 import {
   Dialog,
@@ -70,7 +70,7 @@ import { useAIHealth } from '@/hooks/use-ai-health';
 import { useActivity } from '@/contexts/activity-context';
 import { resolveDepthWithConfidence, analyzeTopicComplexity } from '@/lib/depth-analysis';
 import { trackGenerationComplete, trackGenerationFailed } from '@/lib/tracker';
-import { useSessionTracking, useMapTracking } from '@/hooks/use-tracking';
+import { useMapTracking } from '@/hooks/use-tracking';
 
 function MindMapPageContent() {
   const { params, navigateToMap, changeLanguage, clearRegenFlag, getParamKey, router } = useMindMapRouter();
@@ -94,6 +94,9 @@ function MindMapPageContent() {
 
   const [useFileAwareContext, setUseFileAwareContext] = useState(false);
   const [pinnedMessagesCount, setPinnedMessagesCount] = useState(0);
+
+  // Delete confirmation state
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   // Universal Nested Maps Dialog state
   const [mapHierarchy, setMapHierarchy] = useState<{
@@ -184,21 +187,12 @@ function MindMapPageContent() {
     }
   });
 
-  const { trackPageView } = useSessionTracking(user?.id);
   const mapTracker = useMapTracking({
     mapId: mindMap?.id || params.mapId || 'pending',
     userId: user?.id,
     title: mindMap?.topic || params.topic || undefined,
     isPublic: !!params.publicMapId,
   });
-
-  useEffect(() => {
-    trackPageView('Canvas', { 
-      topic: params.topic, 
-      mapId: params.mapId,
-      mode: params.topic1 && params.topic2 ? 'compare' : 'single'
-    });
-  }, [trackPageView, params.topic, params.mapId, params.topic1, params.topic2]);
 
   // Sync ref with actual function
   useEffect(() => {
@@ -1014,6 +1008,9 @@ function MindMapPageContent() {
       refreshBalance();
       awardXP('SUB_MAP_CREATED', { topic: subTopic }).catch(() => {});
 
+      // Mark unsaved so auto-save persists parent with the new nestedExpansions
+      setHasUnsavedChanges(true);
+
       if (mode === 'foreground') {
         toast({ title: "Sub-Map Generated", description: `Created detailed map for "${subTopic}".` });
       } else {
@@ -1031,24 +1028,22 @@ function MindMapPageContent() {
     }
   }, [user, expandNode, mindMaps.length, setMindMaps, setActiveMindMapIndex, toast, mindMap?.id, mapHierarchy, fetchMapHierarchy]);
 
-  const handleDeleteNestedMap = useCallback(async (id: string) => {
-    if (!mindMap) return;
-    const updatedExpansions = (mindMap.nestedExpansions || []).filter(e => e.id !== id);
+  const handleDeleteNestedMapConfirm = useCallback(async () => {
+    const id = pendingDeleteId;
+    if (!mindMap || !id) return;
 
-    // Create the updated map object
+    const updatedExpansions = (mindMap.nestedExpansions || []).filter(e => e.id !== id);
     const updatedMap = { ...mindMap, nestedExpansions: updatedExpansions };
 
-    // Update local state
     handleUpdateCurrentMap({ nestedExpansions: updatedExpansions });
 
-    // Directly persist the updated map to avoid race condition
-    // where handleSaveMapFromHook might save the old state
     if (mindMap.id) {
       try {
         await handleSaveMap(updatedMap, mindMap.id, true);
       } catch (err) {
         console.error("Failed to persist nested map deletion:", err);
         toast({ variant: "destructive", title: "Save Failed", description: "Could not save the deletion." });
+        setPendingDeleteId(null);
         return;
       }
     }
@@ -1057,8 +1052,13 @@ function MindMapPageContent() {
       const { error } = await supabase.from('mindmaps').delete().eq('id', id).eq('user_id', user.id);
       if (error) console.error('Failed to delete nested map:', error);
     }
-    toast({ title: "Nested Map Deleted", description: "The link has been removed." });
-  }, [mindMap, handleUpdateCurrentMap, handleSaveMap, toast, user]);
+    toast({ title: "Nested Map Deleted", description: "The nested map has been permanently removed." });
+    setPendingDeleteId(null);
+  }, [mindMap, pendingDeleteId, handleUpdateCurrentMap, handleSaveMap, toast, user]);
+
+  const handleDeleteNestedMap = useCallback((id: string) => {
+    setPendingDeleteId(id);
+  }, []);
 
   const handleRegenerateNestedMap = useCallback(async (topic: string, id: string) => {
     if (!mindMap) return;
@@ -1438,6 +1438,31 @@ function MindMapPageContent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Nested Map Confirmation Dialog */}
+      <Dialog open={!!pendingDeleteId} onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}>
+        <DialogContent className="sm:max-w-[400px] rounded-[2rem] border-red-500/20 bg-zinc-950">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black text-white flex items-center gap-3">
+              <Trash2 className="h-5 w-5 text-red-400" />
+              Delete Nested Map?
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400 font-medium">
+              This will permanently delete the nested map and all its data. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-2">
+            <Button variant="ghost" onClick={() => setPendingDeleteId(null)} className="rounded-xl border border-white/5 text-zinc-400 hover:text-white hover:bg-white/5 font-bold px-6 h-11">
+              Cancel
+            </Button>
+            <Button onClick={handleDeleteNestedMapConfirm} variant="destructive" className="rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold px-6 h-11 shadow-lg shadow-red-600/20">
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Permanently
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <button
         onClick={() => setIsChatOpen(true)}
         className="fixed bottom-6 right-6 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 p-4 text-white shadow-lg transition-transform hover:scale-110 z-50"

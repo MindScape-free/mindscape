@@ -139,7 +139,7 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
             const id = setTimeout(() => setPollenBalance(null), 0);
             return () => clearTimeout(id);
         }
-    }, [config.pollinationsApiKey, user]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [config.pollinationsApiKey, user, refreshBalance]);
 
     // Reset config when user logs out
     useEffect(() => {
@@ -147,7 +147,7 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
             const id = setTimeout(() => resetConfig(), 0);
             return () => clearTimeout(id);
         }
-    }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [user, resetConfig]);
 
     // Sync state with local storage on mount and when storage changes
     useEffect(() => {

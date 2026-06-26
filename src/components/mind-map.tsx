@@ -213,7 +213,7 @@ interface MindMapProps {
   isSaved: boolean;
   onSaveMap: () => void;
   onExplainInChat: (message: string) => void;
-  onGenerateNewMap: (topic: string, parentTopic?: string, contextPath?: string, mode?: 'foreground' | 'background') => void;
+  onGenerateNewMap: (topic: string, nodeId?: string, contextPath?: string, mode?: 'foreground' | 'background', branchDepth?: 'low' | 'medium' | 'deep') => void | Promise<void>;
   onViewSource?: () => void;
   onOpenNestedMap?: (mapData: any, expansionId: string) => void;
   onStartQuiz: (topic?: string) => void;

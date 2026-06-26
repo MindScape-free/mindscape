@@ -33,7 +33,7 @@ import { toPascalCase } from '@/lib/utils';
 interface MindMapAccordionProps {
     mindMap: any;
     mainTopic?: string;
-    onGenerateNewMap: (topic: string, parentId: string, contextPath: string, mode?: 'foreground' | 'background') => void;
+    onGenerateNewMap: (topic: string, parentId: string, contextPath: string, mode?: 'foreground' | 'background') => void | Promise<void>;
     onExplainInChat: (text: string) => void;
     onStartQuiz: (topic: string) => void;
     onOpenNestedMap?: (data: any, id: string) => void;

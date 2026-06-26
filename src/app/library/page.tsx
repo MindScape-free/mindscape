@@ -28,6 +28,7 @@ import { formatShortDistanceToNow } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
+import { TextOverflowTooltip } from '@/components/ui/text-overflow-tooltip';
 import { useNotifications } from '@/contexts/notification-context';
 import { useAIConfig } from '@/contexts/ai-config-context';
 import { categorizeMindMapAction, suggestRelatedTopicsAction } from '@/app/actions/community';
@@ -1345,9 +1346,12 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  <h3 className="font-bold text-lg text-white mb-2 line-clamp-2 group-hover:text-purple-400 transition-colors font-orbitron tracking-tight pb-1 leading-snug" onClick={() => handleMindMapClick(map.id)}>
-                    {(map as any).shortTitle || map.topic}
-                  </h3>
+                  <TextOverflowTooltip 
+                    as="h3" 
+                    text={(map as any).shortTitle || map.topic}
+                    className="font-bold text-lg text-white mb-2 line-clamp-2 group-hover:text-purple-400 transition-colors font-orbitron tracking-tight pb-1 leading-snug cursor-pointer" 
+                    onClick={() => handleMindMapClick(map.id)}
+                  />
 
                   <div className="flex items-center justify-between mt-auto pt-2 border-t border-white/5">
                     {updatedAt && (

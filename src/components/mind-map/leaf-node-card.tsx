@@ -32,7 +32,7 @@ interface LeafNodeCardProps {
     onSubCategoryClick: (subCategory: SubCategory) => void;
     onGenerateImage: (subCategory: SubCategory) => void;
     onExplainInChat: (message: string) => void;
-    onGenerateNewMap: (topic: string, nodeId: string, contextPath: string, mode?: 'foreground' | 'background') => void;
+    onGenerateNewMap: (topic: string, nodeId: string, contextPath: string, mode?: 'foreground' | 'background') => void | Promise<void>;
     isGeneratingMap: boolean;
     mainTopic: string;
     nodeId: string;
@@ -72,10 +72,16 @@ export const LeafNodeCard = memo(function LeafNodeCard({
 
     const { toast } = useToast();
     const [isCopied, setIsCopied] = useState(false);
+    const [localIsGenerating, setLocalIsGenerating] = useState(false);
 
-    const handleExpandClick = (e: React.MouseEvent) => {
+    const handleExpandClick = async (e: React.MouseEvent) => {
         e.stopPropagation();
-        onGenerateNewMap(node.name, nodeId, contextPath, 'background');
+        setLocalIsGenerating(true);
+        try {
+            await onGenerateNewMap(node.name, nodeId, contextPath, 'background');
+        } finally {
+            setLocalIsGenerating(false);
+        }
     };
 
     const handleChatClick = (e: React.MouseEvent) => {
@@ -181,7 +187,7 @@ export const LeafNodeCard = memo(function LeafNodeCard({
                                             variant="ghost"
                                             size="icon"
                                             className={cn(
-                                                "h-8 w-8 rounded-lg transition-all",
+                                                "h-8 w-8 rounded-lg transition-all relative",
                                                 existingExpansion ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-500 hover:text-primary hover:bg-primary/10'
                                             )}
                                             onClick={(e) => {
@@ -191,12 +197,19 @@ export const LeafNodeCard = memo(function LeafNodeCard({
                                                     handleExpandClick(e);
                                                 }
                                             }}
-                                            disabled={isGeneratingMap || isGlobalBusy}
+                                            disabled={isGeneratingMap || localIsGenerating || isGlobalBusy}
                                         >
-                                            {isGeneratingMap ? <Loader2 className="h-4 w-4 animate-spin" /> : <Network className="h-4 w-4" />}
+                                            {isGeneratingMap || localIsGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                                                <>
+                                                    <Network className="h-4 w-4" />
+                                                    {existingExpansion && (
+                                                        <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_5px_#10b981]" />
+                                                    )}
+                                                </>
+                                            )}
                                         </Button>
                                     </TooltipTrigger>
-                                    <TooltipContent className="glassmorphism"><p>Generate Sub-Map</p></TooltipContent>
+                                    <TooltipContent className="glassmorphism"><p>{existingExpansion ? 'Open Sub Map' : 'Generate Sub Map'}</p></TooltipContent>
                                 </Tooltip>
 
                                 <Tooltip>

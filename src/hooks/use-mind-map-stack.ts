@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { MindMapData, NestedExpansionItem } from '@/types/mind-map';
 
 export type MindMapStatus = 'idle' | 'generating' | 'syncing' | 'error';
@@ -25,6 +25,8 @@ export function useMindMapStack(options: {
     const [generationScope, setGenerationScope] = useState<'foreground' | 'background' | null>(null);
 
     const currentMap = useMemo(() => stack[activeIndex], [stack, activeIndex]);
+    const currentMapRef = useRef(currentMap);
+    useEffect(() => { currentMapRef.current = currentMap; }, [currentMap]);
 
     const navigate = useCallback((index: number) => {
         if (index >= 0 && index < stack.length) {
@@ -184,17 +186,18 @@ export function useMindMapStack(options: {
     }, [activeIndex]);
 
     const sync = useCallback(async (isSilent = false) => {
-        if (!currentMap) return;
+        const mapToSync = currentMapRef.current;
+        if (!mapToSync) return;
         setStatus('syncing');
         try {
-            await options.persistenceAdapter.persist(currentMap, currentMap.id, isSilent);
+            await options.persistenceAdapter.persist(mapToSync, mapToSync.id, isSilent);
         } catch (err: any) {
             setError(err.message || 'Sync failed');
             throw err;
         } finally {
             setStatus('idle');
         }
-    }, [currentMap, options.persistenceAdapter]);
+    }, [options.persistenceAdapter]);
 
     return {
         stack,

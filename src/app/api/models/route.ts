@@ -21,29 +21,41 @@ export async function GET(req: Request) {
       const allModelsRes = await fetch('https://gen.pollinations.ai/models').then(r => r.json());
 
       if (Array.isArray(allModelsRes)) {
-        // Process Text Models — text-capable (use paid_only from API)
+        // Process Text Models — text-capable
         textCache = allModelsRes
           .filter((m: any) => m.output_modalities?.includes('text') && m.category === 'text')
-          .map((m: any) => ({
-            id: m.name,
-            name: m.title || m.name,
-            description: m.description || m.name,
-            feature: m.reasoning ? 'reasoning' : m.tools ? 'creative' : 'fast',
-            cost: m.pricing?.completionTextTokens ? parseFloat(m.pricing.completionTextTokens) : 0,
-            isFree: !m.paid_only
-          }));
+          .map((m: any) => {
+            const cost = m.pricing?.completionTextTokens ? parseFloat(m.pricing.completionTextTokens) : 0;
+            // Free text models are explicitly not paid AND have a cost <= 0.000001 pollen
+            const isFree = m.paid_only === true ? false : (cost === 0 || cost <= 0.000001);
+            
+            return {
+              id: m.name,
+              name: m.title || m.name,
+              description: m.description || m.name,
+              feature: m.reasoning ? 'reasoning' : m.tools ? 'creative' : 'fast',
+              cost,
+              isFree
+            };
+          });
 
-        // Process Image Models — only image-output, non-paid
+        // Process Image Models — only image-output
         imageCache = allModelsRes
-          .filter((m: any) => !m.paid_only && m.output_modalities?.includes('image') && m.category === 'image')
-          .map((m: any) => ({
-            id: m.name,
-            name: m.title || m.name,
-            description: m.description || m.name,
-            cost: m.pricing?.completionImageTokens ? parseFloat(m.pricing.completionImageTokens) : 0.04,
-            quality: 'high',
-            isFree: true
-          }));
+          .filter((m: any) => m.output_modalities?.includes('image') && m.category === 'image')
+          .map((m: any) => {
+            const cost = m.pricing?.completionImageTokens ? parseFloat(m.pricing.completionImageTokens) : 0.04;
+            // Free image models are explicitly not paid AND have a cost < 0.005 pollen
+            const isFree = m.paid_only === true ? false : (cost < 0.005);
+
+            return {
+              id: m.name,
+              name: m.title || m.name,
+              description: m.description || m.name,
+              cost,
+              quality: 'high',
+              isFree
+            };
+          });
       }
 
       lastFetch = now;

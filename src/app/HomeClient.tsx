@@ -61,7 +61,7 @@ import { getSupabaseClient } from '@/lib/supabase-db';
 import { useAIConfig } from '@/contexts/ai-config-context';
 import { OnboardingWizard, TRIGGER_ONBOARDING_EVENT } from '@/components/onboarding-wizard';
 import { trackGenerationStart } from '@/lib/tracker';
-import { useSessionTracking } from '@/hooks/use-tracking';
+
 
 import dynamic from 'next/dynamic';
 import { useMultiSource } from '@/hooks/use-multi-source';
@@ -609,12 +609,6 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const languageSelectRef = useRef<HTMLButtonElement>(null);
   const [selectedSource, setSelectedSource] = useState<{ type: string; timestamp: number } | null>(null);
-
-  const { trackPageView } = useSessionTracking(user?.id);
-
-  useEffect(() => {
-    trackPageView('Home');
-  }, [trackPageView]);
 
   const [showScrollTop, setShowScrollTop] = useState(false);
 

@@ -88,9 +88,9 @@ async function recordTelemetry(params: {
       error_message: params.errorMessage || null,
       prompt: params.prompt || null,
       user_id: params.userId || null,
+      repair_applied: params.repairApplied || false,
+      salvaged: params.salvaged || false,
       metadata: {
-        repairApplied: params.repairApplied || false,
-        salvaged: params.salvaged || false,
         model: params.model,
         provider: params.provider,
       },

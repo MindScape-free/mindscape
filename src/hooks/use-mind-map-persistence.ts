@@ -18,6 +18,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
   const { user, supabase } = useAuth();
   const { toast } = useToast();
   const isSavingRef = useRef(false);
+  const saveQueueRef = useRef<{ mapToSave: MindMapData; existingId?: string; isSilent: boolean } | null>(null);
   const generatingThumbnailsRef = useRef<Set<string>>(new Set());
   const [aiPersona, setAiPersona] = useState<string>('Teacher');
 
@@ -78,9 +79,15 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
   }, [user, supabase]);
 
   const saveMap = useCallback(async (mapToSave: MindMapData, existingId?: string, isSilent = false) => {
-    if (!mapToSave || !user || !supabase || isSavingRef.current) return;
+    if (!mapToSave || !user || !supabase) return;
     if (mapToSave.mode === 'compare' && !mapToSave.compareData) { console.warn('Refused to save empty comparison map'); return; }
     if (mapToSave.mode !== 'compare' && (!mapToSave.subTopics || mapToSave.subTopics.length === 0)) { console.warn('Refused to save empty mind map'); return; }
+
+    // Queue if a save is already in progress — replaces the stale pending save with latest data
+    if (isSavingRef.current) {
+      saveQueueRef.current = { mapToSave, existingId, isSilent };
+      return;
+    }
 
     isSavingRef.current = true;
     const targetId = existingId || mapToSave.id || null;
@@ -99,6 +106,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
         searchImages, searchTimestamp, pdfContext, videoId, sourceType,
         categoriesCount, sourcesCount, pinnedMessages, enrichments,
         confidenceRatings, quizAnswers, createdAt, updatedAt,
+        nestedExpansions,
         ...metadata
       } = mapToSave as any;
 
@@ -150,6 +158,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
         sourceFileContent: sourceFileContent || null,
         originalPdfFileContent: originalPdfFileContent || null,
         shortTitle: shortTitle || mapToSave.shortTitle || null,
+        nestedExpansions: nestedExpansions || mapToSave.nestedExpansions || [],
       };
 
       const finalId = await saveMindMap(supabase, user.id, targetId, metadataToSave, contentToSave);
@@ -220,7 +229,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
               const data = await response.json();
               if (data.imageUrl) {
                 // Save to DB
-                await updateMindMapField(supabase, finalId, { thumbnail_url: data.imageUrl });
+                await updateMindMapField(supabase, finalId, { thumbnail_url: data.imageUrl }, user.id);
                 console.log(`✅ Thumbnail generated and saved for map: ${finalId}`);
                 
                 // Update locally if callback provided
@@ -273,6 +282,12 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
       toast({ variant: 'destructive', title: 'Save Failed', description: err.message || 'An unknown error occurred.' });
     } finally {
       isSavingRef.current = false;
+      // Process queued save (latest pending data) after current one completes
+      const pending = saveQueueRef.current;
+      if (pending) {
+        saveQueueRef.current = null;
+        setTimeout(() => saveMap(pending.mapToSave, pending.existingId, pending.isSilent), 0);
+      }
     }
   }, [user, supabase, toast, aiPersona, options, showAchievementToasts]);
 

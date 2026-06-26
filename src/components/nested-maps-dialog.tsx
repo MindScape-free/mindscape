@@ -250,6 +250,13 @@ export function NestedMapsDialog({
                 break;
             }
         }
+    } else if (expansions.length > 0) {
+        // Fallback: no rootMap available but expansions exist — show as a single flat column
+        columns.push({
+            level: 0,
+            items: expansions,
+            parentName: 'All Sub-Maps',
+        });
     }
 
     return (

@@ -117,9 +117,9 @@ export function ModelSelector({
         loadModels();
     }, [type]);
 
-    // freeOnly: for text models use isFree flag; for image models use cost threshold
+    // freeOnly: use the isFree flag from the API
     const models = freeOnly 
-      ? availableModels.filter(m => m.type === 'text' ? m.isFree : m.cost < 0.005) 
+      ? availableModels.filter(m => m.isFree) 
       : availableModels;
     
     // If loading or no models, show placeholder
@@ -225,9 +225,9 @@ export function CompactModelSelector({ value, onChange, className, freeOnly = fa
         loadModels();
     }, [type]);
 
-    // freeOnly: for text models use isFree flag; for image models use cost threshold
+    // freeOnly: use the isFree flag from the API
     const models = freeOnly 
-      ? availableModels.filter(m => m.type === 'text' ? m.isFree : m.cost < 0.005) 
+      ? availableModels.filter(m => m.isFree) 
       : availableModels;
     if (isLoading && models.length === 0) return <div className={cn("h-9 w-24 bg-white/5 animate-pulse rounded-lg", className)} />;
     
@@ -236,26 +236,24 @@ export function CompactModelSelector({ value, onChange, className, freeOnly = fa
 
     return (
         <Select value={selectedModel.value} onValueChange={onChange}>
-            <SelectTrigger className={cn("h-9 bg-zinc-900/50 border-white/10", className)}>
+            <SelectTrigger className={cn("w-full h-9 bg-black/40 border-white/5 rounded-lg px-3 text-xs font-bold transition-colors", className)}>
                 <SelectValue />
             </SelectTrigger>
-            <SelectContent className="z-[250] bg-zinc-950 border-white/10">
+            <SelectContent className="z-[250] bg-zinc-900 border-zinc-800 rounded-xl">
                 {models.map(model => (
                     <SelectItem
                         key={model.value}
                         value={model.value}
-                        className="focus:bg-zinc-800 focus:text-white"
+                        className="py-2.5 text-xs font-bold focus:bg-white/5 focus:text-white rounded-lg cursor-pointer transition-colors"
                     >
-                        <div className="grid grid-cols-[16px_1fr_60px] items-center w-full gap-2 py-1">
-                            <model.icon className="w-3 h-3 text-zinc-400 group-hover:text-violet-400" />
-                            <span className="text-xs truncate">{model.label}</span>
-                            <div className="flex justify-end pr-1">
-                                <span className={`text-[9px] font-mono uppercase ${model.isFree ? 'text-emerald-500' : 'text-amber-500'}`}>
-                                    {type === 'text' 
-                                      ? (model.isFree ? 'Free' : 'Paid') 
-                                      : model.cost.toFixed(4)}
-                                </span>
+                        <div className="flex items-center justify-between w-full min-w-[180px] gap-3 pr-2">
+                            <div className="flex items-center gap-2">
+                                <model.icon className="w-3.5 h-3.5 text-zinc-400 group-hover:text-white" />
+                                <span className="truncate">{model.label}</span>
                             </div>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-mono uppercase tracking-wider ${model.isFree ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                                {model.isFree ? 'Free' : 'Paid'}
+                            </span>
                         </div>
                     </SelectItem>
                 ))}

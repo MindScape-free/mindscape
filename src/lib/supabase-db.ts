@@ -134,8 +134,10 @@ export async function getMindMap(supabase: SupabaseClient, userId: string, mapId
   return data;
 }
 
-export async function updateMindMapField(supabase: SupabaseClient, mapId: string, updates: Record<string, any>) {
-  await supabase.from('mindmaps').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', mapId);
+export async function updateMindMapField(supabase: SupabaseClient, mapId: string, updates: Record<string, any>, userId?: string) {
+  let query = supabase.from('mindmaps').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', mapId);
+  if (userId) query = query.eq('user_id', userId);
+  await query;
 }
 
 export async function getUserMindMaps(supabase: SupabaseClient, userId: string) {

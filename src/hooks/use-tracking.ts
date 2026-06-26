@@ -168,7 +168,6 @@ export function useMapTracking(meta: MapEngagementMeta) {
 // ── Session Tracking ──
 
 interface SessionMetrics {
-  pageViews: number;
   searches: number;
   mapsViewed: number;
   aiGenerations: number;
@@ -180,7 +179,6 @@ interface SessionMetrics {
 export function useSessionTracking(userId?: string) {
   const [metricsRef] = useState<{ current: SessionMetrics }>(() => ({
     current: {
-      pageViews: 0,
       searches: 0,
       mapsViewed: 0,
       aiGenerations: 0,
@@ -194,16 +192,6 @@ export function useSessionTracking(userId?: string) {
   useEffect(() => {
     if (userId) analytics.setUserId(userId);
   }, [userId]);
-
-  const trackPageView = useCallback(
-    (pageName: string, additionalData?: Record<string, any>) => {
-      metricsRef.current.pageViews++;
-      metricsRef.current.lastActivity = Date.now();
-      analytics.trackPageView(pageName, additionalData);
-      logUserEvent(userId, 'page_viewed', { page: pageName, ...additionalData }, 'app');
-    },
-    [userId]
-  );
 
   const trackSearch = useCallback(
     (query: string, resultsCount: number, filters?: Record<string, any>) => {
@@ -249,7 +237,6 @@ export function useSessionTracking(userId?: string) {
       metadata: {
         sessionId: sessionIdRef.current,
         sessionDuration,
-        pageViews: metrics.pageViews,
         searches: metrics.searches,
         mapsViewed: metrics.mapsViewed,
         aiGenerations: metrics.aiGenerations,
@@ -259,7 +246,7 @@ export function useSessionTracking(userId?: string) {
     logUserEvent(
       userId,
       'session_end',
-      { sessionDuration, pageViews: metrics.pageViews, searches: metrics.searches },
+      { sessionDuration, searches: metrics.searches },
       'app'
     );
   }, [userId]);
@@ -289,7 +276,6 @@ export function useSessionTracking(userId?: string) {
   }, []);
 
   return {
-    trackPageView,
     trackSearch,
     trackMapViewed,
     trackAIGeneration,

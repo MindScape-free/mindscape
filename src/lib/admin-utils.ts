@@ -53,7 +53,6 @@ export type ActivityType =
   | 'SEARCH_PERFORMED'
   | 'BOOKMARK_ADDED'
   | 'BOOKMARK_REMOVED'
-  | 'PAGE_VIEWED'
   // System events
   | 'DATA_MODIFIED'
   | 'BACKEND_SYNC'
@@ -166,8 +165,6 @@ export const ACTIVITY_CONFIG: Record<ActivityType, ActivityConfig> = {
   SEARCH_PERFORMED: { icon: Search, color: 'cyan', bgColor: 'bg-cyan-500/10', borderColor: 'border-cyan-500/20', textColor: 'text-cyan-400', label: 'Search Performed', category: 'engagement' },
   BOOKMARK_ADDED: { icon: Bookmark, color: 'amber', bgColor: 'bg-amber-500/10', borderColor: 'border-amber-500/20', textColor: 'text-amber-400', label: 'Bookmark Added', category: 'engagement' },
   BOOKMARK_REMOVED: { icon: Bookmark, color: 'zinc', bgColor: 'bg-zinc-500/10', borderColor: 'border-zinc-500/20', textColor: 'text-zinc-400', label: 'Bookmark Removed', category: 'engagement' },
-  PAGE_VIEWED: { icon: Eye, color: 'zinc', bgColor: 'bg-zinc-500/10', borderColor: 'border-zinc-500/20', textColor: 'text-zinc-400', label: 'Page Viewed', category: 'engagement' },
-  
   // System events
   DATA_MODIFIED: { icon: Database, color: 'violet', bgColor: 'bg-violet-500/10', borderColor: 'border-violet-500/20', textColor: 'text-violet-400', label: 'Data Modified', category: 'system' },
   BACKEND_SYNC: { icon: RefreshCw, color: 'cyan', bgColor: 'bg-cyan-500/10', borderColor: 'border-cyan-500/20', textColor: 'text-cyan-400', label: 'Backend Sync', category: 'system' },

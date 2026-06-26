@@ -71,7 +71,7 @@ interface ExplanationDialogProps {
     onConfidenceChange: (level: ConfidenceLevel) => void;
     quizAnswer: string | null;
     onQuizAnswer: (answer: string) => void;
-    onGenerateSubMap?: (topic: string) => void;
+    onGenerateSubMap?: (topic: string) => void | Promise<void>;
     onRegenerateQuiz?: () => Promise<void>;
 }
 
@@ -219,8 +219,10 @@ function A_RelatedConcepts({
 }: {
     relatedNodes: NodeEnrichment['relatedNodes'];
     onExplainInChat: (msg: string) => void;
-    onGenerateSubMap?: (topic: string) => void;
+    onGenerateSubMap?: (topic: string) => void | Promise<void>;
 }) {
+    const [generatingMapFor, setGeneratingMapFor] = useState<string | null>(null);
+
     return (
         <div className="grid grid-cols-2 gap-2">
             {relatedNodes.slice(0, 4).map((node, idx) => {
@@ -245,10 +247,19 @@ function A_RelatedConcepts({
                         <div className="flex gap-1.5 mt-2">
                             {onGenerateSubMap && (
                                 <button
-                                    onClick={() => onGenerateSubMap(node.name)}
-                                    className="flex-1 bg-white/5 hover:bg-primary/20 text-zinc-500 hover:text-primary rounded-lg py-2 text-[10px] font-normal transition-all flex items-center justify-center gap-1"
+                                    onClick={async () => {
+                                        setGeneratingMapFor(node.name);
+                                        try {
+                                            await onGenerateSubMap(node.name);
+                                        } finally {
+                                            setGeneratingMapFor(null);
+                                        }
+                                    }}
+                                    disabled={generatingMapFor === node.name}
+                                    className="flex-1 bg-white/5 hover:bg-primary/20 text-zinc-500 hover:text-primary rounded-lg py-2 text-[10px] font-normal transition-all flex items-center justify-center gap-1 disabled:opacity-50"
                                 >
-                                    <Map className="h-3 w-3" />
+                                    {generatingMapFor === node.name ? <Loader2 className="h-3 w-3 animate-spin" /> : <Map className="h-3 w-3" />}
+                                    Sub-Map
                                 </button>
                             )}
                             <button

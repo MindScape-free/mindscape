@@ -58,30 +58,30 @@ export function GlobalPinnedMessagesDialog({
 
   const { user, supabase } = useAuth();
 
-  useEffect(() => {
-    if (activeTab === 'all' && !allPinnedMessages.length) {
-      fetchAllPinnedMessages();
-    }
-  }, [activeTab]);
-
   const fetchAllPinnedMessages = async () => {
     if (!user || !supabase) return;
     setIsLoadingAllPins(true);
     try {
       const { data, error } = await supabase
-        .from('users')
-        .select('global_pinned_messages')
-        .eq('id', user.id)
-        .single();
+        .from('pinned_messages')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('pinned_at', { ascending: false });
       
       if (error) throw error;
-      setAllPinnedMessages(data.global_pinned_messages || []);
+      setAllPinnedMessages((data as PinnedMessage[]) || []);
     } catch (error) {
-      console.error('Failed to fetch all pinned messages:', error);
+      console.error('Failed to fetch pinned messages:', error);
     } finally {
       setIsLoadingAllPins(false);
     }
   };
+
+  useEffect(() => {
+    if (activeTab === 'all' && !allPinnedMessages.length) {
+      fetchAllPinnedMessages();
+    }
+  }, [activeTab]);
 
   const currentPins = activeTab === 'map' ? pinnedMessages : allPinnedMessages;
 

@@ -14,7 +14,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { Achievement, getNewlyUnlockedAchievements, UserStatistics } from './achievements';
-import { createElement, ComponentType } from 'react';
 
 // ═══════════════════════════════════════════════════════════════
 // SECTION 1 — Types
@@ -157,14 +156,6 @@ class AnalyticsTracker {
     }
   }
 
-  trackPageView(pageName: string, properties?: Record<string, any>): void {
-    this.track('page_view', 'page', {
-      page: pageName,
-      referrer: typeof document !== 'undefined' ? document.referrer : null,
-      ...properties,
-    });
-  }
-
   trackPerformance(metrics: PerformanceMetrics): void {
     this.track('performance', 'performance', metrics);
   }
@@ -292,19 +283,6 @@ export function useAnalytics() {
   return analytics;
 }
 
-export function withAnalytics<P extends object>(
-  WrappedComponent: ComponentType<P>,
-  pageName: string
-): ComponentType<P> {
-  const AnalyticsWrapper = (props: P) => {
-    if (typeof window !== 'undefined') {
-      analytics.trackPageView(pageName);
-    }
-    return createElement(WrappedComponent, props);
-  };
-  return AnalyticsWrapper;
-}
-
 // ═══════════════════════════════════════════════════════════════
 // SECTION 3A — User Events (Immutable Event Log)
 // Writes to the user_events table for the unified data store.
@@ -326,7 +304,6 @@ export type UserEventType =
   | 'chat_sent'
   | 'image_generated'
   | 'study_time'
-  | 'page_viewed'
   | 'search_performed'
   | 'session_end'
   | 'client_error'

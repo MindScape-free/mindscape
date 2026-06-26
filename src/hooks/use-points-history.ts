@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUser } from '@/lib/auth-context';
 import { getSupabaseClient } from '@/lib/supabase-db';
 import { PointTransaction } from '@/types/points';
@@ -84,12 +84,16 @@ export function usePointsHistory(): UsePointsHistoryReturn {
     }
   }, [user, offset]);
 
+  // Stable ref to avoid stale closure issues in the mount effect
+  const fetchTransactionsRef = useRef(fetchTransactions);
+  useEffect(() => { fetchTransactionsRef.current = fetchTransactions; }, [fetchTransactions]);
+
   useEffect(() => {
     if (!isUserLoading) {
-      const id = setTimeout(() => fetchTransactions(true), 0);
+      const id = setTimeout(() => fetchTransactionsRef.current(true), 0);
       return () => clearTimeout(id);
     }
-  }, [user?.id, isUserLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id, isUserLoading]);
 
   return {
     history: groupTransactionsByDate(transactions),
