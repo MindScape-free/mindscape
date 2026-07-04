@@ -164,8 +164,12 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
       const finalId = await saveMindMap(supabase, user.id, targetId, metadataToSave, contentToSave);
 
       // Background thumbnail generation - Only if missing, not already generating, and not a temporary synthesis state
+      // Skip for nested/sub-maps — they use icon-based cards instead of images
       const isSynthesizing = (mapToSave as any).subTopics?.some((st: any) => st.name === "Synthesizing...");
-      if (!mapToSave.thumbnailUrl && !generatingThumbnailsRef.current.has(finalId) && !isSynthesizing) {
+      const isSubMap = (mapToSave as any).isSubMap || metadataToSave.is_sub_map || !!(mapToSave as any).parentMapId || !!metadataToSave.parent_map_id;
+      
+      // ONLY trigger background generation for BRAND NEW root maps (no existingId)
+      if (!existingId && !isSubMap && !mapToSave.thumbnailUrl && !generatingThumbnailsRef.current.has(finalId) && !isSynthesizing) {
         generatingThumbnailsRef.current.add(finalId);
         // Don't await — fire and forget async thumbnail generation
         (async () => {

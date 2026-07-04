@@ -54,10 +54,10 @@ export function useMindMapStack(options: {
         });
     }, [activeIndex]);
 
-    const push = useCallback(async (topic: string, nodeId: string, navOptions: { mode: 'foreground' | 'background', parentDepth?: number, branchDepth?: 'low' | 'medium' | 'deep' } = { mode: 'background' }) => {
+    const push = useCallback(async (topic: string, nodeId: string, navOptions: { mode: 'foreground' | 'background', parentDepth?: number, branchDepth?: 'low' | 'medium' | 'deep', explicitParentMapId?: string } = { mode: 'background' }) => {
         if (status !== 'idle') return;
 
-        let actualParentId = currentMap?.id;
+        let actualParentId = navOptions.explicitParentMapId || currentMap?.id;
         if (currentMap && !actualParentId) {
             console.warn('Parent map not saved yet, saving first...');
             try {
@@ -148,7 +148,7 @@ export function useMindMapStack(options: {
 
                 setStack(prev => {
                     const newStack = [...prev];
-                    if (newStack[activeIndex]) {
+                    if (newStack[activeIndex] && actualParentId === newStack[activeIndex].id) {
                         const parent = newStack[activeIndex];
                         const currentExpansions = parent.nestedExpansions || [];
                         if (!currentExpansions.some((e: any) => e.topic === topic)) {

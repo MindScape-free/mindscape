@@ -3,7 +3,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Globe, 
-  Youtube, 
+  Video, 
   FileText, 
   FileIcon as PdfIcon, 
   FileText as DocIcon,
@@ -28,7 +28,7 @@ export function SourcePillList({ sources, onRemove, onClearAll, contextUsage }: 
 
   const getTypeIcon = (type: SourceItem['type']) => {
     switch (type) {
-      case 'youtube': return <Youtube className="w-3 h-3 text-red-500" />;
+      case 'youtube': return <Video className="w-3 h-3 text-red-500" />;
       case 'website': return <Globe className="w-3 h-3 text-blue-400" />;
       case 'pdf': return <PdfIcon className="w-3 h-3 text-orange-400" />;
       case 'doc': return <DocIcon className="w-3 h-3 text-blue-500" />;

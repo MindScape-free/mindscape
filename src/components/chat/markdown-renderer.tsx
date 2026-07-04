@@ -430,7 +430,7 @@ export function MarkdownRenderer({ content, className, onEntityClick, onQuizSubm
           table: TableBlock,
           thead: ({ children }) => <thead className="bg-white/[0.03] border-b border-white/5">{children}</thead>,
           th: ({ children }) => <th className="px-6 py-4 font-bold uppercase tracking-tight text-zinc-400 text-[11px] whitespace-nowrap">{children}</th>,
-          td: ({ children }) => <td className="px-6 py-4 text-zinc-300 border-b border-white/[0.02] leading-relaxed">{children}</td>,
+          td: ({ children }) => <td className="px-6 py-4 text-zinc-300 border-b border-white/[0.02] leading-relaxed align-top min-w-[120px] break-words">{children}</td>,
           tr: ({ children }) => <tr className="hover:bg-white/[0.01] transition-colors">{children}</tr>,
 
           // Links (YouTube Detection + Entity Linking)

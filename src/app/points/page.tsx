@@ -20,7 +20,7 @@ const EARN_TABLE: { category: string; rows: { label: string; type: PointEventTyp
     category: 'Mind Maps',
     rows: [
       { label: 'Create any mind map', type: 'MAP_CREATED', note: 'Single, PDF, image, website, YouTube' },
-      { label: 'Create sub-map', type: 'SUB_MAP_CREATED' },
+      { label: 'Generate Sub-Map', type: 'SUB_MAP_CREATED' },
       { label: 'Comparison map', type: 'MAP_COMPARE' },
       { label: 'Multi-source map', type: 'MAP_MULTI_SOURCE' },
       { label: 'Translate a map', type: 'MAP_TRANSLATED' },

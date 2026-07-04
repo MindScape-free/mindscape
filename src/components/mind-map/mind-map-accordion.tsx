@@ -194,14 +194,27 @@ const MindMapAccordionComponent = ({
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            onGenerateNewMap(subTopic.name, subTopicId, `${mainTopic} > ${subTopic.name}`);
+                                                            const existing = nestedExpansions.find(exp => exp.topic === subTopic.name);
+                                                            if (existing?.fullData && onOpenNestedMap) {
+                                                                onOpenNestedMap(existing.fullData, existing.id);
+                                                            } else {
+                                                                onGenerateNewMap(subTopic.name, subTopicId, `${mainTopic} > ${subTopic.name}`);
+                                                            }
                                                         }}
-                                                        className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/5 text-zinc-500 hover:bg-primary hover:text-white transition-all duration-300"
+                                                        className={cn(
+                                                            "w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-300 relative",
+                                                            nestedExpansions.some(exp => exp.topic === subTopic.name)
+                                                                ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300'
+                                                                : 'bg-white/5 text-zinc-500 hover:bg-primary hover:text-white'
+                                                        )}
                                                     >
                                                         <Network className="w-4 h-4" />
+                                                        {nestedExpansions.some(exp => exp.topic === subTopic.name) && (
+                                                            <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_5px_#10b981]" />
+                                                        )}
                                                     </button>
                                                 </TooltipTrigger>
-                                                <TooltipContent><p>Generate Concept Map</p></TooltipContent>
+                                                <TooltipContent><p>{nestedExpansions.some(exp => exp.topic === subTopic.name) ? 'Open Sub-Map' : 'Generate Sub-Map'}</p></TooltipContent>
                                             </Tooltip>
                                             
                                             <Tooltip>
@@ -332,11 +345,26 @@ const MindMapAccordionComponent = ({
                                                             <TooltipProvider>
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>
-                                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-primary hover:bg-primary/10 transition-all rounded-lg" onClick={() => onGenerateNewMap(category.name, catId, `${mainTopic} > ${subTopic.name}`, 'background')} disabled={isGlobalBusy}>
+                                                                        <Button variant="ghost" size="icon" className={cn(
+                                                                            "h-8 w-8 transition-all rounded-lg relative",
+                                                                            nestedExpansions.some(exp => exp.topic === category.name)
+                                                                                ? 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 hover:text-emerald-300'
+                                                                                : 'text-zinc-500 hover:text-primary hover:bg-primary/10'
+                                                                        )} onClick={() => {
+                                                                            const existing = nestedExpansions.find(exp => exp.topic === category.name);
+                                                                            if (existing?.fullData && onOpenNestedMap) {
+                                                                                onOpenNestedMap(existing.fullData, existing.id);
+                                                                            } else {
+                                                                                onGenerateNewMap(category.name, catId, `${mainTopic} > ${subTopic.name}`, 'background');
+                                                                            }
+                                                                        }} disabled={isGlobalBusy}>
                                                                             <Network className="h-4 w-4" />
+                                                                            {nestedExpansions.some(exp => exp.topic === category.name) && (
+                                                                                <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_5px_#10b981]" />
+                                                                            )}
                                                                         </Button>
                                                                     </TooltipTrigger>
-                                                                    <TooltipContent className="glassmorphism"><p>Generate Sub-Map</p></TooltipContent>
+                                                                    <TooltipContent className="glassmorphism"><p>{nestedExpansions.some(exp => exp.topic === category.name) ? 'Open Sub-Map' : 'Generate Sub-Map'}</p></TooltipContent>
                                                                 </Tooltip>
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>

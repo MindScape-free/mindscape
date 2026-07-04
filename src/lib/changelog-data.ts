@@ -1,5 +1,5 @@
 
-import { Sparkles, Zap, Palette, Layout, Network, Image as ImageIcon, FastForward, Info, Shield, Brain, Cpu, RefreshCw, Trash2, Eye, FileText, MessageSquare, Search, Youtube, Layers, Globe, Folders, SlidersHorizontal, ListFilter, BarChart2, Wrench, MousePointerClick, Gem, PanelRight, BookOpen, ChevronDown, Star } from 'lucide-react';
+import { Sparkles, Zap, Palette, Layout, Network, Image as ImageIcon, FastForward, Info, Shield, Brain, Cpu, RefreshCw, Trash2, Eye, FileText, MessageSquare, Search, Video, Layers, Globe, Folders, SlidersHorizontal, ListFilter, BarChart2, Wrench, MousePointerClick, Gem, PanelRight, BookOpen, ChevronDown, Star } from 'lucide-react';
 
 export interface ChangelogHighlight {
     icon: any;
@@ -23,6 +23,55 @@ export interface ChangelogVersion {
 }
 
 export const CHANGELOG_DATA: ChangelogVersion[] = [
+    {
+        version: '1.7.0',
+        slug: 'admin-suite-faq-quick-start',
+        date: 'July 5, 2026',
+        title: 'Admin Suite, FAQ System & Quick Start Categories',
+        summary: 'A massive platform expansion introducing a comprehensive Admin Dashboard, a new FAQ system, leaf node card synthesis, and a revamped Quick Start category browser.',
+        coverImage: '/changelog/homepage-hero.png',
+        tags: ['Admin', 'FAQ', 'UI/UX', 'Mind Maps'],
+        impact: 'major',
+        highlights: [
+            {
+                icon: Shield,
+                color: 'text-rose-400 bg-rose-500/10',
+                title: 'Comprehensive Admin Dashboard',
+                description: 'A powerful new admin suite with unified analytics tracking and robust user profile management capabilities.',
+            },
+            {
+                icon: MessageSquare,
+                color: 'text-blue-400 bg-blue-500/10',
+                title: 'FAQ System & Community',
+                description: 'A fully integrated FAQ system and new community interaction actions to foster collaboration and support.',
+            },
+            {
+                icon: Network,
+                color: 'text-emerald-400 bg-emerald-500/10',
+                title: 'Leaf Node Synthesis & Chat',
+                description: 'Mind map leaf nodes now support deep expansion, contextual chat, and multi-node synthesis right from the card.',
+            },
+            {
+                icon: Layout,
+                color: 'text-violet-400 bg-violet-500/10',
+                title: 'Quick Start Categories',
+                description: 'The Quick Start grid now features horizontally scrollable category chips, dynamic scroll indicators, and a View More option.',
+            },
+        ],
+        content: [
+            "v1.7.0 is a massive platform expansion that bridges the gap between administrators, the community, and individual learners. This release introduces entirely new systems for platform management while simultaneously refining the core mind mapping experience.",
+            "## Comprehensive Admin Dashboard",
+            "We have launched a full-scale administrative suite designed to give platform managers deep insights. The new **Admin Dashboard** provides unified analytics tracking, real-time public usage statistics, and comprehensive user profile management tools. Backfill utilities and sync services ensure data consistency across the platform.",
+            "## FAQ System & Community Interactions",
+            "To better support our growing user base, we've implemented a robust **FAQ System**. Alongside this, new community interaction actions allow users to engage more deeply with shared content, fostering a collaborative learning environment.",
+            "## Advanced Leaf Node Cards",
+            "Mind map exploration has leveled up. Leaf node cards now feature built-in **expansion, chat, and synthesis functionality**. We also refined the UI layout, keeping action buttons neatly aligned in a single row without awkward wrapping, making deep exploration both powerful and visually pleasing.",
+            "## Quick Start Category Filtering",
+            "Finding your next learning topic is easier than ever. The **Quick Start Grid** now features a sleek, horizontally scrollable row of category chips (like Science, History, and Business). Dynamic gradient scroll indicators provide intuitive feedback, and a new **View More Topics** button lets you expand the grid infinitely without cluttering the page.",
+            "## Source Selection & UI Polish",
+            "We introduced new animated public usage statistic components and revamped the source type selection cards. Additionally, we implemented crucial UI fixes, including professional Markdown table formatting (no more mid-word line breaks in chat logs!) and resolved critical Vercel build TDZ (Temporal Dead Zone) errors to ensure rock-solid stability.",
+        ],
+    },
     {
         version: '1.6.7',
         slug: 'explanation-dialog-chat-rework',
@@ -226,7 +275,7 @@ export const CHANGELOG_DATA: ChangelogVersion[] = [
                 description: 'Standardized depth terminology across the platform for better clarity on generation intensity.',
             },
             {
-                icon: Youtube,
+                icon: Video,
                 color: 'text-red-400 bg-red-500/10',
                 title: 'YouTube Data Tracking',
                 description: 'Fixed a critical issue where YouTube-sourced mind maps were missing depth information and source badges.',

@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion';
 import {
   FileText,
-  Youtube,
+  Video,
   Globe,
   Image,
   PenLine,
@@ -44,7 +44,7 @@ const SOURCE_TYPES: SourceTypeCard[] = [
   },
   {
     id: 'youtube',
-    icon: Youtube,
+    icon: Video,
     actionIcon: Link2,
     title: 'YouTube',
     subtitle: 'Paste a video link — transcript auto-extracted',

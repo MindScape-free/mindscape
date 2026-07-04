@@ -233,8 +233,7 @@ export async function mapToMindMapData(raw: any, depth: 'low' | 'medium' | 'deep
     categoriesCount: raw.categoriesCount,
     sourcesCount: raw.sourcesCount,
     aiPersona: raw.aiPersona,
-    explanations: raw.explanations,
-    nestedExpansions: (raw.nestedExpansions || []).map((ne: any) => ({
+    explanations: raw.explanations,        nestedExpansions: (raw.nestedExpansions || []).map((ne: any) => ({
       id: ne.id,
       parentName: ne.parentName,
       topic: ne.topic,
@@ -243,6 +242,7 @@ export async function mapToMindMapData(raw: any, depth: 'low' | 'medium' | 'deep
       depth: ne.depth,
       path: ne.path,
       status: ne.status,
+      fullData: ne.fullData || undefined,
       subCategories: (ne.subCategories || []).map((sub: any) => ({
         name: sub.name,
         description: sub.description,
@@ -1287,6 +1287,25 @@ export async function generateRelatedQuestionsAction(
       data: null,
       error: `Failed to generate related questions: ${errorMessage}`,
     };
+  }
+}
+
+/**
+ * Server action to generate topic-specific FAQs for the canvas page.
+ * Returns an array of { question, answer } items relevant to the given topic.
+ */
+export async function generateTopicFAQsAction(
+  input: { topic: string; summary?: string },
+  options: AIActionOptions = {}
+): Promise<{ data: Array<{ question: string; answer: string }> | null; error: string | null }> {
+  try {
+    const effectiveApiKey = await resolveApiKey(options);
+    const { generateTopicFAQs } = await import('@/ai/flows/generate-topic-faqs');
+    const result = await generateTopicFAQs({ ...input, ...options, apiKey: effectiveApiKey });
+    return { data: result.faqs, error: null };
+  } catch (error: any) {
+    console.error('Error in generateTopicFAQsAction:', error.message);
+    return { data: null, error: error.message || 'Failed to generate topic FAQs' };
   }
 }
 

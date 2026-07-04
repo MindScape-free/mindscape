@@ -20,6 +20,7 @@ interface FAQSectionProps {
   showSearch?: boolean;
   className?: string;
   id?: string;
+  hideHeader?: boolean;
 }
 
 export function FAQSection({
@@ -30,6 +31,7 @@ export function FAQSection({
   showSearch = true,
   className,
   id,
+  hideHeader = false,
 }: FAQSectionProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -69,17 +71,19 @@ export function FAQSection({
   return (
     <section id={id} className={cn('py-16 md:py-24 relative', className)}>
       <div className="mx-auto max-w-3xl px-6">
-        <div className="text-center mb-10">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <HelpCircle className="w-5 h-5 text-primary" />
+        {!hideHeader && (
+          <div className="text-center mb-10">
+            <div className="flex items-center justify-center gap-2 mb-3">
+              <HelpCircle className="w-5 h-5 text-primary" />
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight mb-3">
+              {title}
+            </h2>
+            {subtitle && (
+              <p className="text-zinc-500 text-sm max-w-xl mx-auto">{subtitle}</p>
+            )}
           </div>
-          <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight mb-3">
-            {title}
-          </h2>
-          {subtitle && (
-            <p className="text-zinc-500 text-sm max-w-xl mx-auto">{subtitle}</p>
-          )}
-        </div>
+        )}
 
         {showSearch && allItems.length > 6 && (
           <div className="relative mb-8">

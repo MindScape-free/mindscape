@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Image as ImageIcon, Youtube, Layers, Globe } from 'lucide-react';
+import { FileText, Image as ImageIcon, Video, Layers, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
     Tooltip,
@@ -23,7 +23,7 @@ export const SourceBadge = ({ type, className, sourceFileContent }: SourceBadgeP
     const config: Record<string, { label: string; icon: React.ReactNode; class: string }> = {
         youtube: {
             label: 'YouTube',
-            icon: <Youtube className="h-2.5 w-2.5" />,
+            icon: <Video className="h-2.5 w-2.5" />,
             class: 'bg-black/60 text-red-400 border-red-500/30'
         },
         pdf: {

@@ -271,7 +271,7 @@ export const CompareView = ({
                                                             {isGeneratingMap ? <Loader2 className="h-4 w-4 animate-spin" /> : <Network className="h-4 w-4" />}
                                                         </Button>
                                                     </TooltipTrigger>
-                                                    <TooltipContent className="glassmorphism"><p>Generate Sub-Map</p></TooltipContent>
+                                                    <TooltipContent className="glassmorphism"><p>{existingExpansion ? 'Open Sub-Map' : 'Generate Sub-Map'}</p></TooltipContent>
                                                 </Tooltip>
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
@@ -584,7 +584,7 @@ const NexusCard = ({
                                         {isGeneratingMap ? <Loader2 className="h-4 w-4 animate-spin" /> : <Network className="h-4 w-4" />}
                                     </Button>
                                 </TooltipTrigger>
-                                <TooltipContent className="glassmorphism"><p>Generate Sub-Map</p></TooltipContent>
+                                <TooltipContent className="glassmorphism"><p>{existingExpansion ? 'Open Sub-Map' : 'Generate Sub-Map'}</p></TooltipContent>
                             </Tooltip>
 
                             <Tooltip>

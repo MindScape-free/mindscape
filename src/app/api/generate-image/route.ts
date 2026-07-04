@@ -448,11 +448,19 @@ export async function POST(req: NextRequest) {
  * Get list of available models
  */
 export async function GET() {
-  const models = await getDynamicModels();
-  return addCorsHeaders(NextResponse.json({
-    models: Object.entries(models).map(([name, info]) => ({
-      name,
-      ...(info as any)
-    }))
-  }));
+  try {
+    const models = await getDynamicModels();
+    return addCorsHeaders(NextResponse.json({
+      models: Object.entries(models).map(([name, info]) => ({
+        name,
+        ...(info as any)
+      }))
+    }));
+  } catch (error: any) {
+    console.error('❌ Failed to fetch image models:', error.message);
+    return addCorsHeaders(NextResponse.json(
+      { error: 'Failed to fetch models', models: [] },
+      { status: 500 }
+    ));
+  }
 }

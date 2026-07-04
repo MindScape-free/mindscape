@@ -842,10 +842,13 @@ export default function DashboardPage() {
     const sb = currentSupabase;
     const u = currentUser;
     async function fetchMaps() {
+      // Server-side filter: only fetch root maps (parent_map_id IS NULL)
+      // Sub-maps are only visible inside their parent's Nested Maps dialog
       const { data } = await sb
         .from('mindmaps')
         .select('*')
         .eq('user_id', u.id)
+        .is('parent_map_id', null)
         .order('updated_at', { ascending: false })
         .limit(50);
       // Normalize snake_case to camelCase for consistency

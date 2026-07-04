@@ -17,7 +17,7 @@ import { Separator } from '@/components/ui/separator';
 import {
     Loader2, Flame, Map, Brain, BrainCircuit, LogOut, Settings, Globe, Wand2,
     Pencil, Edit2, Check, X, Trophy, Target, Lock, ChevronRight, Sparkles, Copy, Key, RefreshCw, ShieldCheck, Activity,
-    FastForward, Scale, BookOpen, BarChart3, Zap, Layers, Youtube, Image as ImageIcon, ChevronLeft, ExternalLink, Heart, Library, Clock, FileText, TrendingUp
+    FastForward, Scale, BookOpen, BarChart3, Zap, Layers, Video, Image as ImageIcon, ChevronLeft, ExternalLink, Heart, Library, Clock, FileText, TrendingUp
 } from 'lucide-react';
 import {
     Sheet,
@@ -1740,7 +1740,7 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
                             { type: 'pdf', icon: FileText, color: 'red' as const, label: 'PDF' },
                             { type: 'website', icon: Globe, color: 'emerald' as const, label: 'Website' },
                             { type: 'image', icon: ImageIcon, color: 'pink' as const, label: 'Image' },
-                            { type: 'youtube', icon: Youtube, color: 'violet' as const, label: 'YouTube' },
+                            { type: 'youtube', icon: Video, color: 'violet' as const, label: 'YouTube' },
                             { type: 'multi', icon: Library, color: 'orange' as const, label: 'Multi' }
                         ].map(({ type, icon: Icon, color, label }) => {
                             const count = sourceCounts[type] || 0;

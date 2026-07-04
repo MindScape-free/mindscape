@@ -20,7 +20,7 @@ import {
   Globe, 
   FileText, 
   Image as ImageIcon, 
-  Youtube, 
+  Video, 
   Layers, 
   Lock, 
   Unlock, 
@@ -506,7 +506,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
                       { type: 'pdf', icon: FileText, color: 'indigo' as const, label: 'PDF' },
                       { type: 'website', icon: Globe, color: 'blue' as const, label: 'Web' },
                       { type: 'image', icon: ImageIcon, color: 'emerald' as const, label: 'Image' },
-                      { type: 'youtube', icon: Youtube, color: 'amber' as const, label: 'YT' },
+                      { type: 'youtube', icon: Video, color: 'amber' as const, label: 'YT' },
                       { type: 'multi', icon: Layers, color: 'rose' as const, label: 'Multi' }
                     ] as const).map(({ type, icon: Icon, color, label }) => {
                       const count = safeMapAnalytics.sourceCounts?.[type] || 0;

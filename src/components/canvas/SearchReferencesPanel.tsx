@@ -1,6 +1,6 @@
 'use client';
 
-import { Globe, ExternalLink, Youtube, FileText, Video, BookOpen, GraduationCap, Figma, Image as ImageIcon } from 'lucide-react';
+import { Globe, ExternalLink, FileText, Video, BookOpen, GraduationCap, Sigma, Image as ImageIcon } from 'lucide-react';
 import type { SearchSource, SearchImage } from '@/types/mind-map';
 import { motion } from 'framer-motion';
 
@@ -17,10 +17,10 @@ function getDomainMeta(url: string) {
     const hostname = new URL(url).hostname.toLowerCase();
 
     if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) {
-        return { icon: Youtube, color: 'text-red-500', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/20' };
+        return { icon: Video, color: 'text-red-500', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/20' };
     }
     if (hostname.includes('figma.com')) {
-        return { icon: Figma, color: 'text-purple-500', bgColor: 'bg-purple-500/10', borderColor: 'border-purple-500/20' };
+        return { icon: Sigma, color: 'text-purple-500', bgColor: 'bg-purple-500/10', borderColor: 'border-purple-500/20' };
     }
     if (hostname.includes('coursera.org') || hostname.includes('udemy.com')) {
         return { icon: GraduationCap, color: 'text-blue-500', bgColor: 'bg-blue-500/10', borderColor: 'border-blue-500/20' };

@@ -53,13 +53,34 @@ export const TopicHeader = ({
     // Compute true hierarchical path based on rootMap and allSubMaps
     const hierarchicalPath = React.useMemo(() => {
         if (!rootMap || !allSubMaps) {
-            return mindMapStack.slice(0, activeStackIndex + 1).map((m, idx) => ({
-                id: m.id,
-                topic: m.shortTitle || m.topic,
-                depth: idx,
-                isStackFallback: true,
-                stackIndex: idx
-            }));
+            const currentStack = mindMapStack.slice(0, activeStackIndex + 1);
+            if (currentStack.length === 0) return [];
+
+            const path = [];
+            let currentMap: MindMapData | undefined = currentStack[currentStack.length - 1];
+            let safeCount = 0;
+
+            while (currentMap && safeCount < 10) {
+                safeCount++;
+                const parentId: string | undefined = (currentMap as any).parentMapId || (currentMap as any).parent_map_id;
+                
+                path.unshift({
+                    id: currentMap.id,
+                    topic: currentMap.shortTitle || currentMap.topic,
+                    depth: 0, 
+                    isStackFallback: true,
+                    stackIndex: currentStack.findIndex(m => m.id === currentMap?.id)
+                });
+
+                if (parentId) {
+                    currentMap = currentStack.find(m => m.id === parentId);
+                } else {
+                    currentMap = undefined;
+                }
+            }
+
+            // Assign depths based on resolved hierarchy
+            return path.map((item, idx) => ({ ...item, depth: idx }));
         }
 
         const path = [];
@@ -84,7 +105,7 @@ export const TopicHeader = ({
                     topic: subMap.topic || subMap.fullData?.shortTitle,
                     depth: subMap.depth
                 });
-                currentId = subMap.fullData?.parentMapId;
+                currentId = subMap.fullData?.parentMapId || (subMap.fullData as any)?.parent_map_id;
             } else {
                 if (currentId === mindMap.id) {
                     const parentId = (mindMap as any).parentMapId;

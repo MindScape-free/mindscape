@@ -22,7 +22,7 @@ import { SearchReferencesPanel, SourceFileModal } from '@/components/canvas';
 
 import { Button } from '@/components/ui/button';
 import {
-  Scale, RefreshCw, Sparkles, Loader2, ZapOff, List, UserRound, Zap as ZapIcon, Globe, Palette, Brain, FileText, Image as ImageIcon, Youtube, Key, Trash2
+  Scale, RefreshCw, Sparkles, Loader2, ZapOff, List, UserRound, Zap as ZapIcon, Globe, Palette, Brain, FileText, Image as ImageIcon, Video, Key, Trash2, HelpCircle
 } from 'lucide-react';
 import {
   Dialog,
@@ -42,6 +42,12 @@ import {
 import {
   TooltipProvider,
 } from '@/components/ui/tooltip';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 
 import { useUser } from '@/lib/auth-context';
 import { getSupabaseClient } from '@/lib/supabase-db';
@@ -55,6 +61,7 @@ import {
   generateComparisonMapAction,
   synthesizeNodesAction,
   mapToMindMapData,
+  generateTopicFAQsAction,
 } from '@/app/actions';
 // shareMindMapAction removed - using client-side sharing
 import { cn, depthFromServer } from '@/lib/utils';
@@ -98,11 +105,17 @@ function MindMapPageContent() {
   // Delete confirmation state
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
+  // Dynamic Topic-specific FAQs
+  const [dynamicFAQs, setDynamicFAQs] = useState<Array<{ question: string; answer: string }> | null>(null);
+  const [isFAQLoading, setIsFAQLoading] = useState(false);
+  const [faqGeneratedTopic, setFaqGeneratedTopic] = useState<string>('');
+
   // Universal Nested Maps Dialog state
   const [mapHierarchy, setMapHierarchy] = useState<{
     rootMap: { id: string; topic: string; icon?: string } | null;
     allSubMaps: NestedExpansionItem[];
   }>({ rootMap: null, allSubMaps: [] });
+  const [hierarchyLoading, setHierarchyLoading] = useState(false);
 
 
   const aiHealth = useAIHealth();
@@ -703,7 +716,9 @@ function MindMapPageContent() {
               originalPdfFileContent: pendingOriginalPdfContent || result.data.originalPdfFileContent,
               sourceFile2Content: (sessionContent as any)?.file2,
               sourceFile2Type: (sessionContent as any)?.file2Type,
-            };
+              parentMapId: (params as any).parentMapId,
+              isSubMap: !!(params as any).parentMapId,
+            } as any;
 
             const existingMapWithId = mindMapsRef.current.find(m => m.topic?.toLowerCase() === result.data!.topic?.toLowerCase() && m.id);
             handleSaveMap(dataToSave, existingMapWithId?.id).then((savedId: any) => {
@@ -791,9 +806,10 @@ function MindMapPageContent() {
   // Fetch complete map hierarchy (root + all sub-maps) — single query
   const fetchMapHierarchy = useCallback(async (currentMapData: MindMapData) => {
     if (!user) return;
+    setHierarchyLoading(true);
     try {
       const currentMapId = (currentMapData as any).id;
-      if (!currentMapId) return;
+      if (!currentMapId) { setHierarchyLoading(false); return; }
 
       // Single query: fetch all user maps at once instead of N sequential round trips
       const { data: allMaps } = await supabase
@@ -808,22 +824,49 @@ function MindMapPageContent() {
 
       // Walk up to find the root map (now O(1) per hop via mapById, no DB calls)
       let rootMapId = currentMapId;
-      let rootMapData: { id: string; topic: string; icon?: string } | null = null;
+      let currentId = currentMapId;
+      let iterations = 0;
 
-      if ((currentMapData as any).parentMapId) {
-        let currentId = (currentMapData as any).parentMapId;
-        let iterations = 0;
-        while (currentId && iterations < 10) {
-          const parent = mapById.get(currentId);
-          if (parent) {
-            rootMapId = currentId;
-            rootMapData = { id: currentId, topic: parent.topic || 'Untitled', icon: parent.icon };
-            currentId = parent.parent_map_id as string | null;
-          } else { break; }
-          iterations++;
+      while (currentId && iterations < 10) {
+        let nextParentId = null;
+
+        // 1. Try upward pointer: does the current map declare a parent?
+        const currentData = currentId === currentMapId ? currentMapData : mapById.get(currentId);
+        if (currentData) {
+          nextParentId = (currentData as any).parent_map_id || (currentData as any).content?.parentMapId || (currentData as any).parentMapId;
         }
-      } else {
-        rootMapData = { id: currentMapId, topic: currentMapData.topic, icon: currentMapData.icon };
+
+        // 2. Fallback downward pointer: does ANY map in allMaps claim this map as a child?
+        if (!nextParentId) {
+          const parentMap = allMaps.find(m => {
+            const content = m.content as any;
+            return content?.nestedExpansions?.some((e: any) => e.id === currentId);
+          });
+          if (parentMap) {
+            nextParentId = parentMap.id;
+          }
+        }
+
+        if (nextParentId && nextParentId !== currentId) {
+          const parent = mapById.get(nextParentId);
+          if (parent) {
+            rootMapId = nextParentId;
+            currentId = nextParentId;
+          } else {
+            break; // Parent not fetched or doesn't exist
+          }
+        } else {
+          break; // This is the root
+        }
+        iterations++;
+      }
+
+      let rootMapData: { id: string; topic: string; icon?: string; createdAt?: string } | null = null;
+      const rootParent = mapById.get(rootMapId);
+      if (rootParent) {
+        rootMapData = { id: rootMapId, topic: rootParent.topic || 'Untitled', icon: rootParent.icon, createdAt: rootParent.created_at };
+      } else if (rootMapId === currentMapId) {
+        rootMapData = { id: currentMapId, topic: currentMapData.topic, icon: currentMapData.icon, createdAt: (currentMapData as any).created_at || (currentMapData as any).createdAt };
       }
 
       // Build descendant tree in memory (no recursive DB queries)
@@ -831,12 +874,16 @@ function MindMapPageContent() {
       const visitedIds = new Set<string>();
 
       const buildDescendants = (parentId: string, parentName: string, currentDepth: number) => {
-        // Find all direct children from our local map dictionary
-        const children = allMaps.filter(m => m.parent_map_id === parentId);
+        // Find all direct children from our local map dictionary using bi-directional checks
+        const children = allMaps.filter(m => {
+          const isUpwardChild = m.parent_map_id === parentId || (m.content as any)?.parentMapId === parentId;
+          const isDownwardChild = (mapById.get(parentId)?.content as any)?.nestedExpansions?.some((e: any) => e.id === m.id);
+          return isUpwardChild || isDownwardChild;
+        });
         for (const child of children) {
           if (visitedIds.has(child.id)) continue;
           visitedIds.add(child.id);
-          const subMapData = { ...child, ...(child.content || {}), id: child.id } as MindMapWithId;
+          const subMapData = { ...child, ...(child.content || {}), id: child.id, parentMapId: child.parent_map_id } as MindMapWithId;
           allSubMaps.push({
             id: child.id,
             topic: child.topic,
@@ -855,6 +902,7 @@ function MindMapPageContent() {
       if (rootMapId) buildDescendants(rootMapId, rootMapData?.topic || 'Parent', 1);
       setMapHierarchy({ rootMap: rootMapData, allSubMaps });
     } catch (error) { console.error('Error fetching map hierarchy:', error); }
+    finally { setHierarchyLoading(false); }
   }, [user]);
 
   // Update hierarchy when mindMap changes
@@ -863,6 +911,12 @@ function MindMapPageContent() {
       fetchMapHierarchy(mindMap);
     }
   }, [mindMap, fetchMapHierarchy]);
+
+  // Reset generated FAQs when mind map topic changes
+  useEffect(() => {
+    setDynamicFAQs(null);
+    setFaqGeneratedTopic('');
+  }, [mindMap?.topic]);
 
   // Set default chat mode to PDF-Aware if the mind map has PDF context
   useEffect(() => {
@@ -977,7 +1031,7 @@ function MindMapPageContent() {
 
 
 
-  const handleGenerateAndOpenSubMap = useCallback(async (subTopic: string, nodeId?: string, _contextPath?: string, mode: 'foreground' | 'background' = 'background', branchDepth?: 'low' | 'medium' | 'deep') => {
+  const handleGenerateAndOpenSubMap = useCallback(async (subTopic: string, nodeId?: string, _contextPath?: string, mode: 'foreground' | 'background' = 'background', branchDepth?: 'low' | 'medium' | 'deep', explicitParentMapId?: string) => {
     try {
       // First check if it already exists locally in the parent map to avoid duplicate generations
       const existingExpansion = mindMap?.nestedExpansions?.find(e => e.topic === subTopic);
@@ -987,7 +1041,7 @@ function MindMapPageContent() {
           setActiveMindMapIndex(mindMaps.length);
           toast({ title: "Sub-Map Opened", description: `Opened existing map for "${subTopic}".` });
         } else {
-          toast({ title: "Sub-Map Available", description: `An existing map for "${subTopic}" is already in your Nested Maps.` });
+          toast({ title: "Sub-Map Available", description: `An existing map for "${subTopic}" is already available as a Sub-Map.` });
         }
         return;
       }
@@ -1000,10 +1054,10 @@ function MindMapPageContent() {
 
       // Notify user that background generation has started
       if (mode === 'background') {
-        toast({ title: "🧠 Creating Sub-Map", description: `Generating "${subTopic}" in the background — it will appear in your Nested Maps shortly.` });
+        toast({ title: "🧠 Creating Sub-Map", description: `Generating "${subTopic}" in the background — it will appear as a Sub-Map shortly.` });
       }
 
-      const expansionResult = await expandNode(subTopic, nodeId || `sub-${Date.now()}`, { mode, parentDepth: parentAbsoluteDepth, branchDepth });
+      const expansionResult = await expandNode(subTopic, nodeId || `sub-${Date.now()}`, { mode, parentDepth: parentAbsoluteDepth, branchDepth, explicitParentMapId });
       const parentId = expansionResult?.parentId;
       refreshBalance();
       awardXP('SUB_MAP_CREATED', { topic: subTopic }).catch(() => {});
@@ -1017,10 +1071,12 @@ function MindMapPageContent() {
         // Re-fetch hierarchy after background generation so the new map
         // appears in the Nested Maps list immediately.
         const currentMap = mindMapRef.current;
-        if (currentMap || parentId) {
-          // If the parent map was just saved for the first time, use parentId
-          const mapToRefresh = currentMap ? { ...currentMap, id: parentId || currentMap.id } : { id: parentId } as any;
-          fetchMapHierarchy(mapToRefresh);
+        if (currentMap) {
+          // If currentMap doesn't have an ID yet (just saved), it will be parentId
+          const effectiveId = currentMap.id || (!explicitParentMapId ? parentId : undefined);
+          if (effectiveId) {
+            fetchMapHierarchy({ ...currentMap, id: effectiveId });
+          }
         }
       }
     } catch (error: any) {
@@ -1049,12 +1105,22 @@ function MindMapPageContent() {
     }
 
     if (user) {
-      const { error } = await supabase.from('mindmaps').delete().eq('id', id).eq('user_id', user.id);
-      if (error) console.error('Failed to delete nested map:', error);
+      // Find all descendant sub-maps to cascade delete and prevent orphans
+      const getDescendantIds = (parentId: string, maps: any[]): string[] => {
+        const children = maps.filter(m => m.parentMapId === parentId || m.parent_map_id === parentId).map(m => m.id);
+        return children.reduce((acc, childId) => [...acc, childId, ...getDescendantIds(childId, maps)], [] as string[]);
+      };
+      
+      const descendantIds = mapHierarchy?.allSubMaps ? getDescendantIds(id, mapHierarchy.allSubMaps) : [];
+      const idsToDelete = [id, ...descendantIds];
+
+      const { error } = await supabase.from('mindmaps').delete().in('id', idsToDelete).eq('user_id', user.id);
+      if (error) console.error('Failed to delete nested map(s):', error);
     }
-    toast({ title: "Nested Map Deleted", description: "The nested map has been permanently removed." });
+    toast({ title: "Sub-Map Deleted", description: "The Sub-Map has been permanently removed." });
     setPendingDeleteId(null);
-  }, [mindMap, pendingDeleteId, handleUpdateCurrentMap, handleSaveMap, toast, user]);
+  }, [mindMap, pendingDeleteId, handleUpdateCurrentMap, handleSaveMap, toast, user, mapHierarchy]);
+
 
   const handleDeleteNestedMap = useCallback((id: string) => {
     setPendingDeleteId(id);
@@ -1315,6 +1381,7 @@ function MindMapPageContent() {
             onViewSource={() => setIsSourceFileModalOpen(true)}
             rootMap={mapHierarchy.rootMap}
             allSubMaps={mapHierarchy.allSubMaps}
+            hierarchyLoading={hierarchyLoading}
             onShare={handleShare}
             isSharing={isSharing}
             onOpenPinnedMessages={handleOpenPinnedMessages}
@@ -1324,9 +1391,76 @@ function MindMapPageContent() {
             resonanceNodes={resonanceNodes}
             onSynthesize={handleSynthesize}
           />
-          </Profiler>
+          </Profiler>              {/* Dynamic Topic-Specific FAQs */}
+              <div className="mx-auto w-full max-w-4xl px-4 py-8 mb-16">
+                <Accordion 
+                  type="single" 
+                  collapsible 
+                  className="w-full bg-background rounded-xl border border-white/5 shadow-sm"
+                  onValueChange={(value) => {
+                    // Generate FAQs only on first open for the current topic
+                    if (value === 'canvas-faq' && !faqGeneratedTopic && !isFAQLoading && mindMap) {
+                      setIsFAQLoading(true);
+                      generateTopicFAQsAction(
+                        { 
+                          topic: mindMap.topic, 
+                          summary: (mindMap as any).summary 
+                        },
+                        {
+                          provider: config.provider,
+                          apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
+                          userId: user?.id,
+                        }
+                      ).then(({ data, error }) => {
+                        if (data && data.length > 0) {
+                          setDynamicFAQs(data);
+                          setFaqGeneratedTopic(mindMap.topic);
+                        }
+                        setIsFAQLoading(false);
+                      }).catch(() => {
+                        setIsFAQLoading(false);
+                      });
+                    }
+                  }}
+                >
+                  <AccordionItem value="canvas-faq" className="border-none">
+                    <AccordionTrigger className="px-6 py-6 hover:no-underline hover:bg-white/5 rounded-xl transition-colors">
+                      <div className="flex flex-col items-center justify-center text-center w-full">
+                        <div className="flex items-center justify-center gap-2 mb-3">
+                          <HelpCircle className="w-5 h-5 text-primary" />
+                        </div>
+                        <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight mb-2">
+                          Topic FAQs
+                        </h2>
+                        <p className="text-zinc-500 text-sm max-w-xl mx-auto">
+                          {mindMap ? `Frequently asked questions about ${mindMap.topic}` : 'Frequently asked questions about this topic'}
+                        </p>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-0 pb-0 pt-0">
+                      {isFAQLoading ? (
+                        <div className="space-y-3 px-6 py-4">
+                          {[1, 2, 3, 4].map((i) => (
+                            <div key={i} className="rounded-xl border border-white/5 bg-zinc-900/30 px-5 py-4 animate-pulse">
+                              <div className="h-4 w-3/4 bg-zinc-800 rounded mb-3" />
+                              <div className="h-3 w-full bg-zinc-800/50 rounded" />
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <FAQSection
+                          items={dynamicFAQs && dynamicFAQs.length > 0 ? dynamicFAQs : CANVAS_FAQS}
+                          showSearch={false}
+                          hideHeader={true}
+                          className="py-6 md:py-8"
+                        />
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </div>
 
-          {/* Search References Panel */}
+              {/* Search References Panel */}
           {mindMap.searchSources && mindMap.searchSources.length > 0 && (
             <SearchReferencesPanel
               sources={mindMap.searchSources}
@@ -1439,16 +1573,16 @@ function MindMapPageContent() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Nested Map Confirmation Dialog */}
+      {/* Delete Sub-Map Confirmation Dialog */}
       <Dialog open={!!pendingDeleteId} onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}>
         <DialogContent className="sm:max-w-[400px] rounded-[2rem] border-red-500/20 bg-zinc-950">
           <DialogHeader>
             <DialogTitle className="text-lg font-black text-white flex items-center gap-3">
               <Trash2 className="h-5 w-5 text-red-400" />
-              Delete Nested Map?
+              Delete Sub-Map?
             </DialogTitle>
             <DialogDescription className="text-zinc-400 font-medium">
-              This will permanently delete the nested map and all its data. This action cannot be undone.
+              This will permanently delete the Sub-Map and all its data. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 pt-2">
@@ -1484,7 +1618,7 @@ function MindMapPageContent() {
           ) : sourceFileType === 'image' ? (
             <ImageIcon className="h-5 w-5" />
           ) : sourceFileType === 'youtube' ? (
-            <Youtube className="h-5 w-5 text-red-500" />
+            <Video className="h-5 w-5 text-red-500" />
           ) : sourceFileType === 'website' ? (
             <Globe className="h-5 w-5 text-blue-400" />
           ) : (
@@ -1567,12 +1701,6 @@ function MindMapPageContent() {
         }}
       />
 
-      <FAQSection
-        title="Canvas FAQ"
-        subtitle="Everything about exploring and interacting with your mind maps."
-        items={CANVAS_FAQS}
-        showSearch={true}
-      />
     </>
   );
 }

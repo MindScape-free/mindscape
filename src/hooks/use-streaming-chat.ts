@@ -32,6 +32,12 @@ interface StreamInput {
   apiKey?: string;
   token?: string;
   agentMode?: boolean;
+  /**
+   * The full mind map data so the AI can contextualize answers within
+   * the canvas structure (subTopics, categories, relationships, etc.).
+   * A compact structural summary is built from this on the server side.
+   */
+  mindMapData?: unknown;
 }
 
 export function useStreamingChat(options: StreamingChatOptions = {}): StreamingChatResult {

@@ -33,7 +33,7 @@ import {
   BarChart3,
   Brain,
   Globe,
-  Youtube,
+  Video,
   Layers,
   Zap,
   Lock,
@@ -1109,7 +1109,7 @@ function UserMapAnalytics({ userMaps }: { userMaps: any[] }) {
               { type: 'pdf', icon: FileText, color: 'indigo' as const, label: 'PDF' },
               { type: 'website', icon: Globe, color: 'blue' as const, label: 'Website' },
               { type: 'image', icon: ImageIcon, color: 'emerald' as const, label: 'Image' },
-              { type: 'youtube', icon: Youtube, color: 'yellow' as const, label: 'YouTube' },
+              { type: 'youtube', icon: Video, color: 'yellow' as const, label: 'YouTube' },
               { type: 'multi', icon: Library, color: 'orange' as const, label: 'Multi' }
             ].map(({ type, icon: Icon, color, label }) => {
               const count = sourceCounts[type] || 0;
@@ -1421,7 +1421,7 @@ function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
               { type: 'pdf', icon: FileText, color: 'indigo' as const, label: 'PDF' },
               { type: 'website', icon: Globe, color: 'blue' as const, label: 'Website' },
               { type: 'image', icon: ImageIcon, color: 'emerald' as const, label: 'Image' },
-              { type: 'youtube', icon: Youtube, color: 'yellow' as const, label: 'YouTube' },
+              { type: 'youtube', icon: Video, color: 'yellow' as const, label: 'YouTube' },
               { type: 'multi', icon: Library, color: 'orange' as const, label: 'Multi' }
             ].map(({ type, icon: Icon, color, label }) => {
               const count = sourceCounts[type] || 0;

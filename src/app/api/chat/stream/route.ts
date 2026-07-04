@@ -23,6 +23,7 @@ const ChatStreamInputSchema = z.object({
   apiKey: z.string().optional(),
   model: z.string().optional(),
   agentMode: z.boolean().optional().default(false),
+  mindMapData: z.any().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
     console.log('📦 [ChatStream] Request body parsed');
     const input = ChatStreamInputSchema.parse(body);
     console.log('✅ [ChatStream] Input validated');
-    const { apiKey: effectiveApiKey, topic, persona, history, question, attachments, pdfContext, model: requestedModel, agentMode } = input;
+    const { apiKey: effectiveApiKey, topic, persona, history, question, attachments, pdfContext, model: requestedModel, agentMode, mindMapData } = input;
 
     // Authenticate user
     let currentUserId: string | undefined;
@@ -119,12 +120,60 @@ export async function POST(req: NextRequest) {
 2. Reference the Core Features above when answering.
 3. Tone: expert, helpful, concise.`;
     } else {
+      // Build a compact structural overview of the mind map canvas
+      let mindMapBlock = '';
+      if (mindMapData) {
+        try {
+          const mm = typeof mindMapData === 'string' ? JSON.parse(mindMapData) : mindMapData;
+          const mapParts: string[] = [`📋 CANVAS MIND MAP STRUCTURE: "${mm.topic || topic}"`];
+
+          if (mm.mode === 'compare' && mm.compareData) {
+            const cd = mm.compareData;
+            mapParts.push(`Mode: Comparison (${cd.root?.title || 'A vs B'})`);
+            if (cd.dimensions?.length) {
+              mapParts.push('Dimensions:');
+              cd.dimensions.forEach((d: any) => mapParts.push(`  - ${d.name}`));
+            }
+            if (cd.unityNexus?.length) {
+              mapParts.push('Shared Core:');
+              cd.unityNexus.forEach((n: any) => mapParts.push(`  - ${n.title}: ${n.description || ''}`));
+            }
+            if (cd.synthesisHorizon) {
+              mapParts.push(`Synthesis: ${cd.synthesisHorizon.expertVerdict}`);
+            }
+          } else if (mm.subTopics?.length) {
+            const subTopicList = mm.subTopics.slice(0, 15).map((st: any) => {
+              const catNames = (st.categories || []).slice(0, 8).map((c: any) => c.name).join(', ');
+              const leafCount = (st.categories || []).reduce((sum: number, c: any) => sum + (c.subCategories?.length || 0), 0);
+              return `  - ${st.name} (${st.categories?.length || 0} categories, ${leafCount} items)${catNames ? ': ' + catNames : ''}`;
+            });
+            mapParts.push(`Sub-Topics (${mm.subTopics.length} total):`);
+            mapParts.push(...subTopicList);
+          }
+
+          if (mm.explanations && Object.keys(mm.explanations).length > 0) {
+            mapParts.push(`Explanations available for: ${Object.keys(mm.explanations).slice(0, 10).join(', ')}`);
+          }
+          if (mm.nestedExpansions?.length) {
+            mapParts.push(`Nested Sub-Maps: ${mm.nestedExpansions.map((e: any) => e.topic).join(', ')}`);
+          }
+          if (mm.sourceType) {
+            mapParts.push(`Source: ${mm.sourceType}`);
+          }
+
+          mindMapBlock = `\n\n${mapParts.join('\n')}\n\n**CONTEXT RULE**: When answering, anchor your response within this mind map structure. Mention specific nodes, categories, or relationships from the map that are relevant to the user's question. If the user asks about a specific node, explain how it connects to other parts of the map.`;
+        } catch (e) {
+          console.warn('[ChatStream] Failed to parse mindMapData:', e);
+        }
+      }
+
       basePrompt = `You are **MindSpark** ✨, an AI assistant in the MindScape mind mapping app.
 
 🚀 LIVE ACCESS: You have real-time search results and current date. Never claim you cannot access current events.
 
 🧠 Topic: ${topic}
 ${searchBlock}
+${mindMapBlock}
 
 ${pdfContext ? `📄 DOCUMENT-AWARE MODE:
 - PRIORITY: Use document context to answer questions about the topic.

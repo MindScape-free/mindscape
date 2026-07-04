@@ -213,7 +213,7 @@ interface MindMapProps {
   isSaved: boolean;
   onSaveMap: () => void;
   onExplainInChat: (message: string) => void;
-  onGenerateNewMap: (topic: string, nodeId?: string, contextPath?: string, mode?: 'foreground' | 'background', branchDepth?: 'low' | 'medium' | 'deep') => void | Promise<void>;
+  onGenerateNewMap: (topic: string, nodeId?: string, contextPath?: string, mode?: 'foreground' | 'background', branchDepth?: 'low' | 'medium' | 'deep', explicitParentMapId?: string) => void | Promise<void>;
   onViewSource?: () => void;
   onOpenNestedMap?: (mapData: any, expansionId: string) => void;
   onStartQuiz: (topic?: string) => void;
@@ -238,6 +238,7 @@ interface MindMapProps {
   onPracticeQuestionClick?: (question: string) => void;
   rootMap?: { id: string; topic: string; icon?: string } | null;
   allSubMaps?: NestedExpansionItem[];
+  hierarchyLoading?: boolean;
   onShare?: () => void;
   isSharing?: boolean;
   useFileAware?: boolean;
@@ -297,6 +298,7 @@ export const MindMap = React.memo(({
   onPracticeQuestionClick,
   rootMap,
   allSubMaps,
+  hierarchyLoading,
   onShare,
   isSharing: propIsSharing,
   useFileAware = false,
@@ -441,8 +443,7 @@ export const MindMap = React.memo(({
   const [isAllExpanded, setIsAllExpanded] = useState(false);
   const [isAiContentDialogOpen, setIsAiContentDialogOpen] = useState(false);
 
-  const [nestedGeneratingImageId, setNestedGeneratingImageId] = useState<string | null>(null);
-  const [thumbnailOverrides, setThumbnailOverrides] = useState<Record<string, string>>({});
+
 
   const [isExampleDialogOpen, setIsExampleDialogOpen] = useState(false);
   const [exampleContent, setExampleContent] = useState('');
@@ -508,10 +509,7 @@ export const MindMap = React.memo(({
   const [labNode, setLabNode] = useState<SubCategoryInfo | null>(null);
   const [isEnhancing, setIsEnhancing] = useState(false);
 
-  // Advanced Image Generation for Nested Maps
-  const [isNestedImageLabOpen, setIsNestedImageLabOpen] = useState(false);
-  const [nestedLabNode, setNestedLabNode] = useState<NestedExpansionItem | null>(null);
-  const [isEnhancingNested, setIsEnhancingNested] = useState(false);
+
 
   // Practice Mode State
 
@@ -708,14 +706,8 @@ export const MindMap = React.memo(({
   // Notify parent of updates — memoized to avoid recomputing on every render
   const lastNotifiedRef = useRef<string>('');
   const dataToNotify = useMemo(() => {
-    if (!onUpdate) return null;
-    const sanitizedExpansions = nestedExpansions.map(item => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { fullData, ...rest } = item;
-      return rest;
-    });
-    return toPlainObject({
-      nestedExpansions: sanitizedExpansions,
+    if (!onUpdate) return null;    return toPlainObject({
+      nestedExpansions,
       savedImages: generatedImages,
       explanations,
       enrichments,
@@ -1710,7 +1702,13 @@ export const MindMap = React.memo(({
                   openCategories={openCategories}
                   setOpenCategories={setOpenCategories}
                   onGenerateNewMap={onGenerateNewMap}
-                  onSubCategoryClick={handleSubCategoryClick}
+                  onSubCategoryClick={(subCategory) => {
+                    const existingExpansion = mergedExpansions.find(
+                      e => e.topic.toLowerCase().trim() === subCategory.name.toLowerCase().trim() &&
+                           ((e as any).fullData?.parentMapId === data.id || (e as any).fullData?.parent_map_id === data.id || e.parentName === data.topic)
+                    );
+                    handleSubCategoryClick(subCategory);
+                  }}
                   onGenerateImage={handleGenerateImageClick}
                   onExplainInChat={onExplainInChat}
                   nestedExpansions={mergedExpansions}
@@ -1901,13 +1899,10 @@ export const MindMap = React.memo(({
       <NestedMapsDialog
         isOpen={isNestedMapsDialogOpen}
         onClose={() => setIsNestedMapsDialogOpen(false)}
-        expansions={mergedExpansions.map(item => ({
-          ...item,
-          thumbnailUrl: thumbnailOverrides[item.id] || (item.fullData as any)?.thumbnailUrl || (item as any).thumbnailUrl,
-          path: item.path || ''
-        }))}
+        expansions={mergedExpansions}
         rootMap={rootMap}
         currentMapId={(data as any).id}
+        hierarchyLoading={!!hierarchyLoading}
         onDelete={(id) => {
           if (onDeleteNestedMap) {
             onDeleteNestedMap(id);
@@ -1916,7 +1911,6 @@ export const MindMap = React.memo(({
           }
         }}
         onRegenerate={(parentName, id) => {
-          // Find criteria from nested item if needed, but parentName (which is actually topic in dialog) is sufficient
           if (onRegenerateNestedMap) {
             onRegenerateNestedMap(parentName, id);
           } else {
@@ -1926,20 +1920,15 @@ export const MindMap = React.memo(({
         expandingId={null}
         onExplainInChat={onExplainInChat}
         mainTopic={data.topic}
-        onGenerateImage={(expansion) => {
-          setNestedLabNode(expansion);
-          setIsNestedImageLabOpen(true);
-        }}
         onOpenMap={(mapData, id) => {
           setIsNestedMapsDialogOpen(false);
           if (onOpenNestedMap) onOpenNestedMap(mapData, id);
         }}
         onExpandFurther={(name, desc, parentId) => {
           setIsNestedMapsDialogOpen(false);
-          onGenerateNewMap(name, desc, parentId);
+          onGenerateNewMap(name, parentId, desc, 'background', undefined, parentId);
         }}
         isGlobalBusy={status !== 'idle'}
-        generatingImageId={nestedGeneratingImageId}
       />
 
       {isImageLabOpen && labNode && (
@@ -1952,119 +1941,6 @@ export const MindMap = React.memo(({
           initialPrompt={`${labNode.name} in the context of "${data.topic}": ${labNode.description}`}
           onEnhancePrompt={handleEnhancePrompt}
           isEnhancing={isEnhancing}
-        />
-      )}
-
-      {/* Visual Insight Lab for Nested Maps */}
-      {isNestedImageLabOpen && nestedLabNode && (
-        <ImageGenerationDialog
-          isOpen={isNestedImageLabOpen}
-          onClose={() => {
-            setIsNestedImageLabOpen(false);
-            setNestedLabNode(null);
-          }}
-          onGenerate={async (settings) => {
-            setNestedGeneratingImageId(nestedLabNode.id);
-            toast({
-              title: 'Generating Thumbnail...',
-              description: `Creating thumbnail for ${nestedLabNode.topic}`,
-            });
-
-            try {
-              console.log(`🎨 Generating nested thumbnail using client key: ${config.pollinationsApiKey ? 'Yes' : 'No'}`);
-
-              const response = await fetch('/api/generate-image', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  prompt: settings.enhancedPrompt || settings.initialPrompt,
-                  model: settings.model || 'flux',
-                  width: settings.width || 512,
-                  height: settings.height || 288,
-                  userId: user?.id,
-                  userApiKey: config.pollinationsApiKey
-                })
-              });
-
-              if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.error || 'Image generation failed');
-              }
-
-              const imageData = await response.json();
-
-              // Refresh global pollen balance after successful generation
-              await refreshBalance();
-
-              // Update LOCAL nestedExpansions state
-              setNestedExpansions((prev: any[]) => prev.map(exp =>
-                exp.id === nestedLabNode.id
-                  ? ({ ...exp, fullData: exp.fullData ? { ...exp.fullData, thumbnailUrl: imageData.imageUrl } : undefined } as any)
-                  : exp
-              ));
-
-              // Immediate UI feedback via overrides
-              if (nestedLabNode.id) {
-                setThumbnailOverrides(prev => ({
-                  ...prev,
-                  [nestedLabNode.id]: imageData.imageUrl
-                }));
-              }
-
-              // If allSubMaps is being used by the dialog, we need to ensure it's also updated locally
-              // Since allSubMaps is a prop, we can't update it directly, BUT we can update the Firestore doc
-              // and let the parent re-fetch, OR manage a local override map in MindMap.
-              toast({
-                title: 'Thumbnail Generated!',
-                description: `Successfully created thumbnail for ${nestedLabNode.topic}`,
-              });
-
-              // Persist the new thumbnail URL to Supabase
-              if (user && supabase && nestedLabNode.id) {
-                try {
-                  await supabase
-                    .from('mindmaps')
-                    .update({ thumbnail_url: imageData.imageUrl })
-                    .eq('id', nestedLabNode.id)
-                    .eq('user_id', user.id);
-                } catch (dbError) {
-                  console.error('Failed to save nested map thumbnail to db:', dbError);
-                }
-              }
-            } catch (err: any) {
-              toast({
-                variant: 'destructive',
-                title: 'Generation Failed',
-                description: err.message || 'Failed to generate thumbnail.',
-              });
-            } finally {
-              setNestedGeneratingImageId(null);
-            }
-          }}
-          nodeName={nestedLabNode.topic}
-          nodeDescription={`Updating thumbnail for ${nestedLabNode.topic}`}
-          initialPrompt={`${nestedLabNode.topic}${nestedLabNode.fullData?.summary ? `: ${nestedLabNode.fullData.summary}` : ''}`}
-          onEnhancePrompt={async (prompt, style, composition, mood, colorPalette, lighting) => {
-            setIsEnhancingNested(true);
-            try {
-              const { enhancedPrompt, error } = await enhanceImagePromptAction({
-                prompt,
-                style,
-                composition,
-                mood,
-                colorPalette,
-                lighting
-              }, providerOptions);
-              if (error) throw new Error(error);
-              return enhancedPrompt?.enhancedPrompt || prompt;
-            } catch (err: any) {
-              toast({ variant: 'destructive', title: 'Enhancement failed', description: err.message });
-              return prompt;
-            } finally {
-              setIsEnhancingNested(false);
-            }
-          }}
-          isEnhancing={isEnhancingNested}
         />
       )}
 

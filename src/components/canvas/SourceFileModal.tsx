@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Globe, Youtube, FileText, Image as ImageIcon, ArrowRight } from 'lucide-react';
+import { X, Globe, Video, FileText, Image as ImageIcon, ArrowRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { BlobPdfViewer } from './BlobPdfViewer';
 import { parseSourceContent } from './SourceParser';
@@ -64,7 +64,7 @@ export function SourceFileModal({
             ) : currentType === 'image' ? (
               <><ImageIcon className="h-5 w-5 text-purple-400" /> {currentTopic}</>
             ) : currentType === 'youtube' ? (
-              <><Youtube className="h-5 w-5 text-red-500" /> YouTube Video</>
+              <><Video className="h-5 w-5 text-red-500" /> YouTube Video</>
             ) : currentType === 'website' ? (
               <><Globe className="h-5 w-5 text-blue-400" /> {currentTopic}</>
             ) : (
@@ -143,7 +143,7 @@ export function SourceFileModal({
                     <div className="px-5 py-3 bg-white/10 border-b border-white/5 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         {source.type.toLowerCase().includes('youtube') ? (
-                          <Youtube className="h-4 w-4 text-red-500" />
+                          <Video className="h-4 w-4 text-red-500" />
                         ) : source.type.toLowerCase().includes('website') ? (
                           <Globe className="h-4 w-4 text-blue-400" />
                         ) : (

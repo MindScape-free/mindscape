@@ -11,14 +11,15 @@ export async function GET(req: Request) {
   const type = searchParams.get('type') || 'all'; // 'text' | 'image' | 'all'
 
   const now = Date.now();
-  const isExpired = now - lastFetch > CACHE_TTL;
-
-  if (isExpired || !textCache || !imageCache) {
+  const isExpired = now - lastFetch > CACHE_TTL;    if (isExpired || !textCache || !imageCache) {
     try {
       console.log('🌐 Fetching latest models from Pollinations...');
       
       // Fetch unified models list
-      const allModelsRes = await fetch('https://gen.pollinations.ai/models').then(r => r.json());
+      const response = await fetch('https://gen.pollinations.ai/models');
+      if (!response.ok) throw new Error(`Pollinations returned ${response.status}`);
+      
+      const allModelsRes = await response.json();
 
       if (Array.isArray(allModelsRes)) {
         // Process Text Models — text-capable
@@ -60,8 +61,8 @@ export async function GET(req: Request) {
 
       lastFetch = now;
     } catch (error) {
-      console.warn('⚠️ Failed to fetch dynamic models');
-      throw error;
+      console.warn('⚠️ Failed to fetch dynamic models, using stale cache or empty fallback:', error);
+      // Don't throw — use stale cache if available, or let the route return empty arrays gracefully
     }
   }
 

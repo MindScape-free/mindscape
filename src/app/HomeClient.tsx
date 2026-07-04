@@ -22,7 +22,7 @@ import {
   FastForward,
   Scale,
   BookOpen,
-  Youtube,
+  Video,
   MessageSquare,
   GraduationCap,
   Layers,

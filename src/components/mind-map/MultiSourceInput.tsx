@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { 
   Globe, 
-  Youtube, 
+  Video, 
   FileText, 
   Sparkles, 
   Paperclip, 
@@ -44,7 +44,7 @@ export function MultiSourceInput({
   const getIcon = () => {
     if (!value.trim()) return <Sparkles className="w-5 h-5 text-zinc-600" />;
     switch (detectedType) {
-      case 'youtube': return <Youtube className="w-4 h-4 text-red-500" />;
+      case 'youtube': return <Video className="w-4 h-4 text-red-500" />;
       case 'website': return <Globe className="w-4 h-4 text-blue-400" />;
       default: return <FileText className="w-4 h-4 text-green-400" />;
     }

@@ -172,14 +172,14 @@ export const LeafNodeCard = memo(function LeafNodeCard({
                     </div>
                 </div>
 
-                <p className="text-sm text-zinc-400 leading-relaxed mb-6 flex-grow group-hover/item:text-zinc-300 transition-colors">
+                <p className="text-sm text-zinc-400 leading-relaxed mb-6 flex-grow group-hover/item:text-zinc-300 transition-colors break-words whitespace-pre-wrap">
                     {cleanCitations(node.description)}
                 </p>
 
 
                 {!isSynthesisMode && (
-                    <div className="flex items-center justify-between gap-2 mt-auto pt-4 border-t border-white/5">
-                        <div className="flex items-center gap-0.5">
+                    <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/5 w-full">
+                        <div className="flex items-center gap-0.5 shrink-0">
                             <TooltipProvider>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
@@ -187,7 +187,7 @@ export const LeafNodeCard = memo(function LeafNodeCard({
                                             variant="ghost"
                                             size="icon"
                                             className={cn(
-                                                "h-8 w-8 rounded-lg transition-all relative",
+                                                "h-8 w-8 rounded-lg transition-all relative shrink-0",
                                                 existingExpansion ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-500 hover:text-primary hover:bg-primary/10'
                                             )}
                                             onClick={(e) => {
@@ -209,12 +209,12 @@ export const LeafNodeCard = memo(function LeafNodeCard({
                                             )}
                                         </Button>
                                     </TooltipTrigger>
-                                    <TooltipContent className="glassmorphism"><p>{existingExpansion ? 'Open Sub Map' : 'Generate Sub Map'}</p></TooltipContent>
+                                    <TooltipContent className="glassmorphism"><p>{existingExpansion ? 'Open Sub-Map' : 'Generate Sub-Map'}</p></TooltipContent>
                                 </Tooltip>
 
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-pink-400 hover:bg-pink-400/10 transition-all" onClick={handleImageClick}>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-pink-400 hover:bg-pink-400/10 transition-all shrink-0" onClick={handleImageClick}>
                                             <ImageIcon className="h-4 w-4" />
                                         </Button>
                                     </TooltipTrigger>
@@ -223,7 +223,7 @@ export const LeafNodeCard = memo(function LeafNodeCard({
 
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-emerald-400 hover:bg-emerald-400/10 transition-all" onClick={handleQuizClick}>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-emerald-400 hover:bg-emerald-400/10 transition-all shrink-0" onClick={handleQuizClick}>
                                             <BrainCircuit className="h-4 w-4" />
                                         </Button>
                                     </TooltipTrigger>
@@ -232,7 +232,7 @@ export const LeafNodeCard = memo(function LeafNodeCard({
 
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-orange-400 hover:bg-orange-400/10 transition-all" onClick={(e) => {
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-orange-400 hover:bg-orange-400/10 transition-all shrink-0" onClick={(e) => {
                                             e.stopPropagation();
                                             onPracticeClick(node.name);
                                         }}>
@@ -244,7 +244,7 @@ export const LeafNodeCard = memo(function LeafNodeCard({
 
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-blue-400 hover:bg-blue-400/10 transition-all" onClick={handleChatClick}>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-blue-400 hover:bg-blue-400/10 transition-all shrink-0" onClick={handleChatClick}>
                                             <MessageCircle className="h-4 w-4" />
                                         </Button>
                                     </TooltipTrigger>
@@ -253,7 +253,7 @@ export const LeafNodeCard = memo(function LeafNodeCard({
 
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-amber-400 hover:bg-amber-400/10 transition-all" onClick={handleCopy}>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-amber-400 hover:bg-amber-400/10 transition-all shrink-0" onClick={handleCopy}>
                                             {isCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
                                         </Button>
                                     </TooltipTrigger>
@@ -268,7 +268,7 @@ export const LeafNodeCard = memo(function LeafNodeCard({
                                 onSubCategoryClick(node);
                             }}
                             variant="ghost"
-                            className="h-8 py-0 px-3 text-xs font-bold text-zinc-400 hover:text-white hover:bg-white/5 rounded-full group-hover/item:bg-primary/20 group-hover/item:text-primary transition-all flex items-center gap-1"
+                            className="h-8 py-0 px-3 text-xs font-bold text-zinc-400 hover:text-white hover:bg-white/5 rounded-full group-hover/item:bg-primary/20 group-hover/item:text-primary transition-all flex items-center gap-1 shrink-0"
                         >
                             More <ArrowRight className="w-3 h-3 group-hover/item:translate-x-1 transition-transform" />
                         </Button>

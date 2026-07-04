@@ -42,7 +42,7 @@ import {
   MicOff,
   Download,
   Eraser,
-  Github,
+  GitBranch,
   ChevronRight,
   BrainCircuit,
   Paperclip,
@@ -156,7 +156,7 @@ const allSuggestionPrompts = [
   { icon: HelpCircle, text: 'Explain quantum computing simply', color: 'text-yellow-400' },
   { icon: Zap, text: 'Explain the theory of relativity', color: 'text-orange-400' },
 
-  { icon: Github, text: 'Explain Blockchain technology', color: 'text-gray-400' }, // Assuming Github icon available or use generic
+  { icon: GitBranch, text: 'Explain Blockchain technology', color: 'text-gray-400' }, // Assuming GitBranch icon available or use generic
 
   // Creative & Ideas
   { icon: Palette, text: 'Brainstorm marketing ideas for a coffee shop', color: 'text-pink-400' },
@@ -585,6 +585,7 @@ export function ChatPanel({
       token: session?.access_token,
       model: providerOptionsConfig.textModel || providerOptionsConfig.pollinationsModel || 'openai',
       agentMode,
+      mindMapData: mindMapData ? toPlainObject(mindMapData) : undefined,
     });
 
   }, [input, attachments, activeSessionId, activeSession?.messages, topic, persona, providerOptions, mindMapData, updateSession, startStream]);
@@ -1435,6 +1436,7 @@ export function ChatPanel({
       attachments: combinedAttachments as any,
       apiKey: providerOptions.apiKey,
       model: providerOptionsConfig.textModel || providerOptionsConfig.pollinationsModel || 'openai',
+      mindMapData: mindMapData ? toPlainObject(mindMapData) : undefined,
     });
   };
 
