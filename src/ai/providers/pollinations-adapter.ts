@@ -186,86 +186,100 @@ export class PollinationsAdapter implements IAIProvider {
     const messages = this.buildMessages(request);
     const body: any = { messages, model: model.trim().replace(/\s+/g, '-').toLowerCase(), stream: true };
 
-    const response = await fetch(this.STREAM_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-    });
+    const controller = new AbortController();
+    const timeout = request.timeout || 30_000;
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    if (!response.ok) throw new Error(`Pollinations stream error: ${response.status}`);
+    try {
+      const response = await fetch(this.STREAM_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
 
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error('No readable stream');
+      if (!response.ok) throw new Error(`Pollinations stream error: ${response.status}`);
 
-    const decoder = new TextDecoder();
-    let fullText = '';
-    let buffer = '';
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No readable stream');
 
-    while (true) {
-      const { done, value } = await reader.read();
-      
-      const chunk = decoder.decode(value || new Uint8Array(), { stream: !done });
-      buffer += chunk;
-      
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || ''; // Keep the last partial line in buffer
+      const decoder = new TextDecoder();
+      let fullText = '';
+      let buffer = '';
 
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+      while (true) {
+        const { done, value } = await reader.read();
         
-        const data = trimmed.slice(6).trim();
-        if (data === '[DONE]') {
-          onChunk({ text: '', done: true, model });
-          break;
-        }
-        try {
-          const parsed = JSON.parse(data);
-          const delta = parsed.choices?.[0]?.delta?.content || '';
-          const reasoningDelta = parsed.choices?.[0]?.delta?.reasoning_content || '';
-          if (delta || reasoningDelta) {
-            fullText += delta;
-            onChunk({ text: delta, reasoning: reasoningDelta, done: false, model });
+        const chunk = decoder.decode(value || new Uint8Array(), { stream: !done });
+        buffer += chunk;
+        
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep the last partial line in buffer
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data: ')) continue;
+          
+          const data = trimmed.slice(6).trim();
+          if (data === '[DONE]') {
+            onChunk({ text: '', done: true, model });
+            break;
           }
-        } catch { /* skip unparseable chunks */ }
+          try {
+            const parsed = JSON.parse(data);
+            const delta = parsed.choices?.[0]?.delta?.content || '';
+            const reasoningDelta = parsed.choices?.[0]?.delta?.reasoning_content || '';
+            if (delta || reasoningDelta) {
+              fullText += delta;
+              onChunk({ text: delta, reasoning: reasoningDelta, done: false, model });
+            }
+          } catch { /* skip unparseable chunks */ }
+        }
+
+        if (done) break;
       }
 
-      if (done) break;
-    }
-
-    // Process any remaining buffer if it looks like a valid data line
-    if (buffer.trim().startsWith('data: ')) {
-      try {
-        const data = buffer.trim().slice(6).trim();
-        if (data !== '[DONE]') {
-          const parsed = JSON.parse(data);
-          const delta = parsed.choices?.[0]?.delta?.content || '';
-          const reasoningDelta = parsed.choices?.[0]?.delta?.reasoning_content || '';
-          if (delta || reasoningDelta) {
-            fullText += delta;
-            onChunk({ text: delta, reasoning: reasoningDelta, done: false, model });
+      // Process any remaining buffer if it looks like a valid data line
+      if (buffer.trim().startsWith('data: ')) {
+        try {
+          const data = buffer.trim().slice(6).trim();
+          if (data !== '[DONE]') {
+            const parsed = JSON.parse(data);
+            const delta = parsed.choices?.[0]?.delta?.content || '';
+            const reasoningDelta = parsed.choices?.[0]?.delta?.reasoning_content || '';
+            if (delta || reasoningDelta) {
+              fullText += delta;
+              onChunk({ text: delta, reasoning: reasoningDelta, done: false, model });
+            }
           }
-        }
-      } catch { /* skip */ }
+        } catch { /* skip */ }
+      }
+
+      const latencyMs = Date.now() - startTime;
+      recordLatency(latencyMs);
+      successCount++;
+      consecutiveFailures = 0;
+
+      return {
+        content: fullText,
+        raw: fullText,
+        provider: this.name,
+        model,
+        latencyMs,
+        repairApplied: false,
+        salvaged: false,
+      };
+    } catch (fetchError: any) {
+      if (fetchError.name === 'AbortError') {
+        throw new Error(`Pollinations streaming timed out after ${timeout}ms`);
+      }
+      throw fetchError;
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const latencyMs = Date.now() - startTime;
-    recordLatency(latencyMs);
-    successCount++;
-    consecutiveFailures = 0;
-
-    return {
-      content: fullText,
-      raw: fullText,
-      provider: this.name,
-      model,
-      latencyMs,
-      repairApplied: false,
-      salvaged: false,
-    };
   }
 
   // ── Internal API Call ──────────────────────────────────────────────
@@ -303,7 +317,7 @@ export class PollinationsAdapter implements IAIProvider {
     }
 
     const controller = new AbortController();
-    const timeout = request.timeout || 120_000;
+    const timeout = request.timeout || 30_000;
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {

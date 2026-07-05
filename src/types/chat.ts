@@ -11,8 +11,9 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'ai';
   content: string;
-  type: 'text' | 'quiz' | 'quiz-result' | 'quiz-selector' | 'file';
+  type: 'text' | 'quiz' | 'quiz-result' | 'quiz-selector' | 'file' | 'quick-explain';
   timestamp: string | number | Date;
+  topic?: string;
   quiz?: Quiz;
   quizResult?: QuizResult;
   attachments?: ChatAttachment[];

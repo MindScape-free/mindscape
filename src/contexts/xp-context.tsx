@@ -30,6 +30,7 @@ const EVENT_LABELS: Record<PointEventType, string> = {
   MAP_VIEWS_10:          '10 Map Views',
   MAP_CLONED:            'Map Cloned',
   DAILY_LOGIN:           'Daily Login',
+  DAILY_CHALLENGE:       'Daily Challenge',
   STREAK_3:              '3-Day Streak!',
   STREAK_7:              '7-Day Streak!',
   STREAK_30:             '30-Day Streak!',
@@ -88,7 +89,7 @@ export function XPProvider({ children }: { children: React.ReactNode }) {
     if (user && processedUserRef.current !== user.id) {
       processedUserRef.current = user.id;
       // Award daily login points
-      awardXP('DAILY_LOGIN').catch(() => {});
+      awardXP('DAILY_LOGIN').catch((err) => console.error("[XP] Failed:", err));
       
       // Track activity in users table (streaks, etc.)
       const supabase = getSupabaseClient();
@@ -100,7 +101,9 @@ export function XPProvider({ children }: { children: React.ReactNode }) {
     }
 
     return () => { processingRef.current = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // `supabase` is created fresh inside the callback via getSupabaseClient(),
+    // so it is not a stale-closure dependency. `awardXP` is already listed.
+    // `user?.id` covers the `user` object for identity changes.
   }, [user?.id, awardXP]);
 
   const dismissToast = useCallback((id: string) => {

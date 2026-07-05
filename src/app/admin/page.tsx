@@ -91,8 +91,7 @@ export default function AdminDashboard() {
     if (bundle?.feedback && bundle.feedback !== feedbackData) {
       setFeedbackData(bundle.feedback);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bundle?.feedback]);
+  }, [bundle?.feedback, feedbackData]);
 
   const listenerIdsRef = useRef<string[]>([]);
 

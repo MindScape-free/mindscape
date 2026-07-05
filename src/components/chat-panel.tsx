@@ -8,6 +8,7 @@ import {
   SheetTitle,
   SheetDescription,
   SheetClose,
+  SheetPortal,
 } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -64,6 +65,9 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn, formatShortDistanceToNow, cleanCitations } from '@/lib/utils';
 import { resizeImage } from '@/lib/image-processor';
 import { MarkdownRenderer } from './chat/markdown-renderer';
+import { EntityAction } from './chat/entity-action-menu';
+import { QuickExplainDrawer } from './chat/quick-explain-dialog';
+import { TextSelectionMenu } from './chat/text-selection-menu';
 import { ThoughtTrace } from './chat/thought-trace';
 import { Separator } from './ui/separator';
 import { formatDistanceToNow } from 'date-fns';
@@ -235,8 +239,8 @@ export function ChatPanel({
   const pinChatTopRef = useRef<HTMLDivElement>(null);
   const pinChatEndRef = useRef<HTMLDivElement>(null);
   const pinChatInitializedRef = useRef(false);
+  const cleanupResizeRef = useRef<(() => void) | null>(null);
   const [persona, setPersona] = useState<Persona>('Teacher');
-  const [displayedPrompts, setDisplayedPrompts] = useState<any[]>([]);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [createMindmapOpen, setCreateMindmapOpen] = useState(false);
   const [createMindmapContent, setCreateMindmapContent] = useState('');
@@ -258,6 +262,15 @@ export function ChatPanel({
   const [hasOpenedBefore, setHasOpenedBefore] = useLocalStorage('mindscape-chat-opened', false);
   const [savedView, setSavedView] = useState<'chat' | 'history' | 'pins' | 'canvas-pins' | 'pin-chat'>('chat');
   
+  // ENTITY ACTION MENU STATE
+  const [explainTopic, setExplainTopic] = useState<string | null>(null);
+  const [explainContext, setExplainContext] = useState<string>('');
+  const [isExplainHistoryOpen, setIsExplainHistoryOpen] = useState(false);
+  
+  // TEXT SELECTION ACTION MENU STATE
+  const [selectedText, setSelectedText] = useState('');
+  const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
+
   // URL SCRAPING STATE
   const [processedUrls, setProcessedUrls] = useState<Set<string>>(new Set());
   const [isScrapingUrl, setIsScrapingUrl] = useState(false);
@@ -295,6 +308,14 @@ export function ChatPanel({
     setLocalUsePdfContext(propUsePdfContext);
   }, [propUsePdfContext]);
 
+  // Reset explanations state when chat panel sheet closes
+  useEffect(() => {
+    if (!isOpen) {
+      setExplainTopic(null);
+      setIsExplainHistoryOpen(false);
+    }
+  }, [isOpen]);
+
   const usePdfContext = localUsePdfContext;
   const setUsePdfContext = (val: boolean) => {
     setLocalUsePdfContext(val);
@@ -331,6 +352,22 @@ export function ChatPanel({
     }
   }, [streamText, streamingIds]);
 
+  // Refs to avoid stale closures inside setTimeout callbacks in the streaming effect
+  const latestSessionsRef = useRef(sessions);
+  latestSessionsRef.current = sessions;
+  const latestActiveSessionIdRef = useRef(activeSessionId);
+  latestActiveSessionIdRef.current = activeSessionId;
+  const latestTopicRef = useRef(topic);
+  latestTopicRef.current = topic;
+  const latestMindMapDataRef = useRef(mindMapData);
+  latestMindMapDataRef.current = mindMapData;
+  const latestUsePdfContextRef = useRef(usePdfContext);
+  latestUsePdfContextRef.current = usePdfContext;
+  const latestProviderOptionsRef = useRef(providerOptions);
+  latestProviderOptionsRef.current = providerOptions;
+  const latestStreamTextRef = useRef(streamText);
+  latestStreamTextRef.current = streamText;
+
   // Effect to handle stream completion - updates message and triggers related questions
   useEffect(() => {
     if (!isStreaming && streamText && streamingIds.size > 0) {
@@ -357,25 +394,34 @@ export function ChatPanel({
         onLatestResponse(streamText);
       }
       
-      // Generate related questions after a short delay
-      setTimeout(() => {
+      // Generate related questions after a short delay.
+      // Uses refs to avoid stale closures if sessions/topic/etc change before the timeout fires.
+      const relatedTimeoutId = setTimeout(() => {
+        const currentSessions = latestSessionsRef.current;
+        const currentActiveSessionId = latestActiveSessionIdRef.current;
+        const currentTopic = latestTopicRef.current;
+        const currentMindMapData = latestMindMapDataRef.current;
+        const currentUsePdfContext = latestUsePdfContextRef.current;
+        const currentProviderOptions = latestProviderOptionsRef.current;
+        const currentStreamText = latestStreamTextRef.current;
+
         if (!streamingCompletedRef.current) {
           streamingCompletedRef.current = true;
-          const session = sessions.find(s => s.id === activeSessionId);
+          const session = currentSessions.find(s => s.id === currentActiveSessionId);
           if (session && session.messages.length > 0) {
             const lastMsg = session.messages[session.messages.length - 1];
-            if (lastMsg.role === 'ai' && !streamText.includes('error') && !streamText.includes('Sorry')) {
+            if (lastMsg.role === 'ai' && !currentStreamText.includes('error') && !currentStreamText.includes('Sorry')) {
               setIsGeneratingRelated(true);
               generateRelatedQuestionsAction({
-                topic: session.title && session.title !== 'General Conversation' ? session.title : (topic || 'General Conversation'),
-                mindMapData: mindMapData ? toPlainObject(mindMapData) : undefined,
+                topic: session.title && session.title !== 'General Conversation' ? session.title : (currentTopic || 'General Conversation'),
+                mindMapData: currentMindMapData ? toPlainObject(currentMindMapData) : undefined,
                 history: session.messages.slice(-10).map(m => ({
                   role: m.role === 'ai' ? 'assistant' : 'user',
                   content: m.content
                 })),
-                usePdfContext,
-                pdfContext: usePdfContext && mindMapData?.pdfContext ? JSON.stringify(mindMapData.pdfContext) : undefined
-              }, providerOptions).then(({ data: relatedData }) => {
+                usePdfContext: currentUsePdfContext,
+                pdfContext: currentUsePdfContext && currentMindMapData?.pdfContext ? JSON.stringify(currentMindMapData.pdfContext) : undefined
+              }, currentProviderOptions).then(({ data: relatedData }) => {
                 if (relatedData?.questions) {
                   setRelatedQuestions(relatedData.questions);
                 }
@@ -401,9 +447,15 @@ export function ChatPanel({
       });
       
       // Reset the completion flag after a delay
-      setTimeout(() => {
+      const resetTimeoutId = setTimeout(() => {
         streamingCompletedRef.current = false;
       }, 1000);
+
+      // Cleanup timeouts if the effect re-runs before they fire
+      return () => {
+        clearTimeout(relatedTimeoutId);
+        clearTimeout(resetTimeoutId);
+      };
     }
   }, [isStreaming, streamText, streamingIds, activeSessionId, sessions, topic, mindMapData, usePdfContext, providerOptions, updateSession, onLatestResponse]);
 
@@ -491,8 +543,7 @@ export function ChatPanel({
       timestamp: Date.now()
     };
     updateSession(activeSessionId, { messages: [...(currentSession?.messages || []), quizSelectorMessage] });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, initialMode, activeSessionId]);
+  }, [isOpen, initialMode, activeSessionId, topic, updateSession, sessions]);
 
   const activeSession = useMemo(() => {
     return sessions.find(s => s.id === activeSessionId) || null;
@@ -530,7 +581,7 @@ export function ChatPanel({
     }
 
     // Award XP for chat message
-    awardXP('CHAT_MESSAGE').catch(() => {});
+    awardXP('CHAT_MESSAGE').catch((err) => console.error("[XP] Failed:", err));
 
     // Don't show loading spinner - streaming handles the UI
     setIsLoading(false);
@@ -748,9 +799,9 @@ export function ChatPanel({
 
     // Award quiz XP
     const scorePct = Math.round((results.score / results.totalQuestions) * 100);
-    awardXP('QUIZ_COMPLETED', { score: results.score, total: results.totalQuestions }).catch(() => {});
-    if (scorePct === 100) awardXP('QUIZ_PERFECT').catch(() => {});
-    else if (scorePct >= 80) awardXP('QUIZ_BONUS_80').catch(() => {});
+    awardXP('QUIZ_COMPLETED', { score: results.score, total: results.totalQuestions }).catch((err) => console.error("[XP] Failed:", err));
+    if (scorePct === 100) awardXP('QUIZ_PERFECT').catch((err) => console.error("[XP] Failed:", err));
+    else if (scorePct >= 80) awardXP('QUIZ_BONUS_80').catch((err) => console.error("[XP] Failed:", err));
 
     // #10 — Quiz-adaptive deepening
     // Correct denominator: questions per tag, not total questions
@@ -821,7 +872,7 @@ export function ChatPanel({
     });
 
     // Award XP
-    awardXP('QUIZ_COMPLETED', { score: results.score, total: results.totalQuestions }).catch(() => {});
+    awardXP('QUIZ_COMPLETED', { score: results.score, total: results.totalQuestions }).catch((err) => console.error("[XP] Failed:", err));
     
     // Adaptive deepening
     if (onQuizDeepen) {
@@ -956,6 +1007,54 @@ export function ChatPanel({
   }, [toast]);
 
   // handleUrlScrape function
+  // Entity action handler for EntityActionMenu
+  const handleEntityAction = useCallback((action: EntityAction, topic: string) => {
+    switch (action) {
+      case 'ask':
+        handleSend(`Tell me more about ${topic}`);
+        break;
+      case 'explore':
+        toast({ title: 'Exploring', description: `Navigating to "${topic}"...` });
+        onTopicClick?.(topic);
+        break;
+      case 'explain':
+        if (!topic) {
+          toast({ title: 'Nothing to explain', description: 'Please try selecting a specific topic or concept.' });
+          return;
+        }
+        setExplainTopic(topic);
+        setExplainContext(mindMapData?.topic || activeSession?.title || topic);
+        break;
+    }
+  }, [handleSend, mindMapData?.topic, activeSession?.title, toast, onTopicClick]);
+
+  const handleExplanationGenerated = useCallback((explainTopic: string, explanationText: string) => {
+    if (!activeSessionId) return;
+    const newExplainMessage: ChatMessage = {
+      id: `explain-${Date.now()}`,
+      role: 'ai',
+      type: 'quick-explain',
+      topic: explainTopic,
+      content: explanationText,
+      timestamp: Date.now()
+    };
+    updateSession(activeSessionId, {
+      messages: [...(activeSession?.messages || []), newExplainMessage]
+    });
+  }, [activeSessionId, activeSession, updateSession]);
+
+  const historyExplanations = useMemo(() => {
+    const msgs = activeSession?.messages;
+    if (!msgs) return [];
+    return msgs
+      .filter(m => m.type === 'quick-explain')
+      .map(m => ({
+        topic: m.topic || '',
+        content: m.content,
+        timestamp: toDate(m.timestamp).getTime()
+      }));
+  }, [activeSession]);
+
   const handleUrlScrape = useCallback(async (url: string) => {
     setIsScrapingUrl(true);
     try {
@@ -1009,14 +1108,6 @@ export function ChatPanel({
     return () => clearTimeout(timeoutId);
   }, [input, processedUrls, handleUrlScrape]);
 
-  // Shuffle prompts when starting a fresh 'General Conversation' chat
-  useEffect(() => {
-    if (activeSessionId && activeSession?.title === 'General Conversation' && activeSession.messages.length === 0) {
-      const shuffled = [...allSuggestionPrompts].sort(() => 0.5 - Math.random());
-      setDisplayedPrompts(shuffled.slice(0, 4));
-    }
-  }, [activeSessionId, activeSession?.title, activeSession?.messages.length]);
-
   /**
    * Scrolls the chat view to the latest assistant message or bottom.
    */
@@ -1042,6 +1133,54 @@ export function ChatPanel({
       return () => clearTimeout(timer);
     }
   }, [isOpen, view, messages, isQuizLoading, isLoading]);
+
+  // TEXT SELECTION DETECTION
+  useEffect(() => {
+    const handleMouseUp = (e: MouseEvent) => {
+      // If the selection menu itself was clicked, do not clear
+      if ((e.target as HTMLElement).closest('.text-selection-menu')) return;
+
+      setTimeout(() => {
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed) {
+          setSelectedText('');
+          setSelectionPosition(null);
+          return;
+        }
+
+        const text = selection.toString().trim();
+        if (text.length === 0) {
+          setSelectedText('');
+          setSelectionPosition(null);
+          return;
+        }
+
+        // Limit selection to elements inside the chat panel SheetContent (dialog role)
+        const sheetEl = document.querySelector('[role="dialog"]');
+        const isInside = sheetEl && sheetEl.contains(selection.anchorNode);
+
+        if (isInside) {
+          try {
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            setSelectionPosition({
+              x: rect.left + rect.width / 2,
+              y: rect.top,
+            });
+            setSelectedText(text);
+          } catch (err) {
+            console.error('Error getting selection range rect:', err);
+          }
+        } else {
+          setSelectedText('');
+          setSelectionPosition(null);
+        }
+      }, 10);
+    };
+
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => document.removeEventListener('mouseup', handleMouseUp);
+  }, []);
 
   // Summarize chat to generate a topic title
   useEffect(() => {
@@ -1070,6 +1209,12 @@ export function ChatPanel({
 
   /**
    * Finds or creates a session for the current topic or resumes the last one.
+   *
+   * Uses `sessions.length` instead of `sessions` intentionally:
+   * Adding `sessions` as a dep would cause the effect to re-run on every
+   * message update (which modifies the sessions array), leading to a
+   * loop of session creation/reselection. Using `.length` captures
+   * structural changes (session added/deleted) while ignoring content updates.
    */
   useEffect(() => {
     if (isOpen) {
@@ -1098,7 +1243,6 @@ export function ChatPanel({
     } else {
       hasSentInitialMessage.current = false;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, topic, isSessionLoading, sessionId, sessions.length]);
 
   // Apply initialView — runs after session effect so it wins
@@ -1132,7 +1276,6 @@ export function ChatPanel({
   useEffect(() => {
     if (isOpen && initialMessage && !hasSentInitialMessage.current && activeSession) {
       handleSend(initialMessage);
-      hasSentInitialMessage.current = true;
       hasSentInitialMessage.current = true;
     }
   }, [isOpen, initialMessage, initialMode, activeSession, handleSend, handleStartQuiz]);
@@ -1356,7 +1499,7 @@ export function ChatPanel({
     updateSession(activeSessionId, { messages: updatedMessages });
     
     if (!message.isPinned) {
-      awardXP('CHAT_PINNED').catch(() => {});
+      awardXP('CHAT_PINNED').catch((err) => console.error("[XP] Failed:", err));
       if (message.role === 'ai') {
         const userMessageIndex = messageIndex - 1;
         if (userMessageIndex >= 0 && messages[userMessageIndex].role === 'user' && messages[userMessageIndex].type === 'text') {
@@ -1474,27 +1617,58 @@ export function ChatPanel({
   }
 
   /**
-   * Handles resize start from the drag handle
+   * Handles resize start from the drag handle.
+   * Preserves the user's scroll position by tracking the scroll ratio
+   * and restoring it after each width change causes content reflow.
    */
+  // Cleanup resize event listeners on unmount to prevent memory leak
+  useEffect(() => {
+    return () => {
+      cleanupResizeRef.current?.();
+      cleanupResizeRef.current = null;
+    };
+  }, []);
+
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('🔧 Resize started at X:', e.clientX);
     setIsResizing(true);
 
     const startX = e.clientX;
     const startWidth = panelWidth;
 
+    // Find the active scroll viewport inside the sheet panel.
+    // Radix ScrollArea uses a [data-radix-scroll-area-viewport] element.
+    const sheetEl = (e.target as HTMLElement).closest('[role="dialog"]');
+    const viewport = sheetEl?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+
     const handleMouseMove = (moveEvent: MouseEvent) => {
+      // Capture scroll ratio BEFORE the width changes
+      let scrollRatio = 0;
+      if (viewport && viewport.scrollHeight > viewport.clientHeight) {
+        scrollRatio = viewport.scrollTop / (viewport.scrollHeight - viewport.clientHeight);
+      }
+
       const deltaX = startX - moveEvent.clientX;
       const newWidth = startWidth + deltaX;
       const clampedWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth));
       setPanelWidth(clampedWidth);
+
+      // Restore scroll position AFTER the browser reflows at the new width
+      requestAnimationFrame(() => {
+        if (viewport && viewport.scrollHeight > viewport.clientHeight) {
+          viewport.scrollTop = scrollRatio * (viewport.scrollHeight - viewport.clientHeight);
+        }
+      });
     };
 
     const handleMouseUp = () => {
-      console.log('✅ Resize ended, final width:', panelWidth);
       setIsResizing(false);
+      cleanupResizeRef.current?.();
+      cleanupResizeRef.current = null;
+    };
+
+    cleanupResizeRef.current = () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
       document.body.style.cursor = '';
@@ -1694,7 +1868,7 @@ export function ChatPanel({
                                   e.stopPropagation();
                                   handleStartQuiz(d as any);
                                 }}
-                                className="h-8 text-[10px] font-bold uppercase rounded-lg hover:bg-emerald-500/20 hover:text-emerald-400 border border-white/5"
+                                className="h-8 text-[10px] font-bold uppercase rounded-lg hover:bg-emerald-500/20 hover:text-emerald-400 border border-white/5 font-sans"
                               >
                                 {d}
                               </Button>
@@ -1702,7 +1876,7 @@ export function ChatPanel({
                           </div>
                           <button
                             onClick={(e) => { e.stopPropagation(); setQuizShowingDifficultySelector(false); }}
-                            className="text-[9px] text-zinc-500 hover:text-white uppercase font-bold mt-1"
+                            className="text-[9px] text-zinc-500 hover:text-white uppercase font-bold mt-1 font-sans"
                           >
                             Cancel
                           </button>
@@ -1736,6 +1910,10 @@ export function ChatPanel({
                   if (message.type === 'quiz-selector' && hiddenSelectorMessages.has(index)) {
                     return null;
                   }
+                  // Skip quick-explain messages
+                  if (message.type === 'quick-explain') {
+                    return null;
+                  }
                   const isTextMessage = message.type === 'text';
                   return (
                     <motion.div
@@ -1748,40 +1926,41 @@ export function ChatPanel({
                     >
                       <div
                         className={cn(
-                          'flex items-start gap-3',
+                          'flex items-start',
                           message.role === 'user' ? 'justify-end' : 'justify-start'
                         )}
                       >
-                        {message.role === 'ai' ? (
-                          <Avatar className="h-8 w-8 border flex-shrink-0">
-                            <AvatarFallback className="bg-primary text-primary-foreground">
-                              <Bot className="h-5 w-5" />
-                            </AvatarFallback>
-                          </Avatar>
-                        ) : (
-                          <div className="order-2 flex-shrink-0">
-                            <div className="h-8 w-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
-                              <User className="h-4 w-4 text-zinc-400" />
-                            </div>
-                          </div>
-                        )}
                         <div
                           className={cn(
-                            'max-w-[85%] overflow-hidden transition-all duration-300 break-words overflow-wrap-anywhere',
+                            'max-w-[92%] min-w-0 transition-all duration-300 break-words overflow-wrap-anywhere group',
                             message.role === 'user'
-                              ? 'order-1 rounded-2xl rounded-tr-sm bg-white/[0.06] border border-white/10 shadow-sm'
-                              : 'bg-secondary/40 backdrop-blur-sm border border-white/5 rounded-2xl rounded-tl-sm'
+                              ? 'rounded-2xl rounded-tr-sm bg-gradient-to-br from-primary/[0.08] to-primary/[0.02] border border-primary/[0.12] shadow-sm shadow-primary/[0.03]'
+                              : 'relative bg-gradient-to-br from-zinc-900/80 via-zinc-900/60 to-zinc-950/70 backdrop-blur-xl border border-white/[0.06] rounded-2xl rounded-tl-sm shadow-lg shadow-black/10'
                           )}
                         >
+                          {message.role === 'ai' && (
+                            <div className="absolute top-0 left-3 right-3 h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent rounded-full" />
+                          )}
                           {message.isPinned && (
                             <div className="px-3 pt-2 flex items-center gap-1.5">
                               <Pin className="h-3 w-3 text-amber-400 fill-amber-400" />
                               <span className="text-[10px] font-bold text-amber-400/80 uppercase tracking-widest">Pinned</span>
                             </div>
                           )}
+                          {message.role === 'ai' && (
+                            <div className="px-4 pt-3 pb-0 flex items-center gap-1.5">
+                              <div className="p-0.5 rounded bg-zinc-500/20">
+                                <Sparkles className="h-2.5 w-2.5 text-zinc-400" />
+                              </div>
+                              <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-500">MindSpark AI</span>
+                            </div>
+                          )}
                           {message.role === 'user' && (
                             <div className="px-4 pt-3 pb-0 flex items-center gap-1.5">
-                              <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-600">You</span>
+                              <div className="p-0.5 rounded bg-zinc-500/20">
+                                <User className="h-2.5 w-2.5 text-zinc-400" />
+                              </div>
+                              <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-500">You</span>
                             </div>
                           )}
                           <div className="p-4">
@@ -1850,7 +2029,7 @@ export function ChatPanel({
                                       size="sm"
                                       onClick={() => handleStartQuiz(d.id as any, index)}
                                       className={cn(
-                                        "h-10 px-6 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl border hover:scale-105 active:scale-95 transition-all backdrop-blur-md",
+                                        "h-10 px-6 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl border hover:scale-105 active:scale-95 transition-all backdrop-blur-md font-sans",
                                         d.color
                                       )}
                                     >
@@ -1860,7 +2039,7 @@ export function ChatPanel({
                                 </div>
                               </div>
                             ) : message.role === 'user' ? (
-                              <p className="text-sm text-zinc-200 leading-relaxed">{message.content}</p>
+                              <p className="text-sm text-zinc-300 leading-relaxed">{message.content}</p>
                             ) : (
                               <div
                                 className="text-sm prose prose-sm max-w-none leading-relaxed prose-invert break-words"
@@ -1871,15 +2050,28 @@ export function ChatPanel({
                                   const isCurrentlyStreaming = streamingIds.has(message.id);
                                   if (isCurrentlyStreaming && !displayContent && !reasoning && toolCalls.length === 0) {
                                     return (
-                                      <div className="flex items-center gap-1 py-1">
-                                        <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                        <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                        <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                      <div className="flex items-center gap-3 py-3">
+                                        {/* Animated gradient orb */}
+                                        <div className="relative w-8 h-8 flex-shrink-0">
+                                          <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-primary/40 via-violet-500/30 to-cyan-400/20 animate-spin" style={{ animationDuration: '3s' }} />
+                                          <div className="absolute inset-[3px] rounded-full bg-zinc-950 flex items-center justify-center">
+                                            <BrainCircuit className="w-3.5 h-3.5 text-primary/80 animate-pulse" />
+                                          </div>
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                          <span className="text-[11px] font-semibold text-zinc-300 tracking-wide">Reasoning</span>
+                                          <div className="flex items-center gap-1">
+                                            <span className="w-1 h-1 bg-primary/60 rounded-full animate-pulse" />
+                                            <span className="w-1 h-1 bg-primary/40 rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+                                            <span className="w-1 h-1 bg-primary/20 rounded-full animate-pulse" style={{ animationDelay: '600ms' }} />
+                                            <span className="text-[9px] text-zinc-600 ml-1 font-medium">analyzing your question</span>
+                                          </div>
+                                        </div>
                                       </div>
                                     );
                                   }
                                   return (
-                                      <div className="markdown-container space-y-4">
+                                      <div className="markdown-container space-y-4 min-w-0 w-full">
                                         {/* Reasoning & Thought Chain (Persistent or Streaming) */}
                                         <ThoughtTrace 
                                           reasoning={isCurrentlyStreaming ? reasoning : message.reasoning}
@@ -1914,10 +2106,11 @@ export function ChatPanel({
                                         <MarkdownRenderer 
                                           content={displayContent} 
                                           onEntityClick={onTopicClick}
+                                          onEntityAction={handleEntityAction}
                                           onQuizSubmit={handleInlineQuizSubmit}
                                         />
                                         {isCurrentlyStreaming && displayContent && (
-                                          <span className="inline-block w-0.5 h-4 bg-primary ml-0.5 animate-pulse align-middle" />
+                                          <span className="inline-block w-0.5 h-4 bg-zinc-400 ml-0.5 animate-pulse align-middle" />
                                         )}
                                       </div>
                                   );
@@ -1925,63 +2118,71 @@ export function ChatPanel({
                               </div>
                             )}
                           </div>
-                          {isTextMessage && !streamingIds.has(message.id) && (
-                            <div className="flex items-center gap-1 px-3 pb-2 pt-0">
-                              {streamingIds.has(message.id) && streamingMessages[message.id] && (
-                                <TooltipProvider><Tooltip><TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-400" onClick={stopStream}>
-                                    <X className="h-3 w-3" />
-                                  </Button>
-                                </TooltipTrigger><TooltipContent>Stop</TooltipContent></Tooltip></TooltipProvider>
-                              )}
-                              {message.role === 'ai' && (
-                                <TooltipProvider><Tooltip><TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => handleCopyMessage(streamingMessages[message.id] || message.content, index)}>
-                                    {copiedIndex === index ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-                                  </Button>
-                                </TooltipTrigger><TooltipContent>Copy</TooltipContent></Tooltip></TooltipProvider>
-                              )}
-{message.role === 'ai' && (
-                                <TooltipProvider><Tooltip><TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => handleRegenerate(index)}>
-                                    <RefreshCw className={cn("h-3 w-3", isLoading && index === messages.length - 1 && "animate-spin")} />
-                                  </Button>
-                                </TooltipTrigger><TooltipContent>Regenerate</TooltipContent></Tooltip></TooltipProvider>
-                              )}
-                              {message.role === 'ai' && !streamingIds.has(message.id) && (
-                                <TooltipProvider><Tooltip><TooltipTrigger asChild>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="h-6 w-6 text-muted-foreground hover:text-primary"
-                                    onClick={() => {
-                                      const userMsg = index > 0 && messages[index - 1]?.role === 'user'
-                                        ? messages[index - 1].content
-                                        : undefined;
-                                      setCreateMindmapUserMessage(userMsg || '');
-                                      setCreateMindmapContent(streamingMessages[message.id] || message.content);
-                                      setCreateMindmapOpen(true);
-                                    }}
-                                  >
-                                    <Brain className="h-3 w-3" />
-                                  </Button>
-                                </TooltipTrigger><TooltipContent>Create Mind Map</TooltipContent></Tooltip></TooltipProvider>
-                              )}
-                              {message.role === 'ai' && (
-                                <TooltipProvider><Tooltip><TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost" size="icon"
-                                    className={cn("h-6 w-6 transition-all", message.isPinned ? "text-amber-400 hover:text-amber-300" : "text-muted-foreground hover:text-amber-400")}
-                                    onClick={() => togglePinMessage(message.id)}
-                                  >
-                                    <motion.div animate={message.isPinned ? { scale: [1, 1.3, 1] } : { scale: 1 }} transition={{ duration: 0.3 }}>
-                                      <Pin className={cn("h-3 w-3", message.isPinned && "fill-current")} />
-                                    </motion.div>
-                                  </Button>
-                                </TooltipTrigger><TooltipContent>{message.isPinned ? 'Unpin' : 'Pin'}</TooltipContent></Tooltip></TooltipProvider>
-                              )}
-                            </div>
-                          )}
+                          {isTextMessage && (() => {
+                            const isCurrentlyStreaming = streamingIds.has(message.id);
+                            return (
+                              <div className={cn(
+                                "flex items-center gap-0.5 px-4 pb-2 pt-0.5 transition-opacity duration-200 border-t border-white/[0.03] mt-2",
+                                isCurrentlyStreaming 
+                                  ? "opacity-100" 
+                                  : "opacity-0 group-hover:opacity-100"
+                              )}>
+                                {isCurrentlyStreaming && (
+                                  <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:text-red-300 animate-pulse" onClick={stopStream}>
+                                      <X className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </TooltipTrigger><TooltipContent side="top">Stop streaming</TooltipContent></Tooltip></TooltipProvider>
+                                )}
+                                {!isCurrentlyStreaming && message.role === 'ai' && (
+                                  <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-zinc-500 hover:text-zinc-100 hover:bg-white/10" onClick={() => handleCopyMessage(streamingMessages[message.id] || message.content, index)}>
+                                      {copiedIndex === index ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                    </Button>
+                                  </TooltipTrigger><TooltipContent side="top">Copy</TooltipContent></Tooltip></TooltipProvider>
+                                )}
+                                {!isCurrentlyStreaming && message.role === 'ai' && (
+                                  <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-zinc-500 hover:text-zinc-100 hover:bg-white/10" onClick={() => handleRegenerate(index)}>
+                                      <RefreshCw className={cn("h-3.5 w-3.5", isLoading && index === messages.length - 1 && "animate-spin")} />
+                                    </Button>
+                                  </TooltipTrigger><TooltipContent side="top">Regenerate</TooltipContent></Tooltip></TooltipProvider>
+                                )}
+                                {!isCurrentlyStreaming && message.role === 'ai' && (
+                                  <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-7 w-7 rounded-lg text-zinc-500 hover:text-zinc-100 hover:bg-white/10"
+                                      onClick={() => {
+                                        const userMsg = index > 0 && messages[index - 1]?.role === 'user'
+                                          ? messages[index - 1].content
+                                          : undefined;
+                                        setCreateMindmapUserMessage(userMsg || '');
+                                        setCreateMindmapContent(streamingMessages[message.id] || message.content);
+                                        setCreateMindmapOpen(true);
+                                      }}
+                                    >
+                                      <Brain className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </TooltipTrigger><TooltipContent side="top">Create Mind Map</TooltipContent></Tooltip></TooltipProvider>
+                                )}
+                                {!isCurrentlyStreaming && message.role === 'ai' && (
+                                  <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost" size="icon"
+                                      className={cn("h-7 w-7 rounded-lg transition-all", message.isPinned ? "text-amber-400 hover:text-amber-300 hover:bg-amber-500/10" : "text-zinc-500 hover:text-amber-400 hover:bg-amber-500/10")}
+                                      onClick={() => togglePinMessage(message.id)}
+                                    >
+                                      <motion.div animate={message.isPinned ? { scale: [1, 1.3, 1] } : { scale: 1 }} transition={{ duration: 0.3 }}>
+                                        <Pin className={cn("h-3.5 w-3.5", message.isPinned && "fill-current")} />
+                                      </motion.div>
+                                    </Button>
+                                  </TooltipTrigger><TooltipContent side="top">{message.isPinned ? 'Unpin' : 'Pin'}</TooltipContent></Tooltip></TooltipProvider>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
 
@@ -1995,7 +2196,7 @@ export function ChatPanel({
                                 onClick={() => setShowRelatedQuestions(!showRelatedQuestions)}
                                 className="flex items-center gap-2 text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-widest hover:text-primary transition-colors group"
                               >
-                                <Sparkles className={cn("h-3 w-3", isGeneratingRelated ? "animate-spin text-primary" : "text-primary/50 group-hover:text-primary")} />
+                                <Sparkles className={cn("h-3 w-3", isGeneratingRelated ? "animate-spin text-zinc-400" : "text-zinc-500 group-hover:text-zinc-300")} />
                                 <span>Related Questions</span>
                                 <motion.div
                                   animate={{ rotate: showRelatedQuestions ? 0 : -90 }}
@@ -2021,7 +2222,7 @@ export function ChatPanel({
                                 exit={{ opacity: 0 }}
                                 className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse py-1"
                               >
-                                <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                <Loader2 className="h-3 w-3 animate-spin text-zinc-400" />
                                 <span>Finding relevant insights...</span>
                               </motion.div>
                             ) : showRelatedQuestions && relatedQuestions.length > 0 && (
@@ -2041,11 +2242,14 @@ export function ChatPanel({
                                       animate={{ opacity: 1, x: 0 }}
                                       transition={{ delay: qIndex * 0.05 }}
                                       onClick={() => handleSend(q)}
-                                      className="text-[11px] bg-secondary/40 hover:bg-secondary/60 text-muted-foreground hover:text-primary border border-border/50 py-2.5 px-4 rounded-2xl transition-all flex items-start gap-3 group text-left w-full sm:w-auto sm:max-w-md shadow-sm hover:shadow-md hover:border-primary/30"
+                                      className="group relative text-[11px] bg-zinc-900/50 hover:bg-zinc-800/80 text-zinc-300 hover:text-white border border-white/[0.06] hover:border-primary/30 py-2.5 px-4 rounded-2xl transition-all duration-200 flex items-start gap-3 text-left w-full shadow-sm hover:shadow-lg hover:shadow-primary/5 overflow-hidden font-sans"
                                     >
-                                      <HelpCircle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 opacity-50 group-hover:opacity-100 text-primary/70" />
-                                      <span className="flex-grow leading-relaxed font-medium">{q}</span>
-                                      <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 transition-all mt-0.5" />
+                                      <div className="absolute inset-0 bg-gradient-to-r from-primary/[0.03] to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                      <div className="relative mt-0.5 p-1.5 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors flex-shrink-0">
+                                        <HelpCircle className="h-3 w-3 text-zinc-500 group-hover:text-zinc-300" />
+                                      </div>
+                                      <span className="relative flex-grow leading-relaxed font-medium">{q}</span>
+                                      <ChevronRight className="relative h-3.5 w-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all duration-200 mt-0.5 text-zinc-400" />
                                     </motion.button>
                                   ))}
                                 </div>
@@ -2065,34 +2269,29 @@ export function ChatPanel({
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="flex items-start gap-3 justify-start"
+                  className="flex items-start justify-start"
                 >
-                  <Avatar className="h-8 w-8 border">
-                    <AvatarFallback className="bg-primary text-primary-foreground">
-                      <Bot className="h-5 w-5" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="bg-secondary/40 backdrop-blur-sm border border-white/5 rounded-2xl rounded-bl-none overflow-hidden p-6 w-full max-w-lg shadow-xl relative mt-2">
+                  <div className="bg-secondary/40 backdrop-blur-sm border border-white/5 rounded-2xl rounded-tl-sm overflow-hidden p-6 w-full max-w-lg shadow-xl relative">
                     {/* Animated background pulse */}
-                    <div className="absolute inset-0 bg-primary/5 animate-pulse" />
+                    <div className="absolute inset-0 bg-zinc-500/5 animate-pulse" />
 
                     <div className="relative z-10 flex flex-col items-center justify-center space-y-4">
                       <div className="relative">
                         <motion.div
                           animate={{ rotate: 360 }}
                           transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                          className="w-16 h-16 rounded-full border-2 border-dashed border-primary/30"
+                          className="w-16 h-16 rounded-full border-2 border-dashed border-zinc-500/30"
                         />
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <BrainCircuit className="w-8 h-8 text-primary animate-pulse" />
+                          <BrainCircuit className="w-8 h-8 text-zinc-400 animate-pulse" />
                         </div>
                       </div>
                       <div className="text-center space-y-1">
                         <h4 className="text-sm font-black text-white uppercase tracking-widest">Architecting Quiz</h4>
                         <div className="flex items-center justify-center gap-1.5">
-                          <span className="w-1 h-1 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]" />
-                          <span className="w-1 h-1 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]" />
-                          <span className="w-1 h-1 bg-primary rounded-full animate-bounce" />
+                          <span className="w-1 h-1 bg-zinc-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                          <span className="w-1 h-1 bg-zinc-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                          <span className="w-1 h-1 bg-zinc-500 rounded-full animate-bounce" />
                         </div>
                         <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-tighter pt-2">AI is mapping your progress nodes...</p>
                       </div>
@@ -2103,14 +2302,20 @@ export function ChatPanel({
 
               {/* Loading spinner - shown only for non-streaming operations (quiz generation) */}
               {isLoading && streamingIds.size === 0 && (
-                <div className="flex items-center gap-3 justify-start">
-                  <Avatar className="h-8 w-8 border">
-                    <AvatarFallback className="bg-primary text-primary-foreground">
-                      <Bot className="h-5 w-5" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="p-3 rounded-lg bg-secondary/80 rounded-bl-none">
-                    <Loader2 className="h-5 w-5 animate-spin" />
+                <div className="flex items-center justify-start">
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-2xl rounded-tl-sm bg-gradient-to-br from-zinc-900/80 via-zinc-900/60 to-zinc-950/70 border border-white/[0.06] shadow-lg shadow-black/10">
+                    <div className="relative w-7 h-7 flex-shrink-0">
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-primary/40 via-violet-500/30 to-cyan-400/20 animate-spin" style={{ animationDuration: '3s' }} />
+                      <div className="absolute inset-[2px] rounded-full bg-zinc-950 flex items-center justify-center">
+                        <BrainCircuit className="w-3 h-3 text-primary/80 animate-pulse" />
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-semibold text-zinc-400">Thinking</span>
+                    <div className="flex items-center gap-1">
+                      <span className="w-1 h-1 bg-primary/60 rounded-full animate-pulse" />
+                      <span className="w-1 h-1 bg-primary/40 rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+                      <span className="w-1 h-1 bg-primary/20 rounded-full animate-pulse" style={{ animationDelay: '600ms' }} />
+                    </div>
                   </div>
                 </div>
               )}
@@ -2132,7 +2337,7 @@ export function ChatPanel({
                     exit={{ opacity: 0, scale: 0.8, x: -10 }}
                     className="group relative flex items-center gap-2 p-1.5 pr-3 bg-white/5 backdrop-blur-md border border-white/10 rounded-xl shadow-lg"
                   >
-                    <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center text-primary shadow-inner overflow-hidden">
+                    <div className="w-7 h-7 rounded-lg bg-zinc-500/20 flex items-center justify-center text-zinc-400 shadow-inner overflow-hidden">
                       {file.type === 'image' && file.content ? (
                         <img src={file.content} alt={file.name} className="w-full h-full object-cover" />
                       ) : file.type === 'image' ? (
@@ -2158,12 +2363,12 @@ export function ChatPanel({
                   <motion.div
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="flex items-center gap-2 p-1.5 pr-3 bg-primary/10 border border-primary/20 rounded-xl animate-pulse shadow-inner"
+                    className="flex items-center gap-2 p-1.5 pr-3 bg-zinc-500/10 border border-zinc-500/20 rounded-xl animate-pulse shadow-inner"
                   >
-                    <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
+                    <div className="w-7 h-7 rounded-lg bg-zinc-500/20 flex items-center justify-center text-zinc-400">
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     </div>
-                    <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Scraping Link...</span>
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Scraping Link...</span>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -2230,9 +2435,9 @@ export function ChatPanel({
                               variant="ghost"
                               size="sm"
                               className={cn(
-                                "h-8 px-2.5 rounded-full transition-all text-xs font-bold gap-1.5 shadow-none mr-1",
+                                "h-8 px-2.5 rounded-full transition-all text-xs font-bold gap-1.5 shadow-none mr-1 font-sans",
                                 usePdfContext
-                                  ? "bg-primary/20 text-primary hover:bg-primary/30"
+                                  ? "bg-zinc-500/20 text-zinc-200 hover:bg-zinc-500/30"
                                   : "text-muted-foreground hover:text-foreground hover:bg-white/10"
                               )}
                             >
@@ -2374,34 +2579,20 @@ export function ChatPanel({
                     transition={{ duration: 0.3, ease: 'easeOut' }}
                     className="flex flex-col gap-3"
                   >
-                    <div className={cn('flex items-start gap-3', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
-                      {msg.role === 'ai' ? (
-                        <Avatar className="h-8 w-8 border">
-                          <AvatarFallback className="bg-primary text-primary-foreground">
-                            <Bot className="h-5 w-5" />
-                          </AvatarFallback>
-                        </Avatar>
-                      ) : (
-                        <div className="order-2">
-                          <Avatar className="h-8 w-8 border shadow-sm">
-                            <AvatarFallback className="bg-secondary text-secondary-foreground">
-                              <User className="h-5 w-5 text-muted-foreground" />
-                            </AvatarFallback>
-                          </Avatar>
-                        </div>
-                      )}
+                    <div className={cn('flex items-start', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
                       <div className={cn(
-                        'rounded-3xl max-w-[85%] overflow-hidden transition-all duration-300 break-words overflow-wrap-anywhere',
+                        'rounded-3xl max-w-[92%] min-w-0 transition-all duration-300 break-words overflow-wrap-anywhere',
                         msg.role === 'user'
-                          ? 'bg-primary text-primary-foreground rounded-br-none order-1'
+                          ? 'bg-primary text-primary-foreground rounded-br-none'
                           : 'bg-secondary/40 backdrop-blur-sm border border-white/5 rounded-bl-none'
                       )}>
                         <div className="p-4">
                           {msg.role === 'ai' ? (
-                            <div className="markdown-container">
+                            <div className="markdown-container min-w-0 w-full">
                               <MarkdownRenderer 
                                 content={msg.content} 
                                 onEntityClick={onTopicClick}
+                                onEntityAction={handleEntityAction}
                                 onQuizSubmit={handleInlineQuizSubmit}
                               />
                             </div>
@@ -2439,15 +2630,19 @@ export function ChatPanel({
             </div>
 
             {isPinChatLoading && (
-              <div className="flex items-start gap-3">
-                <Avatar className="h-8 w-8 border shrink-0">
-                  <AvatarFallback className="bg-primary text-primary-foreground"><Bot className="h-5 w-5" /></AvatarFallback>
-                </Avatar>
-                <div className="bg-secondary/40 border border-white/5 rounded-3xl rounded-bl-none px-4 py-3">
+              <div className="flex items-start">
+                <div className="flex items-center gap-3 px-4 py-3 bg-secondary/40 border border-white/5 rounded-3xl rounded-bl-none">
+                  <div className="relative w-7 h-7 flex-shrink-0">
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-primary/40 via-violet-500/30 to-cyan-400/20 animate-spin" style={{ animationDuration: '3s' }} />
+                    <div className="absolute inset-[2px] rounded-full bg-zinc-950 flex items-center justify-center">
+                      <BrainCircuit className="w-3 h-3 text-primary/80 animate-pulse" />
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-semibold text-zinc-400">Thinking</span>
                   <div className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    <span className="w-1 h-1 bg-primary/60 rounded-full animate-pulse" />
+                    <span className="w-1 h-1 bg-primary/40 rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+                    <span className="w-1 h-1 bg-primary/20 rounded-full animate-pulse" style={{ animationDelay: '600ms' }} />
                   </div>
                 </div>
               </div>
@@ -2704,7 +2899,7 @@ export function ChatPanel({
       <ScrollArea className="flex-grow p-4">
         {isLoadingPins ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
           </div>
         ) : allUserPins.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -2779,13 +2974,21 @@ export function ChatPanel({
       if (!open) {
         setSavedView(view);
         setLastView(view);
+        onClose();
       }
-      onClose();
     }}>
       <SheetContent
         className="flex flex-col p-0 glassmorphism [&>button]:hidden transition-none"
         style={{ width: `${panelWidth}px`, maxWidth: 'none', minWidth: 'auto' }}
         aria-describedby={undefined}
+        onPointerDownOutside={(e) => {
+          // Radix fires a CustomEvent; originalEvent contains the actual pointer event
+          const originalEvent = (e as any).detail?.originalEvent;
+          const clickTarget = (originalEvent?.target || e.target) as HTMLElement;
+          if (clickTarget && (clickTarget.closest('#quick-explain-drawer') || clickTarget.closest('.text-selection-menu'))) {
+            e.preventDefault();
+          }
+        }}
       >
         {/* Resize Handle - Modern Subtle Design */}
         <div
@@ -3051,6 +3254,36 @@ export function ChatPanel({
                   </Tooltip>
                     </TooltipProvider>
 
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          if (explainTopic !== null || isExplainHistoryOpen) {
+                            setExplainTopic(null);
+                            setIsExplainHistoryOpen(false);
+                          } else {
+                            setIsExplainHistoryOpen(true);
+                          }
+                        }}
+                        className={cn('relative', (explainTopic !== null || isExplainHistoryOpen) && 'text-primary bg-white/5')}
+                      >
+                        <Sparkles className="h-5 w-5" />
+                        {historyExplanations.length > 0 && (
+                          <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white">
+                            {historyExplanations.length}
+                          </span>
+                        )}
+                        <span className="sr-only">Quick Explanations</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom"><p>Quick Explanations</p></TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
                 <Button type="button" variant="ghost" size="icon" onClick={() => setView('history')}>
                   <History className="h-5 w-5" />
                   <span className="sr-only">Chat History</span>
@@ -3072,22 +3305,56 @@ export function ChatPanel({
         </div>
 
         {view === 'chat' ? renderChatView() : view === 'history' ? renderHistoryView() : view === 'pins' ? renderPinsView() : view === 'canvas-pins' ? renderCanvasPinsView() : renderPinChatView()}
+      </SheetContent>
 
-        </SheetContent>
-      </Sheet>
+      <AnimatePresence>
+        {selectionPosition && (
+          <SheetPortal>
+            <TextSelectionMenu
+              text={selectedText}
+              position={selectionPosition}
+              onAction={handleEntityAction}
+              onClose={() => {
+                setSelectedText('');
+                setSelectionPosition(null);
+                window.getSelection()?.removeAllRanges();
+              }}
+            />
+          </SheetPortal>
+        )}
+      </AnimatePresence>
 
-      <CreateMindmapDialog
-        open={createMindmapOpen}
-        onOpenChange={setCreateMindmapOpen}
-        content={createMindmapContent}
-        userMessage={createMindmapUserMessage}
-        options={providerOptions}
-        onMindmapCreated={async (mapData) => {
-          if (onMindMapGenerated) {
-            return await onMindMapGenerated(mapData);
-          }
-        }}
-      />
-    </>
+      <SheetPortal>
+        <QuickExplainDrawer
+          isOpen={explainTopic !== null || isExplainHistoryOpen}
+          onClose={() => {
+            setExplainTopic(null);
+            setIsExplainHistoryOpen(false);
+          }}
+          topic={explainTopic}
+          context={explainContext}
+          apiKey={providerOptions.apiKey}
+          authToken={session?.access_token}
+          onAskInChat={(message) => handleSend(message)}
+          panelWidth={panelWidth}
+          historyExplanations={historyExplanations}
+          onExplanationGenerated={handleExplanationGenerated}
+        />
+      </SheetPortal>
+    </Sheet>
+
+    <CreateMindmapDialog
+      open={createMindmapOpen}
+      onOpenChange={setCreateMindmapOpen}
+      content={createMindmapContent}
+      userMessage={createMindmapUserMessage}
+      options={providerOptions}
+      onMindmapCreated={async (mapData) => {
+        if (onMindMapGenerated) {
+          return await onMindMapGenerated(mapData);
+        }
+      }}
+    />
+  </>
   );
 }

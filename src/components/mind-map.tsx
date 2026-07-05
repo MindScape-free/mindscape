@@ -775,7 +775,7 @@ export const MindMap = React.memo(({
       } else if (translation) {
         if (onUpdate) onUpdate(translation);
         onLanguageChange(langCode);
-        awardXP('MAP_TRANSLATED', { targetLang: langCode }).catch(() => {});
+        awardXP('MAP_TRANSLATED', { targetLang: langCode }).catch((err) => console.error("[XP] Failed:", err));
       }
     } catch (err: any) {
       console.error("Translation error:", err);
@@ -835,7 +835,7 @@ export const MindMap = React.memo(({
         setExplanationDialogContent(explanation.explanationPoints);
 
         // Award XP for completing explanation
-        awardXP('EXPLANATION_COMPLETED', { node: activeSubCategory!.name, mode: explanationMode }).catch(() => {});
+        awardXP('EXPLANATION_COMPLETED', { node: activeSubCategory!.name, mode: explanationMode }).catch((err) => console.error("[XP] Failed:", err));
 
         // 2. Save to State (triggers auto-save)
         setExplanations(prev => ({
@@ -858,7 +858,10 @@ export const MindMap = React.memo(({
     if (activeSubCategory && isExplanationDialogOpen && !isExplanationInitialSelection) {
       fetchExplanation();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // `fetchExplanation` is intentionally omitted: it is a regular function
+    // defined in the component body and would change reference on every
+    // render, causing an infinite loop. The effect already depends on the
+    // key inputs that `fetchExplanation` uses internally.
   }, [activeSubCategory, explanationMode, isExplanationDialogOpen, isExplanationInitialSelection]);
 
 
@@ -893,7 +896,10 @@ export const MindMap = React.memo(({
     if (activeExplainableNode && isExampleDialogOpen) {
       fetchExample();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // `fetchExample` is intentionally omitted: it is a regular function
+    // defined in the component body and would change reference on every
+    // render, causing an infinite loop. The effect already depends on the
+    // key inputs that `fetchExample` uses internally.
   }, [activeExplainableNode, explanationMode, isExampleDialogOpen]);
 
 
@@ -1088,7 +1094,7 @@ export const MindMap = React.memo(({
     setIsExplanationDialogOpen(true);
 
     // Award XP for opening explanation
-    awardXP('EXPLANATION_OPENED', { node: subCategory.name }).catch(() => {});
+    awardXP('EXPLANATION_OPENED', { node: subCategory.name }).catch((err) => console.error("[XP] Failed:", err));
 
     // Fire-and-forget enrichment fetch — only if not already cached or in-flight
     const enrichKey = subCategory.name;
@@ -1232,7 +1238,7 @@ export const MindMap = React.memo(({
       setGeneratedImages(prev => prev.map(img => img.id === generationId ? newImage : img));
 
       // Award XP for image generation
-      awardXP('IMAGE_GENERATED', { model: settings.model, node: labNode.name }).catch(() => {});
+      awardXP('IMAGE_GENERATED', { model: settings.model, node: labNode.name }).catch((err) => console.error("[XP] Failed:", err));
 
       if (supabase && user) {
         try {
@@ -1307,6 +1313,7 @@ export const MindMap = React.memo(({
         is_public: false,
         is_sub_map: false,
         parent_map_id: null,
+        forked_from: data.isPublic ? data.id : null,
         content: {
           subTopics: singleData.subTopics || [],
           compareData: singleData.compareData || null,
@@ -1318,6 +1325,12 @@ export const MindMap = React.memo(({
       }).select('id').single();
 
       if (insertError) throw insertError;
+
+      if (data.isPublic) {
+        // Increment fork count on the original map
+        await supabase.rpc('increment_fork_count', { map_id: data.id });
+        awardXP('MAP_CLONED', { topic: data.topic });
+      }
 
       toast({
         title: "Mind Map Duplicated",
@@ -1580,7 +1593,8 @@ export const MindMap = React.memo(({
   }, []);
 
   const handleCompareExplainNode = useCallback((node: any) => {
-    onExplainInChat(`Explain "${node.title}" in the context of the comparison of ${data.topic}.`);
+    const nodeTitle = node?.title || node?.name || '';
+    onExplainInChat(`Explain "${nodeTitle}" in the context of the comparison of ${data.topic}.`);
   }, [onExplainInChat, data.topic]);
 
   const handleCompareSubCategoryClick = useCallback((node: any) => {
@@ -1827,7 +1841,7 @@ export const MindMap = React.memo(({
           if (!activeSubCategory) return;
           const key = activeSubCategory.name;
           setConfidenceRatings(prev => ({ ...prev, [key]: level }));
-          awardXP('CONFIDENCE_RATED', { node: key, level }).catch(() => {});
+          awardXP('CONFIDENCE_RATED', { node: key, level }).catch((err) => console.error("[XP] Failed:", err));
         }}
         quizAnswer={activeSubCategory ? (quizAnswers[activeSubCategory.name] || null) : null}
         onQuizAnswer={(answer) => {

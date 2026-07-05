@@ -18,7 +18,7 @@ export interface AIRequest {
   schema?: any;                          // Zod schema for validation (null = plain text)
   capability?: AIProviderCapability;
   model?: string;                        // Provider-specific model override
-  timeout?: number;                      // ms, default 120_000
+  timeout?: number;                      // ms, default 30_000 (from AI_PROVIDER_TIMEOUT env var)
   attempt?: number;                      // For model rotation within adapter
   apiKey?: string;                       // Per-call key override
   strict?: boolean;                      // Strict schema enforcement

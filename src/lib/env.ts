@@ -93,7 +93,7 @@ export function getEnv(): EnvVars {
     youtubeApiKey: raw.youtubeApiKey || undefined,
     appUrl: raw.appUrl || 'http://localhost:3000',
     adminUserIds: (raw.adminUserIds || '').split(',').map(s => s.trim()).filter(Boolean),
-    aiProviderTimeout: parseInt(raw.aiProviderTimeout || '120000', 10),
+    aiProviderTimeout: parseInt(raw.aiProviderTimeout || '30000', 10),
   };
 
   return _cached;

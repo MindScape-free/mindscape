@@ -115,7 +115,7 @@ export function SummaryDialog({
       });
     },
     onEnd: () => setUseAdvancedTTS(true),
-    onGenerated: () => awardXP('AUDIO_GENERATED').catch(() => {}),
+    onGenerated: () => awardXP('AUDIO_GENERATED').catch((err) => console.error("[XP] Failed:", err)),
   });
 
   useEffect(() => {

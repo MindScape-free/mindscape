@@ -4,6 +4,8 @@ import { normalizeSearchResults, filterAuthoritativeSources } from '@/ai/search/
 import { SearchRequestSchema } from '@/ai/search/search-schema';
 import { z } from 'zod';
 import { orchestrateStream } from '@/ai/providers/orchestrator';
+import { rateLimit, createRateLimitResponse } from '@/lib/rate-limit';
+import { getEnv } from '@/lib/env';
 
 const ChatStreamInputSchema = z.object({
   question: z.string(),
@@ -50,6 +52,13 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'Invalid or expired authentication token.' }, { status: 401 });
         }
         currentUserId = user.id;
+
+        // Rate limit by authenticated user ID (after auth to prevent token consumption by unauthenticated requests)
+        const rateLimitResult = rateLimit(currentUserId, 'chat');
+        const rateLimitResponse = createRateLimitResponse(rateLimitResult);
+        if (rateLimitResponse) {
+          return rateLimitResponse;
+        }
         const { trackChat } = await import('@/lib/tracker');
         await trackChat(supabase, user.id).catch(() => {});
       } catch (err) {
@@ -235,6 +244,8 @@ Provide your response as plain text (no JSON wrapper). Stream the response word 
 
           console.log('🌊 [ChatStream] Starting Orchestrator mode...');
 
+          const { aiProviderTimeout } = getEnv();
+
           await orchestrateStream(
             {
               systemPrompt,
@@ -244,6 +255,7 @@ Provide your response as plain text (no JSON wrapper). Stream the response word 
               model: requestedModel || undefined,
               apiKey: effectiveApiKey,
               stream: true,
+              timeout: aiProviderTimeout,
             },
             (chunk) => {
               if (chunk.reasoning) {

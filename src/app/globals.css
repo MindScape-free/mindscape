@@ -156,7 +156,7 @@ html {
   }
 
   .prose strong {
-    @apply font-bold text-primary;
+    @apply font-bold text-zinc-100;
   }
 
 

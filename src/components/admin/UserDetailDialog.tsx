@@ -269,7 +269,10 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
       setChatCount(null);
       setUserMaps([]);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Deps are intentionally minimal: `session?.access_token` covers the
+    // session object (only access_token is used). `user?.id` covers the
+    // user identity. `supabase` is the stable client. Adding `session` or
+    // `user` would re-fetch on every render since they are new objects.
   }, [isOpen, user?.id, supabase, session?.access_token]);
 
   if (!user) return null;

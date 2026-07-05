@@ -15,6 +15,7 @@ import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { remarkEntityLink } from './remark-entity-link';
 import { QuizCard } from './quiz-card';
+import { EntityActionMenu, EntityAction } from './entity-action-menu';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Initialize Mermaid once globally
@@ -349,14 +350,232 @@ function TableBlock({ children, node }: any) {
   );
 }
 
+/**
+ * Premium Image Block with Lightbox, Loading Skeleton, Hover Controls & Error Fallback
+ */
+function ImageBlock({ src, alt }: { src: string; alt?: string }) {
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+
+  const handleLoad = () => setIsLoading(false);
+  const handleError = () => { setIsLoading(false); setHasError(true); };
+
+  const handleDownload = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const response = await fetch(src);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (alt || 'visual-reference').replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({ title: 'Downloaded', description: 'Image saved successfully.' });
+    } catch {
+      window.open(src, '_blank');
+    }
+  }, [src, alt]);
+
+  // Keyboard Escape + body scroll lock when lightbox is open
+  useEffect(() => {
+    if (!isLightboxOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsLightboxOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isLightboxOpen]);
+
+  if (hasError) {
+    return (
+      <div className="my-6 rounded-[20px] border border-red-500/15 bg-red-500/5 p-10 text-center group">
+        <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-3">
+          <ImageIcon className="w-5 h-5 text-red-400/60" />
+        </div>
+        <p className="text-xs text-zinc-500 font-medium">Image failed to load — the link may be broken or unavailable.</p>
+        <a href={src} target="_blank" rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 mt-3 text-[10px] text-zinc-600 hover:text-zinc-400 uppercase tracking-wider font-bold transition-colors"
+        >
+          <ExternalLink className="w-3 h-3" />
+          Open original URL
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="my-6 space-y-2">
+        <div
+          className={cn(
+            "relative rounded-[20px] overflow-hidden border shadow-xl bg-zinc-900 group cursor-pointer transition-all duration-300",
+            !isLoading && "hover:border-white/20 hover:shadow-2xl hover:shadow-black/30"
+          )}
+          onClick={() => !isLoading && setIsLightboxOpen(true)}
+        >
+          {/* Subtle inner glow ring */}
+          <div className="absolute inset-0 rounded-[20px] ring-1 ring-inset ring-white/[0.04] pointer-events-none z-10" />
+
+          {/* Loading Skeleton */}
+          {isLoading && (
+            <div className="aspect-[16/10] w-full bg-zinc-900 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-3 animate-pulse">
+                <div className="w-10 h-10 rounded-2xl bg-zinc-800 flex items-center justify-center">
+                  <ImageIcon className="w-5 h-5 text-zinc-700" />
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-700 animate-bounce [animation-delay:-0.3s]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-700 animate-bounce [animation-delay:-0.15s]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-700 animate-bounce" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!hasError && (
+            <img
+              src={src}
+              alt={alt}
+              className={cn(
+                "w-full max-h-[500px] object-contain transition-all duration-700",
+                isLoading ? "hidden" : "block group-hover:scale-[1.03] group-hover:brightness-110"
+              )}
+              loading="lazy"
+              decoding="async"
+              onLoad={handleLoad}
+              onError={handleError}
+            />
+          )}
+
+          {/* Hover Toolbar — actions on image */}
+          {!isLoading && !hasError && (
+            <>
+              <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0">
+                <button
+                  onClick={handleDownload}
+                  className="p-2 rounded-lg bg-zinc-900/80 backdrop-blur-sm border border-white/10 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all shadow-lg"
+                  title="Download image"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setIsLightboxOpen(true); }}
+                  className="p-2 rounded-lg bg-zinc-900/80 backdrop-blur-sm border border-white/10 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all shadow-lg"
+                  title="View fullscreen"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Bottom gradient overlay with label */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 rounded-lg bg-white/10 backdrop-blur-sm border border-white/10">
+                    <ImageIcon className="w-3 h-3 text-white/80" />
+                  </div>
+                  <span className="text-xs font-semibold text-white/90 tracking-wide">
+                    {alt || 'Visual Reference'}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Enhanced Caption with decorative dividers */}
+        {alt && (
+          <div className="flex items-center justify-center gap-3 px-4 pt-1">
+            <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-zinc-700/30 to-transparent max-w-[80px]" />
+            <span className="text-[11px] text-zinc-500 italic font-medium tracking-wide">{alt}</span>
+            <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-zinc-700/30 to-transparent max-w-[80px]" />
+          </div>
+        )}
+      </div>
+
+      {/* Lightbox Overlay */}
+      <AnimatePresence>
+        {isLightboxOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[100] bg-zinc-950/95 backdrop-blur-2xl flex items-center justify-center p-4 sm:p-8"
+            onClick={() => setIsLightboxOpen(false)}
+          >
+            {/* Lightbox top bar */}
+            <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-4 bg-gradient-to-b from-black/40 to-transparent z-10">
+              {alt && (
+                <span className="text-xs text-zinc-400 font-medium tracking-wide px-2">{alt}</span>
+              )}
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  onClick={handleDownload}
+                  className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white transition-all"
+                  title="Download"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setIsLightboxOpen(false)}
+                  className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white transition-all"
+                  title="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <motion.img
+              key={src}
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              src={src}
+              alt={alt || 'Visual reference'}
+              className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl shadow-black/60"
+              onClick={(e) => e.stopPropagation()}
+            />
+
+            {/* Bottom caption badge */}
+            {alt && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="absolute bottom-6 left-1/2 -translate-x-1/2 px-5 py-2.5 rounded-2xl bg-zinc-900/80 backdrop-blur-md border border-white/10 shadow-xl"
+              >
+                <p className="text-sm text-zinc-300 font-medium">{alt}</p>
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
 interface MarkdownRendererProps {
   content: string;
   className?: string;
   onEntityClick?: (topic: string) => void;
+  onEntityAction?: (action: EntityAction, topic: string) => void;
   onQuizSubmit?: (quiz: any, answers: Record<string, string>) => void;
 }
 
-export function MarkdownRenderer({ content, className, onEntityClick, onQuizSubmit }: MarkdownRendererProps) {
+export function MarkdownRenderer({ content, className, onEntityClick, onEntityAction, onQuizSubmit }: MarkdownRendererProps) {
   return (
     <div className={cn("markdown-content", className)}>
       <ReactMarkdown
@@ -370,7 +589,7 @@ export function MarkdownRenderer({ content, className, onEntityClick, onQuizSubm
 
             if (inline) {
               return (
-                <code className="px-1.5 py-0.5 bg-white/10 rounded text-[13px] font-mono text-emerald-400" {...props}>
+                <code className="px-1.5 py-0.5 bg-zinc-800/80 rounded text-[13px] font-mono text-zinc-200 border border-white/5" {...props}>
                   {children}
                 </code>
               );
@@ -418,18 +637,23 @@ export function MarkdownRenderer({ content, className, onEntityClick, onQuizSubm
           // @ts-ignore - custom node from remarkEntityLink
           entityLink: ({ topic, children }: any) => {
             return (
-              <button
-                onClick={() => onEntityClick?.(topic)}
-                className="text-primary font-bold hover:underline decoration-primary/30 underline-offset-4 transition-all"
+              <EntityActionMenu
+                topic={topic}
+                onAction={(action, t) => {
+                  if (action === 'explore') {
+                    onEntityClick?.(t);
+                  }
+                  onEntityAction?.(action, t);
+                }}
               >
                 {children}
-              </button>
+              </EntityActionMenu>
             );
           },
           // Tables
           table: TableBlock,
           thead: ({ children }) => <thead className="bg-white/[0.03] border-b border-white/5">{children}</thead>,
-          th: ({ children }) => <th className="px-6 py-4 font-bold uppercase tracking-tight text-zinc-400 text-[11px] whitespace-nowrap">{children}</th>,
+          th: ({ children }) => <th className="px-6 py-4 font-bold uppercase tracking-tight text-zinc-500 text-[11px] whitespace-nowrap">{children}</th>,
           td: ({ children }) => <td className="px-6 py-4 text-zinc-300 border-b border-white/[0.02] leading-relaxed align-top min-w-[120px] break-words">{children}</td>,
           tr: ({ children }) => <tr className="hover:bg-white/[0.01] transition-colors">{children}</tr>,
 
@@ -443,7 +667,7 @@ export function MarkdownRenderer({ content, className, onEntityClick, onQuizSubm
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-400 hover:underline inline-flex items-center gap-1"
+                className="text-zinc-300 underline underline-offset-4 decoration-dotted decoration-zinc-600 hover:text-primary hover:decoration-primary inline-flex items-center gap-1 transition-all duration-200"
               >
                 {children}
                 <ExternalLink className="w-3 h-3 opacity-50" />
@@ -452,49 +676,30 @@ export function MarkdownRenderer({ content, className, onEntityClick, onQuizSubm
           },
 
           // Images
-          img({ src, alt }) {
-            return (
-              <div className="my-6 space-y-2">
-                <div className="relative rounded-[20px] overflow-hidden border border-white/10 shadow-xl bg-zinc-900 group">
-                  <img
-                    src={src}
-                    alt={alt}
-                    className="w-full max-h-[500px] object-contain transition-transform duration-500 group-hover:scale-[1.02]"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
-                    <div className="flex items-center gap-2 text-white/80 text-xs font-medium">
-                      <ImageIcon className="w-4 h-4" />
-                      {alt || 'Visual reference'}
-                    </div>
-                  </div>
-                </div>
-                {alt && <p className="text-center text-xs text-zinc-500 italic px-4">{alt}</p>}
-              </div>
-            );
+          img({ src = '', alt }) {
+            return <ImageBlock src={src} alt={alt} />;
           },
 
           // Typography
           h1: ({ children }) => (
-            <h1 className="text-2xl font-bold mt-10 mb-6 font-orbitron tracking-[0.1em] text-white flex items-center gap-3">
+            <h1 className="text-xl font-bold mt-10 mb-6 text-white flex items-center gap-3">
               <span className="w-1 h-6 bg-primary rounded-full" />
               {children}
             </h1>
           ),
           h2: ({ children }) => (
-            <h2 className="text-xl font-bold mt-8 mb-4 font-orbitron tracking-[0.05em] text-zinc-100 flex items-center gap-2">
+            <h2 className="text-lg font-bold mt-8 mb-4 text-zinc-100 flex items-center gap-2">
               <span className="w-1 h-4 bg-primary/40 rounded-full" />
               {children}
             </h2>
           ),
           h3: ({ children }) => (
-            <h3 className="text-lg font-bold mt-6 mb-3 font-orbitron tracking-tight text-zinc-200">
+            <h3 className="text-base font-bold mt-6 mb-3 text-zinc-200">
               {children}
             </h3>
           ),
           p: ({ children }) => (
-            <p className="mb-5 leading-[1.8] text-zinc-400 font-medium selection:bg-primary/30 last:mb-0">
+            <p className="mb-5 leading-[1.8] text-zinc-300 selection:bg-primary/30 last:mb-0">
               {children}
             </p>
           ),
@@ -510,7 +715,7 @@ export function MarkdownRenderer({ content, className, onEntityClick, onQuizSubm
                 return (
                   <li className="flex items-start gap-3 group">
                     <span className="mt-2.5 w-1.5 h-1.5 rounded-full bg-primary/40 group-hover:bg-primary transition-colors shrink-0" />
-                    <span className="text-zinc-400 font-medium group-hover:text-zinc-200 transition-colors leading-relaxed">
+                    <span className="text-zinc-300 group-hover:text-white transition-colors leading-relaxed">
                       {content}
                     </span>
                   </li>
@@ -532,7 +737,7 @@ export function MarkdownRenderer({ content, className, onEntityClick, onQuizSubm
                     <span className="mt-1 flex items-center justify-center w-5 h-5 rounded-md bg-white/5 border border-white/10 text-[10px] font-bold text-zinc-500 group-hover:text-primary group-hover:border-primary/30 transition-all shrink-0">
                       {i + 1}
                     </span>
-                    <span className="text-zinc-400 font-medium group-hover:text-zinc-200 transition-colors leading-relaxed">
+                    <span className="text-zinc-300 group-hover:text-white transition-colors leading-relaxed">
                       {content}
                     </span>
                   </li>
@@ -543,7 +748,7 @@ export function MarkdownRenderer({ content, className, onEntityClick, onQuizSubm
           blockquote: ({ children }) => (
             <blockquote className="relative border-l border-primary/30 bg-white/[0.02] px-8 py-6 my-8 rounded-r-2xl italic text-zinc-300 font-medium overflow-hidden group">
               <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              <Quote className="absolute top-4 right-6 w-8 h-8 text-white/5" />
+              <Quote className="absolute top-4 right-6 w-6 h-6 text-zinc-700/60" />
               <div className="relative z-10">{children}</div>
             </blockquote>
           ),

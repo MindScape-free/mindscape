@@ -42,13 +42,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipPortal,
-    TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { cn, formatText, toPascalCase } from '@/lib/utils';
 import { ExplanationMode, NodeEnrichment, ConfidenceLevel } from '@/types/mind-map';
 
@@ -263,7 +256,7 @@ function A_RelatedConcepts({
                                 </button>
                             )}
                             <button
-                                onClick={() => onExplainInChat(`Explain ${node.name}`)}
+                                onClick={() => onExplainInChat(`Explain ${node.name || node.description || 'this concept'}`)}
                                 className="flex-1 bg-white/5 hover:bg-primary/20 text-zinc-500 hover:text-primary rounded-lg py-2 text-[10px] font-normal transition-all flex items-center justify-center gap-1"
                             >
                                 <MessageCircle className="h-3 w-3" />
@@ -309,7 +302,7 @@ function I_RealWorldRadar({ radar }: { radar: NodeEnrichment['realWorldRadar'] }
 
 function G_ConceptTimeline({ timeline }: { timeline: NodeEnrichment['timeline'] }) {
     return (
-        <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-white/10">
+        <div className="flex gap-4 overflow-x-auto pb-2 pt-1 px-0.5 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-white/10">
             {timeline.map((event, idx) => (
                 <motion.div
                     key={idx}
@@ -317,29 +310,29 @@ function G_ConceptTimeline({ timeline }: { timeline: NodeEnrichment['timeline'] 
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: idx * 0.05 }}
                     className={cn(
-                        "flex-shrink-0 w-36 snap-start rounded-xl p-3 border transition-all",
+                        "flex-shrink-0 w-48 snap-start rounded-xl p-4 border transition-all hover:scale-[1.02] active:scale-[0.98]",
                         event.isKey 
-                            ? "bg-primary/10 border-primary/30" 
-                            : "bg-white/[0.03] border-white/8"
+                            ? "bg-primary/10 border-primary/30 shadow-[0_0_15px_rgba(139,92,246,0.08)]" 
+                            : "bg-white/[0.03] border-white/8 hover:border-white/20 hover:bg-white/[0.05]"
                     )}
                 >
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2.5 mb-2.5">
                         <div className={cn(
-                            "w-2 h-2 rounded-full",
+                            "w-2.5 h-2.5 rounded-full ring-2 ring-offset-1 ring-offset-zinc-950",
                             event.isKey 
-                                ? "bg-primary shadow-[0_0_6px_rgba(139,92,246,0.5)]" 
-                                : "bg-zinc-600"
+                                ? "bg-primary ring-primary/30 shadow-[0_0_8px_rgba(139,92,246,0.5)]" 
+                                : "bg-zinc-500 ring-zinc-700"
                         )} />
                         <span className={cn(
-                            "text-[10px] font-medium uppercase",
-                            event.isKey ? "text-primary" : "text-zinc-500"
+                            "text-[11px] font-semibold uppercase tracking-wide",
+                            event.isKey ? "text-primary" : "text-zinc-400"
                         )}>
                             {event.year}
                         </span>
                     </div>
                     <p className={cn(
                         "text-sm leading-relaxed",
-                        event.isKey ? "text-zinc-100" : "text-zinc-400"
+                        event.isKey ? "text-zinc-100 font-medium" : "text-zinc-400"
                     )}>
                         {event.event}
                     </p>
@@ -672,40 +665,40 @@ function CompactExplanationCard({
     onExplainInChat: (msg: string) => void;
 }) {
     return (
-        <Card className="bg-zinc-950/40 group relative overflow-hidden border border-white/5 hover:border-primary/20 hover:bg-zinc-900/60 transition-all duration-300 rounded-xl backdrop-blur-xl">
-            <CardContent className="p-5 pt-5 pb-3 pr-12 flex items-start gap-3">
-                <div className="mt-0.5 p-2 bg-primary/10 rounded-lg group-hover:bg-primary/15 transition-all duration-300 border border-primary/10 group-hover:scale-105 shadow-[0_0_10px_rgba(var(--primary),0.05)]">
-                    <Lightbulb className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+        <Card className="bg-zinc-950/40 group relative overflow-hidden border border-white/5 hover:border-primary/20 hover:bg-zinc-900/60 transition-all duration-300 rounded-2xl backdrop-blur-xl shadow-sm hover:shadow-md">
+            <CardContent className="p-6 pt-5 pb-3 flex items-start gap-4">
+                <div className="mt-1 p-2.5 bg-primary/10 rounded-xl group-hover:bg-primary/15 transition-all duration-300 border border-primary/10 group-hover:scale-105 shadow-[0_0_10px_rgba(var(--primary),0.05)] flex-shrink-0">
+                    <Lightbulb className="h-4 w-4 text-primary" />
                 </div>
-                <div
-                    className="prose prose-invert prose-sm max-w-none flex-1 leading-relaxed text-zinc-400 group-hover:text-zinc-300 transition-colors duration-300 selection:bg-primary/30"
-                    dangerouslySetInnerHTML={{ __html: formatText(point) }}
-                />
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                disabled={isBusy}
-                                className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all h-7 w-7 rounded-lg hover:bg-primary/10 hover:text-primary active:scale-95 z-20"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onExplainInChat(`Explain: "${point}"`);
-                                }}
-                            >
-                                <MessageCircle className="h-3.5 w-3.5" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipPortal>
-                            <TooltipContent side="left" align="center" className="bg-zinc-900/95 backdrop-blur-md border-white/10 rounded-lg text-[10px] font-medium uppercase tracking-wider text-white shadow-xl px-2 py-1">
-                                <p>Ask in Chat</p>
-                            </TooltipContent>
-                        </TooltipPortal>
-                    </Tooltip>
-                </TooltipProvider>
+                <div className="flex-1 min-w-0">
+                    <div
+                        className="explanation-text prose prose-invert max-w-none text-zinc-300 group-hover:text-zinc-200 transition-colors duration-300 selection:bg-primary/30
+                            prose-p:text-[13.5px] prose-p:leading-[1.75] prose-p:text-zinc-300 prose-p:mb-3 prose-p:last:mb-0 prose-p:font-normal
+                            prose-headings:text-white prose-headings:font-semibold prose-headings:tracking-tight prose-h1:text-base prose-h2:text-[15px] prose-h3:text-[14px] prose-h1:mt-5 prose-h1:mb-3 prose-h2:mt-4 prose-h2:mb-2.5 prose-h3:mt-3.5 prose-h3:mb-2
+                            prose-strong:text-zinc-100 prose-strong:font-semibold
+                            prose-code:text-[13px] prose-code:text-emerald-400 prose-code:bg-white/5 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md
+                            prose-li:text-[13.5px] prose-li:leading-relaxed prose-li:text-zinc-300 prose-li:mb-2 prose-li:marker:text-primary/60
+                            prose-ul:my-3 prose-ol:my-3
+                            prose-hr:my-4 prose-hr:border-white/10"
+                        dangerouslySetInnerHTML={{ __html: formatText(point) }}
+                    />
+                </div>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={isBusy}
+                    className="flex-shrink-0 self-start mt-0.5 opacity-100 transition-all h-9 rounded-xl bg-primary/15 hover:bg-primary/25 text-primary active:scale-95 backdrop-blur-sm border border-primary/30 gap-2 px-4 shadow-[0_0_12px_rgba(139,92,246,0.15)] hover:shadow-[0_0_20px_rgba(139,92,246,0.25)]"                        onClick={(e) => {
+                            e.stopPropagation();
+                            onExplainInChat(`Explain: "${point || ''}"`);
+                        }}
+                    title="Explain in Chat"
+                >
+                    <MessageCircle className="h-4 w-4" />
+                    <span className="text-[12px] font-medium">Ask</span>
+                </Button>
             </CardContent>
             <div className="absolute left-0 top-0 bottom-0 w-[1px] bg-gradient-to-b from-primary/40 via-primary/20 to-transparent group-hover:w-0.5 transition-all duration-300" />
+            <div className="absolute bottom-0 left-4 right-4 h-[1px] bg-gradient-to-r from-transparent via-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         </Card>
     );
 }
@@ -775,7 +768,7 @@ export function ExplanationDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-3xl glassmorphism border-white/10 rounded-[2rem] p-0 overflow-hidden shadow-2xl max-h-[85vh]">
+            <DialogContent className="sm:max-w-5xl glassmorphism border-white/10 rounded-[2rem] p-0 overflow-hidden shadow-2xl max-h-[90vh]">
                 <DialogHeader className="px-6 pt-6 pb-4 flex-row justify-between items-start bg-gradient-to-b from-white/[0.04] to-transparent relative">
                     <div className="flex flex-col gap-2 relative z-10">
                         <div className="flex items-center gap-2">
@@ -834,7 +827,7 @@ export function ExplanationDialog({
                     )}
                     <div className="absolute top-0 right-0 left-0 h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
                 </DialogHeader>
-                <ScrollArea className="max-h-[calc(85vh-120px)] px-4 pb-4">
+                <ScrollArea className="max-h-[calc(90vh-120px)] px-6 pb-6">
                     <AnimatePresence mode="wait">
                         {isLoading && !hasExistingContent ? (
                             <motion.div
@@ -918,28 +911,46 @@ export function ExplanationDialog({
                                 )}
 
                                 <AnimatePresence mode="wait">
-                                    {!showPartialLoading && content.map((point, index) => (
-                                        <motion.div
-                                            key={`${point}-${index}`}
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            transition={{ delay: index * 0.05 }}
-                                        >
-                                            <CompactExplanationCard
-                                                point={point}
-                                                title={title}
-                                                isBusy={isBusy}
-                                                onExplainInChat={onExplainInChat}
-                                            />
-                                        </motion.div>
-                                    ))}
+                                    {!showPartialLoading && (
+                                        <div className="space-y-5">
+                                            {content.map((point, index) => (
+                                                <motion.div
+                                                    key={`${point}-${index}`}
+                                                    initial={{ opacity: 0, y: 10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    transition={{ delay: index * 0.05 }}
+                                                >
+                                                    <CompactExplanationCard
+                                                        point={point}
+                                                        title={title}
+                                                        isBusy={isBusy}
+                                                        onExplainInChat={onExplainInChat}
+                                                    />
+                                                </motion.div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </AnimatePresence>
 
                                 {content.length > 0 && !showPartialLoading && (
-                                    <div className="flex justify-center pt-2">
-                                        <div className="flex items-center gap-1.5 text-[11px] text-zinc-600 bg-white/5 px-3 py-1 rounded-full border border-white/5 font-normal">
+                                    <div className="flex justify-center pt-3 pb-1">
+                                        <div className="flex items-center gap-1.5 text-[11px] text-zinc-600 bg-white/5 px-4 py-1.5 rounded-full border border-white/5 font-normal backdrop-blur-sm">
                                             <Activity className="h-3 w-3 text-primary" />
                                             {explanationMode} level
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Spacer between explanation cards and enrichment sections */}
+                                {content.length > 0 && (enrichment?.learningPath || enrichment?.relatedNodes?.length || enrichment?.realWorldRadar?.length || enrichment?.timeline?.length || enrichment?.misconceptions?.length || enrichment?.microQuiz) && (
+                                    <div className="relative my-2">
+                                        <div className="absolute inset-0 flex items-center">
+                                            <div className="w-full border-t border-white/[0.04]" />
+                                        </div>
+                                        <div className="relative flex justify-center">
+                                            <span className="bg-zinc-950 px-4 text-[10px] uppercase tracking-[0.2em] font-medium text-zinc-600">
+                                                Deep Dive
+                                            </span>
                                         </div>
                                     </div>
                                 )}
@@ -947,11 +958,10 @@ export function ExplanationDialog({
                                 {enrichment?.learningPath && (
                                     <>
                                         <SectionDivider icon={Compass} title="Learning Path" isOpen={openSections.learningPath} onToggle={() => toggleSection('learningPath')} />
-                                        <AnimatePresence>
-                                        {openSections.learningPath && (
-                                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                                                <C_LearningPath learningPath={enrichment.learningPath} currentName={title} onExplainInChat={onExplainInChat} />
-                                            </motion.div>
+                                        <AnimatePresence>                        {openSections.learningPath && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-y-hidden">
+                                <C_LearningPath learningPath={enrichment.learningPath} currentName={title} onExplainInChat={onExplainInChat} />
+                            </motion.div>
                                         )}
                                         </AnimatePresence>
                                     </>
@@ -960,11 +970,10 @@ export function ExplanationDialog({
                                 {enrichment?.relatedNodes && enrichment.relatedNodes.length > 0 && (
                                     <>
                                         <SectionDivider icon={Globe} title="Related" isOpen={openSections.related} onToggle={() => toggleSection('related')} />
-                                        <AnimatePresence>
-                                        {openSections.related && (
-                                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                                                <A_RelatedConcepts relatedNodes={enrichment.relatedNodes} onExplainInChat={onExplainInChat} onGenerateSubMap={onGenerateSubMap} />
-                                            </motion.div>
+                                        <AnimatePresence>                        {openSections.related && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-y-hidden">
+                                <A_RelatedConcepts relatedNodes={enrichment.relatedNodes} onExplainInChat={onExplainInChat} onGenerateSubMap={onGenerateSubMap} />
+                            </motion.div>
                                         )}
                                         </AnimatePresence>
                                     </>
@@ -973,11 +982,10 @@ export function ExplanationDialog({
                                 {enrichment?.realWorldRadar && enrichment.realWorldRadar.length > 0 && (
                                     <>
                                         <SectionDivider icon={Zap} title="Applications" isOpen={openSections.applications} onToggle={() => toggleSection('applications')} />
-                                        <AnimatePresence>
-                                        {openSections.applications && (
-                                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                                                <I_RealWorldRadar radar={enrichment.realWorldRadar} />
-                                            </motion.div>
+                                        <AnimatePresence>                        {openSections.applications && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-y-hidden">
+                                <I_RealWorldRadar radar={enrichment.realWorldRadar} />
+                            </motion.div>
                                         )}
                                         </AnimatePresence>
                                     </>
@@ -986,11 +994,10 @@ export function ExplanationDialog({
                                 {enrichment?.timeline && enrichment.timeline.length > 0 && (
                                     <>
                                         <SectionDivider icon={Clock} title="Timeline" isOpen={openSections.timeline} onToggle={() => toggleSection('timeline')} />
-                                        <AnimatePresence>
-                                        {openSections.timeline && (
-                                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                                                <G_ConceptTimeline timeline={enrichment.timeline} />
-                                            </motion.div>
+                                        <AnimatePresence>                        {openSections.timeline && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-y-hidden">
+                                <G_ConceptTimeline timeline={enrichment.timeline} />
+                            </motion.div>
                                         )}
                                         </AnimatePresence>
                                     </>
@@ -999,11 +1006,10 @@ export function ExplanationDialog({
                                 {enrichment?.misconceptions && enrichment.misconceptions.length > 0 && (
                                     <>
                                         <SectionDivider icon={AlertTriangle} title="Myths" isOpen={openSections.myths} onToggle={() => toggleSection('myths')} />
-                                        <AnimatePresence>
-                                        {openSections.myths && (
-                                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                                                <H_MisconceptionBuster misconceptions={enrichment.misconceptions} />
-                                            </motion.div>
+                                        <AnimatePresence>                        {openSections.myths && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-y-hidden">
+                                <H_MisconceptionBuster misconceptions={enrichment.misconceptions} />
+                            </motion.div>
                                         )}
                                         </AnimatePresence>
                                     </>
@@ -1012,11 +1018,10 @@ export function ExplanationDialog({
                                 {enrichment?.microQuiz && (
                                     <>
                                         <SectionDivider icon={Brain} title="Quiz" isOpen={openSections.quiz} onToggle={() => toggleSection('quiz')} />
-                                        <AnimatePresence>
-                                        {openSections.quiz && (
-                                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                                                <E_MicroQuiz quiz={enrichment.microQuiz} initialAnswer={quizAnswer} onAnswer={onQuizAnswer} onRegenerateQuiz={onRegenerateQuiz} nodeName={title} mainTopic={title} />
-                                            </motion.div>
+                                        <AnimatePresence>                        {openSections.quiz && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-y-hidden">
+                                <E_MicroQuiz quiz={enrichment.microQuiz} initialAnswer={quizAnswer} onAnswer={onQuizAnswer} onRegenerateQuiz={onRegenerateQuiz} nodeName={title} mainTopic={title} />
+                            </motion.div>
                                         )}
                                         </AnimatePresence>
                                     </>

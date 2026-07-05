@@ -11,8 +11,10 @@ type RateLimitResult = {
 
 const rateLimits: Record<string, RateLimitConfig> = {
   default: { windowMs: 60 * 1000, maxRequests: 60 },
+  chat: { windowMs: 60 * 1000, maxRequests: 20 },
   ai: { windowMs: 60 * 1000, maxRequests: 10 },
   scrape: { windowMs: 60 * 1000, maxRequests: 30 },
+  youtube: { windowMs: 60 * 1000, maxRequests: 15 },
   auth: { windowMs: 60 * 1000, maxRequests: 10 },
   upload: { windowMs: 60 * 1000, maxRequests: 5 },
 };

@@ -401,7 +401,10 @@ function ProfileContent() {
         if (profile?.apiSettings?.pollinationsApiKey && user) {
             fetchPollenBalance(profile.apiSettings.pollinationsApiKey);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // `fetchPollenBalance` is intentionally omitted: it is a regular function
+    // defined in the component body and would change reference on every
+    // render, causing the effect to re-run on every render. The deps capture
+    // the key inputs that should trigger a balance refresh.
     }, [profile?.apiSettings?.pollinationsApiKey, user?.id]);
 
     const handleSaveApiKey = async () => {

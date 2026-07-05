@@ -384,7 +384,7 @@ const MindMapAccordionComponent = ({
                                                                 </Tooltip>
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>
-                                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-blue-400 hover:bg-blue-400/10 transition-all rounded-lg" onClick={() => onExplainInChat(`Detail ${category.name}.`)}>
+                                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-blue-400 hover:bg-blue-400/10 transition-all rounded-lg" onClick={() => onExplainInChat(`Detail ${category.name || ''}.`)}>
                                                                             <MessageCircle className="h-4 w-4" />
                                                                         </Button>
                                                                     </TooltipTrigger>

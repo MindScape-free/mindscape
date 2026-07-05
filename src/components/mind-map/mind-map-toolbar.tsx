@@ -440,6 +440,28 @@ export const MindMapToolbar = ({
                         </Tooltip>
                     )}
 
+                    {isSaved && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={onDuplicate}
+                                    disabled={isBusy || isDuplicating}
+                                    className={cn(
+                                        "h-9 w-9 rounded-xl transition-all hover:scale-105 active:scale-95 disabled:opacity-50",
+                                        isPublic 
+                                          ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20" 
+                                          : "hover:bg-white/10 text-zinc-400 hover:text-white"
+                                    )}
+                                >
+                                    {isDuplicating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent className="glassmorphism"><p>{isPublic ? 'Fork Map' : 'Duplicate Map'}</p></TooltipContent>
+                        </Tooltip>
+                    )}
+
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <Button

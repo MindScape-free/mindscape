@@ -75,8 +75,7 @@ import { useMindMapPinnedMessages } from '@/hooks/use-mind-map-pinned-messages';
 import { Profiler } from '@/components/debug/profiler';
 import { useAIHealth } from '@/hooks/use-ai-health';
 import { useActivity } from '@/contexts/activity-context';
-import { resolveDepthWithConfidence, analyzeTopicComplexity } from '@/lib/depth-analysis';
-import { trackGenerationComplete, trackGenerationFailed } from '@/lib/tracker';
+import { resolveDepthWithConfidence, analyzeTopicComplexity } from '@/lib/depth-analysis';  import { trackGenerationComplete, trackGenerationFailed, type AIGenerationMeta } from '@/lib/tracker';
 import { useMapTracking } from '@/hooks/use-tracking';
 
 function MindMapPageContent() {
@@ -266,7 +265,7 @@ function MindMapPageContent() {
   const setError = setInitialError;
   const setGeneratingNodeId = setLocalGeneratingNodeId;
 
-  const isSaved = !!(mindMap && (mindMap as any).id);
+  const isSaved = !!mindMap?.id;
 
   // Real-time sync listener (Phase 3.3)
   useEffect(() => {
@@ -341,9 +340,9 @@ function MindMapPageContent() {
 
       const trackCompletion = (mapId: string, nodeCount: number, sourceType: string, mode: string) => {
         trackGenerationComplete(params.sessionId || mapId || 'pending', {
-          sourceType: sourceType as any,
-          mode: mode as any,
-          depth: params.depth as any,
+          sourceType: (sourceType || 'text') as AIGenerationMeta['sourceType'],
+          mode: (mode || 'single') as AIGenerationMeta['mode'],
+          depth: (params.depth || 'low') as AIGenerationMeta['depth'],
           persona: params.persona || aiPersona,
           userId: user?.id
         }, {
@@ -354,9 +353,9 @@ function MindMapPageContent() {
 
       const trackFailure = (errorType: string, message: string, sourceType: string, mode: string) => {
         trackGenerationFailed(params.sessionId || 'pending', {
-          sourceType: sourceType as any,
-          mode: mode as any,
-          depth: params.depth as any,
+          sourceType: (sourceType || 'text') as AIGenerationMeta['sourceType'],
+          mode: (mode || 'single') as AIGenerationMeta['mode'],
+          depth: (params.depth || 'low') as AIGenerationMeta['depth'],
           persona: params.persona || aiPersona,
           userId: user?.id
         }, {
@@ -411,25 +410,25 @@ function MindMapPageContent() {
             if (params.sharedMapId || params.mapId?.startsWith('share_')) {
               const shareId = params.sharedMapId || params.mapId!;
               const { data: row } = await supabase.from('shared_mindmaps').select('*').eq('id', shareId).single();
-              if (row) result.data = { ...row, ...(row.content || {}), id: row.id } as any;
+              if (row) result.data = { ...row, ...(row.content || {}), id: row.id } as unknown as MindMapData;
             } else if (params.publicMapId || params.mapId?.startsWith('public_')) {
               const pubId = params.publicMapId || params.mapId!;
               const { data: row } = await supabase.from('public_mindmaps').select('*').eq('id', pubId).single();
               if (row) {
-                result.data = { ...row, ...(row.content || {}), id: row.id } as any;
+                result.data = { ...row, ...(row.content || {}), id: row.id } as unknown as MindMapData;
                 await supabase.from('public_mindmaps').update({ public_views: (row.public_views || 0) + 1 }).eq('id', pubId);
               }
             } else if ((user || params.ownerId) && params.mapId) {
               const targetUid = params.ownerId || user?.id;
               if (targetUid) {
                 const { data: row } = await supabase.from('mindmaps').select('*').eq('id', params.mapId).eq('user_id', targetUid).single();
-                if (row) result.data = { ...row, ...(row.content || {}), id: row.id } as any;
+                if (row) result.data = { ...row, ...(row.content || {}), id: row.id } as unknown as MindMapData;
               }
             }
             // Fallback: try public_mindmaps
             if (!result.data && params.mapId) {
               const { data: row } = await supabase.from('public_mindmaps').select('*').eq('id', params.mapId).single();
-              if (row) result.data = { ...row, ...(row.content || {}), id: row.id } as any;
+              if (row) result.data = { ...row, ...(row.content || {}), id: row.id } as unknown as MindMapData;
             }
 
             if (!result.data && !result.error) {
@@ -578,7 +577,7 @@ function MindMapPageContent() {
                 });
               } else if (sessionType === 'compare') {
                 currentMode = 'compare';
-                const compContent = sessionContent as any;
+                const compContent = sessionContent as { file1?: string; file2?: string; file1Type?: string; file2Type?: string; topic1?: string; topic2?: string };
                 const images: { inlineData: { mimeType: string; data: string } }[] = [];
                 
                 if (compContent.file1 && compContent.file1Type === 'image') {
@@ -638,7 +637,7 @@ function MindMapPageContent() {
                 const parsed = JSON.parse(rawStudioData);
                 if (parsed.type === 'mindmap' || parsed.type === 'roadmap') {
                   if (parsed.data) {
-                    result.data = await mapToMindMapData(parsed.data, params.depth as any || 'low') as MindMapWithId;
+                    result.data = await mapToMindMapData(parsed.data, (params.depth || 'low') as 'low' | 'medium' | 'deep') as MindMapWithId;
                     result.data.id = params.studioId;
                   }
                 }
@@ -666,6 +665,23 @@ function MindMapPageContent() {
 
         // track completion for all modes that result in a new map
         trackCompletion(result.data.id || params.mapId || 'pending', result.data.nodeCount || 0, pendingSourceFileType || 'text', currentMode);
+
+        // Daily Challenge tracking
+        if (params.challenge === 'true' && user) {
+          const dateString = new Date().toISOString().split('T')[0];
+          awardXP('DAILY_CHALLENGE', { topic: result.data.topic });
+          
+          supabase.from('user_daily_challenges').upsert({
+             user_id: user.id,
+             date_string: dateString,
+             map_id: result.data.id || params.mapId || null,
+             xp_awarded: 500
+          }, { onConflict: 'user_id, date_string' })
+          .then(({ error }) => {
+             if (error) console.error('Failed to log daily challenge completion:', error);
+             else console.log('Daily challenge marked complete!');
+          });
+        }
 
         if (result.data) {
           // Refresh balance after any successful AI generation
@@ -714,11 +730,11 @@ function MindMapPageContent() {
               sourceFileContent: pendingSourceFileContent || result.data.sourceFileContent,
               sourceFileType: pendingSourceFileType || result.data.sourceFileType,
               originalPdfFileContent: pendingOriginalPdfContent || result.data.originalPdfFileContent,
-              sourceFile2Content: (sessionContent as any)?.file2,
-              sourceFile2Type: (sessionContent as any)?.file2Type,
-              parentMapId: (params as any).parentMapId,
-              isSubMap: !!(params as any).parentMapId,
-            } as any;
+              sourceFile2Content: (sessionContent as { file2?: string })?.file2,
+              sourceFile2Type: (sessionContent as { file2Type?: string })?.file2Type,
+              parentMapId: (params as Record<string, unknown>).parentMapId as string | undefined,
+              isSubMap: !!(params as Record<string, unknown>).parentMapId,
+            } as unknown as MindMapData;
 
             const existingMapWithId = mindMapsRef.current.find(m => m.topic?.toLowerCase() === result.data!.topic?.toLowerCase() && m.id);
             handleSaveMap(dataToSave, existingMapWithId?.id).then((savedId: any) => {
@@ -732,11 +748,11 @@ function MindMapPageContent() {
                 // Award points for creating a new map
                 const topicName = result.data!.topic;
                 if (currentMode === 'compare') {
-                  awardXP('MAP_COMPARE', { topic: topicName }).catch(() => {});
+                  awardXP('MAP_COMPARE', { topic: topicName }).catch((err) => console.error("[XP] Failed:", err));
                 } else if (currentMode === 'multi-source') {
-                  awardXP('MAP_MULTI_SOURCE', { topic: topicName }).catch(() => {});
+                  awardXP('MAP_MULTI_SOURCE', { topic: topicName }).catch((err) => console.error("[XP] Failed:", err));
                 } else {
-                  awardXP('MAP_CREATED', { topic: topicName, mode: currentMode }).catch(() => {});
+                  awardXP('MAP_CREATED', { topic: topicName, mode: currentMode }).catch((err) => console.error("[XP] Failed:", err));
                 }
               }
             });
@@ -763,15 +779,15 @@ function MindMapPageContent() {
 
   // Track views for community maps
   useEffect(() => {
-    if (mindMap?.id && (mindMap as any).isPublic) {
+    if (mindMap?.id && mindMap.isPublic) {
       supabase.from('public_mindmaps')
-        .update({ views: ((mindMap as any).views || 0) + 1 })
+        .update({ views: (mindMap.views || 0) + 1 })
         .eq('id', mindMap.id)
         .then(({ error }) => {
           if (error) console.error('Failed to update views:', error);
         });
     }
-  }, [mindMap?.id, (mindMap as any)?.isPublic]);
+  }, [mindMap?.id, mindMap?.isPublic]);
 
 
   // 4. Auto-Save Effect
@@ -808,7 +824,7 @@ function MindMapPageContent() {
     if (!user) return;
     setHierarchyLoading(true);
     try {
-      const currentMapId = (currentMapData as any).id;
+      const currentMapId = currentMapData.id;
       if (!currentMapId) { setHierarchyLoading(false); return; }
 
       // Single query: fetch all user maps at once instead of N sequential round trips
@@ -833,13 +849,13 @@ function MindMapPageContent() {
         // 1. Try upward pointer: does the current map declare a parent?
         const currentData = currentId === currentMapId ? currentMapData : mapById.get(currentId);
         if (currentData) {
-          nextParentId = (currentData as any).parent_map_id || (currentData as any).content?.parentMapId || (currentData as any).parentMapId;
+          nextParentId = (currentData as Record<string, any>).parent_map_id as string || (currentData as Record<string, any>).content?.parentMapId as string || (currentData as Record<string, any>).parentMapId as string;
         }
 
         // 2. Fallback downward pointer: does ANY map in allMaps claim this map as a child?
         if (!nextParentId) {
           const parentMap = allMaps.find(m => {
-            const content = m.content as any;
+            const content = m.content as Record<string, any>;
             return content?.nestedExpansions?.some((e: any) => e.id === currentId);
           });
           if (parentMap) {
@@ -866,7 +882,7 @@ function MindMapPageContent() {
       if (rootParent) {
         rootMapData = { id: rootMapId, topic: rootParent.topic || 'Untitled', icon: rootParent.icon, createdAt: rootParent.created_at };
       } else if (rootMapId === currentMapId) {
-        rootMapData = { id: currentMapId, topic: currentMapData.topic, icon: currentMapData.icon, createdAt: (currentMapData as any).created_at || (currentMapData as any).createdAt };
+        rootMapData = { id: currentMapId, topic: currentMapData.topic, icon: currentMapData.icon, createdAt: (currentMapData as unknown as Record<string, unknown>).created_at as string || currentMapData.createdAt as string };
       }
 
       // Build descendant tree in memory (no recursive DB queries)
@@ -876,8 +892,8 @@ function MindMapPageContent() {
       const buildDescendants = (parentId: string, parentName: string, currentDepth: number) => {
         // Find all direct children from our local map dictionary using bi-directional checks
         const children = allMaps.filter(m => {
-          const isUpwardChild = m.parent_map_id === parentId || (m.content as any)?.parentMapId === parentId;
-          const isDownwardChild = (mapById.get(parentId)?.content as any)?.nestedExpansions?.some((e: any) => e.id === m.id);
+          const isUpwardChild = m.parent_map_id === parentId || (m.content as Record<string, any>)?.parentMapId === parentId;
+          const isDownwardChild = (mapById.get(parentId)?.content as Record<string, any>)?.nestedExpansions?.some((e: any) => e.id === m.id);
           return isUpwardChild || isDownwardChild;
         });
         for (const child of children) {
@@ -907,7 +923,7 @@ function MindMapPageContent() {
 
   // Update hierarchy when mindMap changes
   useEffect(() => {
-    if (mindMap && (mindMap as any).id) {
+    if (mindMap?.id) {
       fetchMapHierarchy(mindMap);
     }
   }, [mindMap, fetchMapHierarchy]);
@@ -939,7 +955,7 @@ function MindMapPageContent() {
       if (visible) {
         seconds += 10;
         if (seconds % 600 === 0) {
-          awardXPRef.current('STUDY_TIME_CANVAS').catch(() => {});
+          awardXPRef.current('STUDY_TIME_CANVAS').catch((err) => console.error("[XP] Failed:", err));
         }
       }
     }, 10000);
@@ -958,7 +974,7 @@ function MindMapPageContent() {
 
     let hasActualChanges = false;
     for (const key in resolved) {
-      if (resolved !== currentMap && JSON.stringify((resolved as any)[key]) !== JSON.stringify((currentMap as any)[key])) {
+      if (resolved !== currentMap && JSON.stringify((resolved as unknown as Record<string, unknown>)[key]) !== JSON.stringify((currentMap as unknown as Record<string, unknown>)[key])) {
         hasActualChanges = true;
         break;
       }
@@ -975,7 +991,7 @@ function MindMapPageContent() {
         handleUpdateCurrentMap(resolved);
         setHasUnsavedChanges(true);
         // Save immediately - mindMapRef now has the correct data
-        handleSaveMap(mergedMap, (currentMap as any).id, true);
+        handleSaveMap(mergedMap, currentMap?.id, true);
       } else {
         handleUpdateCurrentMap(resolved);
         setHasUnsavedChanges(true);
@@ -1060,7 +1076,7 @@ function MindMapPageContent() {
       const expansionResult = await expandNode(subTopic, nodeId || `sub-${Date.now()}`, { mode, parentDepth: parentAbsoluteDepth, branchDepth, explicitParentMapId });
       const parentId = expansionResult?.parentId;
       refreshBalance();
-      awardXP('SUB_MAP_CREATED', { topic: subTopic }).catch(() => {});
+      awardXP('SUB_MAP_CREATED', { topic: subTopic }).catch((err) => console.error("[XP] Failed:", err));
 
       // Mark unsaved so auto-save persists parent with the new nestedExpansions
       setHasUnsavedChanges(true);
@@ -1234,7 +1250,7 @@ function MindMapPageContent() {
         nodeA: nodeLabels[0],
         nodeB: nodeLabels[1],
         topic: currentMap.topic,
-        persona: aiPersona as any
+        persona: aiPersona
       }, {
         apiKey: config.pollinationsApiKey,
         provider: config.provider,
@@ -1274,7 +1290,7 @@ function MindMapPageContent() {
         description: `Born from ${nodeLabels[0]} and ${nodeLabels[1]}: "${data.nexusTitle}"`,
       });
       
-      awardXP('ALCHEMY_FUSION').catch(() => {});
+      awardXP('ALCHEMY_FUSION').catch((err) => console.error("[XP] Failed:", err));
       
     } catch (e: any) {
       console.error("Synthesis failed:", e);
@@ -1404,7 +1420,7 @@ function MindMapPageContent() {
                       generateTopicFAQsAction(
                         { 
                           topic: mindMap.topic, 
-                          summary: (mindMap as any).summary 
+                          summary: mindMap.summary 
                         },
                         {
                           provider: config.provider,
@@ -1417,7 +1433,8 @@ function MindMapPageContent() {
                           setFaqGeneratedTopic(mindMap.topic);
                         }
                         setIsFAQLoading(false);
-                      }).catch(() => {
+                      }).catch((err) => {
+                        console.error('[FAQs] Failed:', err);
                         setIsFAQLoading(false);
                       });
                     }

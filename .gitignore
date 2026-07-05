@@ -59,3 +59,6 @@ src/tmp/
 # stray Windows reserved name artifact
 nul
 
+# server logs
+server.log
+

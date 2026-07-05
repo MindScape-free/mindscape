@@ -28,6 +28,7 @@ export function useMindMapRouter() {
             sharedMapId: searchParams.get('sharedMapId'),
             publicMapId: searchParams.get('publicMapId'),
             studioId: searchParams.get('studioId'),
+            challenge: searchParams.get('challenge'),
             lang: searchParams.get('lang') || 'en',
             depth,
             persona: searchParams.get('persona') || 'teacher',

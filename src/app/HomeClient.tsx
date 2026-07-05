@@ -89,6 +89,7 @@ const getTrackerDepth = (d: string): 'low' | 'medium' | 'deep' => {
 
 // Home page section components
 import { QuickStartGrid } from '@/components/home/quick-start-grid';
+import { DailyChallengeWidget } from '@/components/home/daily-challenge-widget';
 import { RecentMaps } from '@/components/home/recent-maps';
 import { StatsCounter } from '@/components/home/stats-counter';
 import { SourceTypeCards } from '@/components/home/source-type-cards';
@@ -780,6 +781,9 @@ export default function Home() {
       />
 
       <div className="relative z-10 pb-24">
+        {/* Daily Challenge Widget */}
+        <DailyChallengeWidget />
+
         {/* Quick Start Grid - Clickable topic suggestions */}
         <QuickStartGrid onSelectTopic={handleGenerate} />
 

@@ -18,6 +18,7 @@ export type PointEventType =
   | 'MAP_VIEWS_10'
   | 'MAP_CLONED'
   | 'DAILY_LOGIN'
+  | 'DAILY_CHALLENGE'
   | 'STREAK_3'
   | 'STREAK_7'
   | 'STREAK_30'
@@ -96,6 +97,7 @@ export const EVENT_LABELS: Record<PointEventType, { label: string; icon: string;
   MAP_VIEWS_10:           { label: 'Map Got 10 Views',         icon: 'eye',         category: 'Community' },
   MAP_CLONED:            { label: 'Map Cloned',                icon: 'copy',        category: 'Community' },
   DAILY_LOGIN:           { label: 'Daily Login',               icon: 'log-in',      category: 'Streak' },
+  DAILY_CHALLENGE:       { label: 'Daily Challenge',           icon: 'target',      category: 'Streak' },
   STREAK_3:              { label: '3-Day Streak',              icon: 'flame',       category: 'Streak' },
   STREAK_7:              { label: '7-Day Streak',              icon: 'flame',       category: 'Streak' },
   STREAK_30:             { label: '30-Day Streak',             icon: 'flame',       category: 'Streak' },
@@ -147,11 +149,12 @@ export const POINT_VALUES: Record<PointEventType, number> = {
   QUIZ_PERFECT:          20,
   IMAGE_GENERATED:        5,
   AUDIO_GENERATED:        8,
-  MAP_TRANSLATED:        10,
+  MAP_TRANSLATED:         10,
   MAP_PUBLISHED:         20,
   MAP_VIEWS_10:           5,
   MAP_CLONED:            15,
   DAILY_LOGIN:            5,
+  DAILY_CHALLENGE:      500,
   STREAK_3:              15,
   STREAK_7:              30,
   STREAK_30:            100,
@@ -185,6 +188,7 @@ export const DAILY_CAPS: Record<PointEventType, number> = {
   MAP_VIEWS_10:           0,
   MAP_CLONED:             0,
   DAILY_LOGIN:            1,
+  DAILY_CHALLENGE:        1,
   STREAK_3:               1,
   STREAK_7:               1,
   STREAK_30:              1,

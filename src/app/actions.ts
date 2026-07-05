@@ -1531,7 +1531,7 @@ export async function logAdminActivityAction(entry: any) {
     } catch (error: any) {
       console.error('❌ Failed to log admin activity:', error.message);
     }
-  }).catch(() => {});
+  }).catch((err) => console.error("[XP] Failed:", err));
 }
 
 /**

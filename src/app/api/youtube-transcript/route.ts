@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchTranscript, getVideoMetadata } from '@/utils/youtube/transcript';
+import { rateLimit, createRateLimitResponse, getClientIdentifier } from '@/lib/rate-limit';
 
 export async function GET(req: NextRequest) {
+  // Rate limit by IP
+  const clientId = getClientIdentifier(req);
+  const rateLimitResult = rateLimit(clientId, 'youtube');
+  const rateLimitResponse = createRateLimitResponse(rateLimitResult);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const { searchParams } = new URL(req.url);
     const videoId = searchParams.get('videoId');

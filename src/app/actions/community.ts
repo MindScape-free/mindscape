@@ -92,8 +92,8 @@ export async function publishMindMapAction(mapId: string, publicData: any, userI
       updated_at: new Date().toISOString(),
     }, { onConflict: 'id' });
 
-    awardPoints(userId, 'MAP_PUBLISHED', { mapId, topic: publicData.topic }).catch(() => {});
-    logActivityAdmin({ type: 'MAP_PUBLISHED', targetId: mapId, targetType: 'mindmap', details: `Map "${publicData.topic || 'Untitled'}" published`, performedBy: userId }).catch(() => {});
+    awardPoints(userId, 'MAP_PUBLISHED', { mapId, topic: publicData.topic }).catch((err) => console.error("[XP] Failed:", err));
+    logActivityAdmin({ type: 'MAP_PUBLISHED', targetId: mapId, targetType: 'mindmap', details: `Map "${publicData.topic || 'Untitled'}" published`, performedBy: userId }).catch((err) => console.error("[XP] Failed:", err));
 
     return { success: true, error: null };
   } catch (error: any) {

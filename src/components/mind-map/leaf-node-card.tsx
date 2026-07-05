@@ -86,7 +86,8 @@ export const LeafNodeCard = memo(function LeafNodeCard({
 
     const handleChatClick = (e: React.MouseEvent) => {
         e.stopPropagation();
-        onExplainInChat(`Explain "${node.name}" in the context of ${mainTopic}.`);
+        const topicName = node?.name || node?.description || 'this topic';
+        onExplainInChat(`Explain "${topicName}" in the context of ${mainTopic}.`);
     };
 
     const handleImageClick = (e: React.MouseEvent) => {
