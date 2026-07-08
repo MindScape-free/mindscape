@@ -90,18 +90,36 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   // 5. Protect API routes — return 401 if unauthenticated
+  //    Checks cookie session first, then falls back to Bearer token in Authorization header
+  //    (some API routes like /api/chat/stream use token-based auth for streaming)
   const isProtectedApi = protectedApiPrefixes.some((prefix) =>
     pathname.startsWith(prefix)
   )
 
   if (isProtectedApi) {
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Unauthorized', message: 'Authentication required' },
-        { status: 401 }
-      )
+    if (user) {
+      return supabaseResponse
     }
-    return supabaseResponse
+
+    // Fallback: check for a valid Bearer token in Authorization header
+    // This handles cases where the cookie session expired but the access_token is still valid
+    const authHeader = request.headers.get('Authorization')
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.substring(7)
+        const { data: { user: tokenUser }, error: tokenError } = await supabase.auth.getUser(token)
+        if (tokenUser && !tokenError) {
+          return supabaseResponse
+        }
+      } catch (e) {
+        console.warn('[Middleware] Bearer token verification failed:', e)
+      }
+    }
+
+    return NextResponse.json(
+      { error: 'Unauthorized', message: 'Authentication required' },
+      { status: 401 }
+    )
   }
 
   // 6. For admin page, redirect to login if not authenticated

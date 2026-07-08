@@ -94,9 +94,23 @@ export function PinnedMessageChatDialog({ pin, onClose, currentMap, onMindMapGen
 
     setIsLoading(false);
 
-    const aiContent = error
-      ? `Sorry, I encountered an error: ${error}`
-      : response?.answer || 'No response received.';
+    const aiContent = error ? (() => {
+      const lower = error.toLowerCase();
+      const isAuthError =
+        lower.includes('unauthorized') ||
+        lower.includes('401') ||
+        lower.includes('authentication failed') ||
+        lower.includes('authentication required') ||
+        lower.includes('invalid or expired') ||
+        lower.includes('authorization header') ||
+        lower.includes('api key required') ||
+        lower.includes('api key');
+
+      if (isAuthError) {
+        return `**🔒 Session Expired** — Your login session has expired or you need to re-authenticate.\n\nPlease **sign out and sign back in** to continue using the AI assistant.\n\n> Details: ${error}`;
+      }
+      return `Sorry, I encountered an error: ${error}`;
+    })() : response?.answer || 'No response received.';
 
     setMessages(prev => [...prev, { role: 'ai', content: aiContent }]);
   };

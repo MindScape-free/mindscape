@@ -325,6 +325,12 @@ export function ChatPanel({
   // STREAMING STATE
   const [streamingMessages, setStreamingMessages] = useState<Record<string, string>>({});
   const [streamingIds, setStreamingIds] = useState<Set<string>>(new Set());
+  const streamingIdsRef = useRef<Set<string>>(new Set());
+
+  // Keep ref in sync with streamingIds state for synchronous access in error handlers
+  useEffect(() => {
+    streamingIdsRef.current = streamingIds;
+  }, [streamingIds]);
 
   const { startStream, stopStream, reset: resetStream, text: streamText, isStreaming, error: streamError, reasoning, toolCalls } = useStreamingChat({
     onChunk: (chunk) => {
@@ -370,8 +376,13 @@ export function ChatPanel({
 
   // Effect to handle stream completion - updates message and triggers related questions
   useEffect(() => {
-    if (!isStreaming && streamText && streamingIds.size > 0) {
+    if (!isStreaming && streamingIds.size > 0) {
       const firstStreamingId = Array.from(streamingIds)[0];
+
+      // Warn if stream completed with no content (blank AI message bug)
+      if (!streamText) {
+        console.warn('[ChatPanel] Stream completed with empty content for message:', firstStreamingId);
+      }
       
       // Update the actual message with final content
       const currentSession = sessions.find(s => s.id === activeSessionId);
@@ -381,7 +392,7 @@ export function ChatPanel({
           const updatedMessages = [...currentSession.messages];
           updatedMessages[messageIndex] = {
             ...updatedMessages[messageIndex],
-            content: streamText
+            content: streamText || ''
           };
           if (activeSessionId) {
             updateSession(activeSessionId, { messages: updatedMessages });
@@ -459,18 +470,56 @@ export function ChatPanel({
     }
   }, [isStreaming, streamText, streamingIds, activeSessionId, sessions, topic, mindMapData, usePdfContext, providerOptions, updateSession, onLatestResponse]);
 
+  // ── Auth error detection ───────────────────────────────────────────────
+  // Returns a user-friendly message and toast title for auth-related errors.
+  function formatAuthError(error: string): { message: string; toastTitle: string; isAuthError: boolean } {
+    const lower = error.toLowerCase();
+    const isAuth =
+      lower.includes('unauthorized') ||
+      lower.includes('401') ||
+      lower.includes('authentication failed') ||
+      lower.includes('authentication required') ||
+      lower.includes('invalid or expired') ||
+      lower.includes('authorization header') ||
+      lower.includes('api key required') ||
+      lower.includes('api key');
+
+    if (isAuth) {
+      return {
+        message: `**🔒 Session Expired** — Your login session has expired or you need to re-authenticate.
+
+Please **sign out and sign back in** to continue using the AI assistant.
+
+> Details: ${error}`,
+        toastTitle: 'Session Expired — Please Re-login',
+        isAuthError: true,
+      };
+    }
+
+    return {
+      message: `Sorry, I encountered an error: ${error}`,
+      toastTitle: 'Stream Error',
+      isAuthError: false,
+    };
+  }
+
   // Effect to handle stream errors
+  // Uses ref as fallback if streamingIds state hasn't flushed yet (race condition safeguard)
   useEffect(() => {
-    if (streamError && streamingIds.size > 0) {
-      const firstStreamingId = Array.from(streamingIds)[0];
+    const ids = streamingIds.size > 0 ? streamingIds : streamingIdsRef.current;
+    if (streamError && ids.size > 0) {
+      const firstStreamingId = Array.from(ids)[0];
       const currentSession = sessions.find(s => s.id === activeSessionId);
+
+      const { message: errorMessage, toastTitle, isAuthError } = formatAuthError(streamError);
+
       if (currentSession) {
         const messageIndex = currentSession.messages.findIndex(m => m.id === firstStreamingId);
         if (messageIndex !== -1) {
           const updatedMessages = [...currentSession.messages];
           updatedMessages[messageIndex] = {
             ...updatedMessages[messageIndex],
-            content: `Sorry, I encountered an error: ${streamError}`,
+            content: errorMessage,
             type: 'text'
           };
           if (activeSessionId) {
@@ -482,10 +531,12 @@ export function ChatPanel({
       setStreamingIds(new Set());
       setStreamingMessages({});
       toast({
-        variant: 'destructive',
-        title: 'Stream Error',
-        description: streamError,
+        variant: isAuthError ? 'destructive' : 'destructive',
+        title: toastTitle,
+        description: isAuthError ? 'Sign out and sign back in to fix this.' : streamError,
       });
+    } else if (streamError) {
+      console.warn('[ChatPanel] Stream error with no tracked streaming IDs:', streamError);
     }
   }, [streamError, streamingIds, activeSessionId, sessions, updateSession, toast]);
 
