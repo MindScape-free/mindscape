@@ -140,7 +140,7 @@ function MermaidBlock({ code }: { code: string }) {
   }
 
   const containerClasses = isFullscreen
-    ? "fixed inset-0 z-[100] bg-zinc-950 flex items-center justify-center overflow-auto"
+    ? "fixed inset-0 z-[250] bg-zinc-950 flex items-center justify-center overflow-auto"
     : "w-full bg-zinc-950/50 rounded-2xl border border-zinc-800 flex items-center justify-center relative group/container";
 
   return (
@@ -216,7 +216,7 @@ function YouTubeEmbed({ url }: { url: string }) {
   // Strict domain whitelist
   const isAllowed = url.includes('youtube.com') || url.includes('youtu.be');
 
-  if (!id || !isAllowed) return <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{url}</a>;
+  if (!id || !isAllowed) return <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline break-all">{url}</a>;
 
   return (
     <div className="my-6 rounded-[20px] overflow-hidden border border-white/10 shadow-2xl bg-black aspect-video">
@@ -511,7 +511,7 @@ function ImageBlock({ src, alt }: { src: string; alt?: string }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[100] bg-zinc-950/95 backdrop-blur-2xl flex items-center justify-center p-4 sm:p-8"
+            className="fixed inset-0 z-[250] bg-zinc-950/95 backdrop-blur-2xl flex items-center justify-center p-4 sm:p-8"
             onClick={() => setIsLightboxOpen(false)}
           >
             {/* Lightbox top bar */}
@@ -667,10 +667,10 @@ export function MarkdownRenderer({ content, className, onEntityClick, onEntityAc
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-zinc-300 underline underline-offset-4 decoration-dotted decoration-zinc-600 hover:text-primary hover:decoration-primary inline-flex items-center gap-1 transition-all duration-200"
+                className="text-zinc-300 underline underline-offset-4 decoration-dotted decoration-zinc-600 hover:text-primary hover:decoration-primary inline break-all transition-all duration-200"
               >
                 {children}
-                <ExternalLink className="w-3 h-3 opacity-50" />
+                <ExternalLink className="inline-block w-3 h-3 opacity-50 ml-1 align-middle" />
               </a>
             );
           },

@@ -1206,17 +1206,18 @@ Please **sign out and sign back in** to continue using the AI assistant.
           return;
         }
 
-        // Limit selection to elements inside the chat panel SheetContent (dialog role)
-        const sheetEl = document.querySelector('[role="dialog"]');
+        // Limit selection to elements inside the chat panel SheetContent
+        const sheetEl = document.querySelector('.chat-panel-sheet-content');
         const isInside = sheetEl && sheetEl.contains(selection.anchorNode);
 
-        if (isInside) {
+        if (isInside && sheetEl) {
           try {
             const range = selection.getRangeAt(0);
             const rect = range.getBoundingClientRect();
+            const sheetRect = sheetEl.getBoundingClientRect();
             setSelectionPosition({
-              x: rect.left + rect.width / 2,
-              y: rect.top,
+              x: rect.left + rect.width / 2 - sheetRect.left,
+              y: rect.top - sheetRect.top,
             });
             setSelectedText(text);
           } catch (err) {
@@ -1690,7 +1691,7 @@ Please **sign out and sign back in** to continue using the AI assistant.
 
     // Find the active scroll viewport inside the sheet panel.
     // Radix ScrollArea uses a [data-radix-scroll-area-viewport] element.
-    const sheetEl = (e.target as HTMLElement).closest('[role="dialog"]');
+    const sheetEl = (e.target as HTMLElement).closest('.chat-panel-sheet-content');
     const viewport = sheetEl?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -3029,11 +3030,18 @@ Please **sign out and sign back in** to continue using the AI assistant.
       }
     }}>
       <SheetContent
-        className="flex flex-col p-0 glassmorphism [&>button]:hidden transition-none"
+        className="flex flex-col p-0 glassmorphism [&>button]:hidden transition-none chat-panel-sheet-content"
         style={{ width: `${panelWidth}px`, maxWidth: 'none', minWidth: 'auto' }}
         aria-describedby={undefined}
         onPointerDownOutside={(e) => {
           // Radix fires a CustomEvent; originalEvent contains the actual pointer event
+          const originalEvent = (e as any).detail?.originalEvent;
+          const clickTarget = (originalEvent?.target || e.target) as HTMLElement;
+          if (clickTarget && (clickTarget.closest('#quick-explain-drawer') || clickTarget.closest('.text-selection-menu'))) {
+            e.preventDefault();
+          }
+        }}
+        onInteractOutside={(e) => {
           const originalEvent = (e as any).detail?.originalEvent;
           const clickTarget = (originalEvent?.target || e.target) as HTMLElement;
           if (clickTarget && (clickTarget.closest('#quick-explain-drawer') || clickTarget.closest('.text-selection-menu'))) {
@@ -3356,26 +3364,7 @@ Please **sign out and sign back in** to continue using the AI assistant.
         </div>
 
         {view === 'chat' ? renderChatView() : view === 'history' ? renderHistoryView() : view === 'pins' ? renderPinsView() : view === 'canvas-pins' ? renderCanvasPinsView() : renderPinChatView()}
-      </SheetContent>
 
-      <AnimatePresence>
-        {selectionPosition && (
-          <SheetPortal>
-            <TextSelectionMenu
-              text={selectedText}
-              position={selectionPosition}
-              onAction={handleEntityAction}
-              onClose={() => {
-                setSelectedText('');
-                setSelectionPosition(null);
-                window.getSelection()?.removeAllRanges();
-              }}
-            />
-          </SheetPortal>
-        )}
-      </AnimatePresence>
-
-      <SheetPortal>
         <QuickExplainDrawer
           isOpen={explainTopic !== null || isExplainHistoryOpen}
           onClose={() => {
@@ -3390,8 +3379,24 @@ Please **sign out and sign back in** to continue using the AI assistant.
           panelWidth={panelWidth}
           historyExplanations={historyExplanations}
           onExplanationGenerated={handleExplanationGenerated}
+          onEntityAction={handleEntityAction}
         />
-      </SheetPortal>
+
+        <AnimatePresence>
+          {selectionPosition && (
+            <TextSelectionMenu
+              text={selectedText}
+              position={selectionPosition}
+              onAction={handleEntityAction}
+              onClose={() => {
+                setSelectedText('');
+                setSelectionPosition(null);
+                window.getSelection()?.removeAllRanges();
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </SheetContent>
     </Sheet>
 
     <CreateMindmapDialog

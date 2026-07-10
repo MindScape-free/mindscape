@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { SupabaseClient, Session, AuthChangeEvent } from '@supabase/supabase-js';
-import { getSupabaseClient } from '@/lib/supabase-db';
+import { createClient } from '@/lib/client';
 
 export interface User {
   id: string;
@@ -53,7 +53,7 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [supabase] = useState<SupabaseClient>(() => getSupabaseClient());
+  const [supabase] = useState<SupabaseClient>(() => createClient());
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isUserLoading, setIsUserLoading] = useState(true);

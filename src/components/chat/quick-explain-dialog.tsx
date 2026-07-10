@@ -16,6 +16,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { MarkdownRenderer } from './markdown-renderer';
+import { EntityAction } from './entity-action-menu';
 
 export interface ExplanationHistoryItem {
   topic: string;
@@ -34,6 +36,7 @@ interface QuickExplainDrawerProps {
   panelWidth: number;
   historyExplanations: ExplanationHistoryItem[];
   onExplanationGenerated: (topic: string, explanation: string) => void;
+  onEntityAction?: (action: EntityAction, topic: string) => void;
 }
 
 const LOADING_MESSAGES = [
@@ -53,6 +56,7 @@ export function QuickExplainDrawer({
   panelWidth,
   historyExplanations,
   onExplanationGenerated,
+  onEntityAction,
 }: QuickExplainDrawerProps) {
   const [explanation, setExplanation] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -186,15 +190,15 @@ export function QuickExplainDrawer({
           exit={{ opacity: 0, x: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 220 }}
           style={{
-            position: 'fixed',
+            position: 'absolute',
             top: 0,
             bottom: 0,
-            right: `${panelWidth}px`,
+            right: '100%',
             width: '380px',
-            zIndex: 200,
+            zIndex: -1,
           }}
           id="quick-explain-drawer"
-          className="bg-zinc-950/98 backdrop-blur-3xl border-l border-white/5 border-r border-white/5 shadow-2xl flex flex-col h-full select-none"
+          className="glassmorphism flex flex-col h-full shadow-2xl"
         >
           <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-primary/30 via-violet-500/20 to-transparent z-20" />
 
@@ -290,9 +294,13 @@ export function QuickExplainDrawer({
                           <div className="p-1 rounded-lg bg-primary/10 border border-primary/20 flex-shrink-0 mt-0.5">
                             <Lightbulb className="h-3.5 w-3.5 text-primary" />
                           </div>
-                          <p className="text-[13px] text-zinc-300 leading-relaxed font-normal select-text">
-                            {explanation}
-                          </p>
+                          <div className="text-[13px] text-zinc-300 leading-relaxed font-normal select-text flex-1 min-w-0 break-words">
+                            <MarkdownRenderer
+                              content={explanation}
+                              onEntityAction={onEntityAction}
+                              onEntityClick={handleAskInChat}
+                            />
+                          </div>
                         </div>
                       </div>
                     ) : null}
@@ -315,8 +323,12 @@ export function QuickExplainDrawer({
                     ) : (
                       historyExplanations.map((item, idx) => (
                         <button
+                          type="button"
                           key={idx}
-                          onClick={() => viewHistoryItem(item)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            viewHistoryItem(item);
+                          }}
                           className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-white/[0.04] bg-white/[0.01] hover:bg-white/[0.04] hover:border-white/10 active:scale-[0.99] text-left transition-all group"
                         >
                           <div className="p-2 rounded-lg bg-zinc-900 border border-white/5 text-zinc-400 group-hover:text-primary transition-colors flex-shrink-0">
@@ -350,10 +362,13 @@ export function QuickExplainDrawer({
                       <div className="flex items-start gap-2.5 pl-3">
                         <div className="p-1 rounded-lg bg-primary/10 border border-primary/20 flex-shrink-0 mt-0.5">
                           <Lightbulb className="h-3.5 w-3.5 text-primary" />
-                        </div>
-                        <p className="text-[13px] text-zinc-300 leading-relaxed font-normal select-text">
-                          {selectedHistoryItem.content}
-                        </p>
+                        </div>                          <div className="text-[13px] text-zinc-300 leading-relaxed font-normal select-text flex-1 min-w-0 break-words">
+                            <MarkdownRenderer
+                              content={selectedHistoryItem.content}
+                              onEntityAction={onEntityAction}
+                              onEntityClick={handleAskInChat}
+                            />
+                          </div>
                       </div>
                     </div>
                   </motion.div>

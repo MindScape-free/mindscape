@@ -34,7 +34,7 @@ export function TextSelectionMenu({ text, position, onAction, onClose }: TextSel
         exit={{ opacity: 0, scale: 0.9, y: 5, x: '-50%' }}
         transition={{ duration: 0.15 }}
         style={{
-          position: 'fixed',
+          position: 'absolute',
           top: `${position.y - 48}px`, // position above the selection
           left: `${position.x}px`,
           zIndex: 500,
