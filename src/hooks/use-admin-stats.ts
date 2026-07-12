@@ -90,7 +90,7 @@ export function useAdminStats(options?: {
     return fetchWithAuth(API_BASE, token);
   }, [getToken]);
 
-  const { data, error, isLoading, isValidating, mutate: revalidate } = useSWR<StatsResponse>(
+  const { data, error, isLoading, isValidating } = useSWR<StatsResponse>(
     [API_BASE, user?.id],
     () => fetcher(),
     {

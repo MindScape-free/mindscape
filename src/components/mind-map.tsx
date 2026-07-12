@@ -583,11 +583,17 @@ export const MindMap = React.memo(({
   // AUTO-SUMMARIZE when canvas content is fully loaded/generated
   const hasAutoSummarizedRef = useRef(false);
 
-  // Reset the auto-summarize lock when the map changes
+  // Reset the auto-summarize lock when the map changes topic
+  const lastTopicRef = useRef(data.topic);
   useEffect(() => {
-    hasAutoSummarizedRef.current = false;
-    setSummaryContent(data.summary || '');
-  }, [data.id]);
+    if (data.topic !== lastTopicRef.current) {
+      lastTopicRef.current = data.topic;
+      hasAutoSummarizedRef.current = false;
+      setSummaryContent(data.summary || '');
+    } else if (data.summary) {
+      setSummaryContent(data.summary);
+    }
+  }, [data.id, data.topic, data.summary]);
 
   useEffect(() => {
     const isReady = status === 'idle' && data && data.mode === 'single' && (data.subTopics?.length || 0) > 0;
@@ -617,7 +623,7 @@ export const MindMap = React.memo(({
 
       triggerAutoSummary();
     }
-  }, [status, data.id, summaryContent, isSummarizing, providerOptions, onUpdate]);
+  }, [status, data.id, data.topic, summaryContent, isSummarizing, providerOptions, onUpdate]);
 
   const handleSaveMap = useCallback(async () => {
     if (onSaveMap) onSaveMap();

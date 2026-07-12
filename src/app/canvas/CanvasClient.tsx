@@ -75,7 +75,8 @@ import { useMindMapPinnedMessages } from '@/hooks/use-mind-map-pinned-messages';
 import { Profiler } from '@/components/debug/profiler';
 import { useAIHealth } from '@/hooks/use-ai-health';
 import { useActivity } from '@/contexts/activity-context';
-import { resolveDepthWithConfidence, analyzeTopicComplexity } from '@/lib/depth-analysis';  import { trackGenerationComplete, trackGenerationFailed, type AIGenerationMeta } from '@/lib/tracker';
+import { resolveDepthWithConfidence, analyzeTopicComplexity } from '@/lib/depth-analysis';
+import { trackGenerationStart, trackGenerationComplete, trackGenerationFailed, type AIGenerationMeta } from '@/lib/tracker';
 import { useMapTracking } from '@/hooks/use-tracking';
 
 function MindMapPageContent() {
@@ -338,8 +339,10 @@ function MindMapPageContent() {
       let pendingSourceFileType: string | null = null;
       let pendingOriginalPdfContent: string | null = null;
 
+      const trackingId = params.sessionId || 'pending';
+
       const trackCompletion = (mapId: string, nodeCount: number, sourceType: string, mode: string) => {
-        trackGenerationComplete(params.sessionId || mapId || 'pending', {
+        trackGenerationComplete(trackingId, {
           sourceType: (sourceType || 'text') as AIGenerationMeta['sourceType'],
           mode: (mode || 'single') as AIGenerationMeta['mode'],
           depth: (params.depth || 'low') as AIGenerationMeta['depth'],
@@ -352,7 +355,7 @@ function MindMapPageContent() {
       };
 
       const trackFailure = (errorType: string, message: string, sourceType: string, mode: string) => {
-        trackGenerationFailed(params.sessionId || 'pending', {
+        trackGenerationFailed(trackingId, {
           sourceType: (sourceType || 'text') as AIGenerationMeta['sourceType'],
           mode: (mode || 'single') as AIGenerationMeta['mode'],
           depth: (params.depth || 'low') as AIGenerationMeta['depth'],
@@ -383,13 +386,13 @@ function MindMapPageContent() {
 
             if (!topicToRegen) throw new Error("Could not determine topic for regeneration.");
 
-            const aiOptions = {
-              provider: config.provider,
-              apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-              model: config.textModel || config.pollinationsModel,
-              strict: true,
-              userId: user?.id,
-            };
+            trackGenerationStart(trackingId, {
+              sourceType: 'text',
+              mode: 'single',
+              depth: (params.depth || 'low') as AIGenerationMeta['depth'],
+              persona: params.persona || aiPersona,
+              userId: user?.id
+            });
             result = await generateMindMapAction({
               topic: topicToRegen!,
               parentTopic: params.parent || undefined,
@@ -397,7 +400,12 @@ function MindMapPageContent() {
               persona: params.persona || aiPersona,
               depth: depthFromServer(params.depth),
               useSearch: params.useSearch === 'true',
-            }, aiOptions);
+            }, {
+              provider: config.provider,
+              apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
+              model: config.textModel || config.pollinationsModel,
+              userId: user?.id,
+            });
 
             if (result.data) {
               await handleSaveMap(result.data, effectiveMapId);
@@ -436,6 +444,13 @@ function MindMapPageContent() {
             }
           } else if (params.topic1 && params.topic2) {
             currentMode = 'compare';
+            trackGenerationStart(trackingId, {
+              sourceType: 'text',
+              mode: 'compare',
+              depth: (params.depth || 'low') as AIGenerationMeta['depth'],
+              persona: params.persona || aiPersona,
+              userId: user?.id
+            });
             result = await generateComparisonMapAction({
               topic1: params.topic1!,
               topic2: params.topic2!,
@@ -451,6 +466,13 @@ function MindMapPageContent() {
             });
           } else if (params.topic) {
             currentMode = 'standard';
+            trackGenerationStart(trackingId, {
+              sourceType: 'text',
+              mode: 'single',
+              depth: (params.depth || 'low') as AIGenerationMeta['depth'],
+              persona: params.persona || aiPersona,
+              userId: user?.id
+            });
             result = await generateMindMapAction({
               topic: params.topic!,
               parentTopic: params.parent || undefined,
@@ -502,6 +524,13 @@ function MindMapPageContent() {
 
               if (sessionType === 'image') {
                 currentMode = 'vision-image';
+                trackGenerationStart(trackingId, {
+                  sourceType: 'image',
+                  mode: 'single',
+                  depth: (params.depth || 'low') as AIGenerationMeta['depth'],
+                  persona: params.persona || aiPersona,
+                  userId: user?.id
+                });
                 result = await generateMindMapFromImageAction({
                   imageDataUri: fileContent!,
                   context: additionalText,
@@ -517,6 +546,13 @@ function MindMapPageContent() {
                 });
               } else if (sessionType === 'youtube') {
                 currentMode = 'youtube';
+                trackGenerationStart(trackingId, {
+                  sourceType: 'youtube',
+                  mode: 'single',
+                  depth: (params.depth || 'low') as AIGenerationMeta['depth'],
+                  persona: params.persona || aiPersona,
+                  userId: user?.id
+                });
                 result = await generateYouTubeMindMapAction({
                   url: fileContent!,
                   context: additionalText,
@@ -532,6 +568,13 @@ function MindMapPageContent() {
                 });
               } else if (sessionType === 'pdf') {
                 currentMode = 'vision-pdf';
+                trackGenerationStart(trackingId, {
+                  sourceType: 'pdf',
+                  mode: 'single',
+                  depth: (params.depth || 'low') as AIGenerationMeta['depth'],
+                  persona: params.persona || aiPersona,
+                  userId: user?.id
+                });
                 result = await generateMindMapFromPdfAction({
                   text: fileContent!,
                   context: additionalText, // Include custom topic if provided
@@ -547,6 +590,13 @@ function MindMapPageContent() {
                 });
               } else if (sessionType === 'text') {
                 currentMode = 'vision-text';
+                trackGenerationStart(trackingId, {
+                  sourceType: 'text',
+                  mode: 'single',
+                  depth: (params.depth || 'low') as AIGenerationMeta['depth'],
+                  persona: params.persona || aiPersona,
+                  userId: user?.id
+                });
                 result = await generateMindMapFromTextAction({
                   text: fileContent!,
                   context: additionalText,
@@ -562,6 +612,13 @@ function MindMapPageContent() {
                 });
               } else if (sessionType === 'website') {
                 currentMode = 'website';
+                trackGenerationStart(trackingId, {
+                  sourceType: 'website',
+                  mode: 'single',
+                  depth: (params.depth || 'low') as AIGenerationMeta['depth'],
+                  persona: params.persona || aiPersona,
+                  userId: user?.id
+                });
                 result = await generateMindMapFromWebsiteAction({
                   url: fileContent!,
                   context: additionalText,
@@ -594,6 +651,13 @@ function MindMapPageContent() {
                   images.push({ inlineData: { mimeType, data } });
                 }
 
+                trackGenerationStart(trackingId, {
+                  sourceType: 'text',
+                  mode: 'compare',
+                  depth: (params.depth || 'low') as AIGenerationMeta['depth'],
+                  persona: params.persona || aiPersona,
+                  userId: user?.id
+                });
                 result = await generateComparisonMapAction({
                   topic1: compContent.topic1 || 'Topic A',
                   topic2: compContent.topic2 || 'Topic B',
@@ -610,6 +674,13 @@ function MindMapPageContent() {
                 });
               } else if (sessionType === 'multi') {
                 currentMode = 'multi-source';
+                trackGenerationStart(trackingId, {
+                  sourceType: 'multi',
+                  mode: 'single',
+                  depth: (params.depth || 'low') as AIGenerationMeta['depth'],
+                  persona: params.persona || aiPersona,
+                  userId: user?.id
+                });
                 result = await generateMindMapFromTextAction({
                   text: additionalText || params.topic || 'Multi-Source Synthesis',
                   context: fileContent!, 
@@ -1678,65 +1749,67 @@ function MindMapPageContent() {
 
 
 
-      <ChatPanel
-        isOpen={isChatOpen}
-        onClose={() => {
-          setIsChatOpen(false);
-          setChatInitialMessage(undefined);
-          setChatInitialView(undefined);
-        }}
-        initialView={chatInitialView}
-        canvasPinnedMessages={pinnedMessages}
-        onCanvasUnpin={removePinnedMessage}
-        topic={chatTopic || (mindMap?.topic) || 'General Conversation'}
-        initialMode={chatMode}
-        initialMessage={chatInitialMessage}
-        mindMapData={mindMap || undefined}
-        sessionId={params.mapId || params.sessionId || undefined}
-        usePdfContext={useFileAwareContext}
-        onUsePdfContextChange={setUseFileAwareContext}
-        sourceFileContent={sourceFileContent}
-        sourceFileType={sourceFileType as "text" | "image" | "pdf"}
-        onMindMapGenerated={async (data) => {
-          handleReplaceCurrentMap(data);
-          setHasUnsavedChanges(true);
-          return await handleSaveMap(data, data.id, true);
-        }}
-        onOpenPinnedMessages={handleOpenPinnedMessages}
-        onAddMindMapPin={(question, response) => {
-          addPinnedMessage(question, response, params.mapId || params.sessionId || undefined);
-        }}
-        onRemoveMindMapPin={(messageId) => {
-          const pinToRemove = pinnedMessages.find(p => 
-            p.question?.messageId === messageId || p.soloMessage?.messageId === messageId
-          );
-          if (pinToRemove) {
-            removePinnedMessage(pinToRemove.id);
-          }
-        }}
-        onQuizDeepen={(weakSections, quizTopic) => {
-          quizDeepenRef.current?.(weakSections, quizTopic);
-        }}
-        onTopicClick={(topic) => {
-          // 1. Try to zoom if it exists in current map
-          if (zoomToNodeRef.current) {
-            zoomToNodeRef.current(topic);
-          }
-          // 2. Also generate/open submap if it doesn't exist or as a fallback
-          handleGenerateAndOpenSubMap(topic, undefined, undefined, 'background');
-        }}
-        onLatestResponse={(answer) => {
-          const regex = /\[\[(.*?)\]\]/g;
-          const matches = [];
-          let match;
-          while ((match = regex.exec(answer)) !== null) {
-            matches.push(match[1]);
-          }
-          setResonanceNodes(matches);
-          // Clear resonance after 5 seconds to prevent visual clutter
-          setTimeout(() => setResonanceNodes([]), 5000);
-        }}
-      />
+      <ErrorBoundary sectionName="Chat Panel">
+        <ChatPanel
+          isOpen={isChatOpen}
+          onClose={() => {
+            setIsChatOpen(false);
+            setChatInitialMessage(undefined);
+            setChatInitialView(undefined);
+          }}
+          initialView={chatInitialView}
+          canvasPinnedMessages={pinnedMessages}
+          onCanvasUnpin={removePinnedMessage}
+          topic={chatTopic || (mindMap?.topic) || 'General Conversation'}
+          initialMode={chatMode}
+          initialMessage={chatInitialMessage}
+          mindMapData={mindMap || undefined}
+          sessionId={params.mapId || params.sessionId || undefined}
+          usePdfContext={useFileAwareContext}
+          onUsePdfContextChange={setUseFileAwareContext}
+          sourceFileContent={sourceFileContent}
+          sourceFileType={sourceFileType as "text" | "image" | "pdf"}
+          onMindMapGenerated={async (data) => {
+            handleReplaceCurrentMap(data);
+            setHasUnsavedChanges(true);
+            return await handleSaveMap(data, data.id, true);
+          }}
+          onOpenPinnedMessages={handleOpenPinnedMessages}
+          onAddMindMapPin={(question, response) => {
+            addPinnedMessage(question, response, params.mapId || params.sessionId || undefined);
+          }}
+          onRemoveMindMapPin={(messageId) => {
+            const pinToRemove = pinnedMessages.find(p => 
+              p.question?.messageId === messageId || p.soloMessage?.messageId === messageId
+            );
+            if (pinToRemove) {
+              removePinnedMessage(pinToRemove.id);
+            }
+          }}
+          onQuizDeepen={(weakSections, quizTopic) => {
+            quizDeepenRef.current?.(weakSections, quizTopic);
+          }}
+          onTopicClick={(topic) => {
+            // 1. Try to zoom if it exists in current map
+            if (zoomToNodeRef.current) {
+              zoomToNodeRef.current(topic);
+            }
+            // 2. Also generate/open submap if it doesn't exist or as a fallback
+            handleGenerateAndOpenSubMap(topic, undefined, undefined, 'background');
+          }}
+          onLatestResponse={(answer) => {
+            const regex = /\[\[(.*?)\]\]/g;
+            const matches = [];
+            let match;
+            while ((match = regex.exec(answer)) !== null) {
+              matches.push(match[1]);
+            }
+            setResonanceNodes(matches);
+            // Clear resonance after 5 seconds to prevent visual clutter
+            setTimeout(() => setResonanceNodes([]), 5000);
+          }}
+        />
+      </ErrorBoundary>
 
     </>
   );

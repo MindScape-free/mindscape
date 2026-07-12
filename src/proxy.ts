@@ -33,11 +33,11 @@ const protectedApiPrefixes = [
   '/api/admin-sync',
 ]
 
-// ── Middleware ───────────────────────────────────────────────────
+// ── Proxy ───────────────────────────────────────────────────
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
-
+  
   // 1. Skip middleware for known public routes
   if (publicRoutes.has(pathname)) {
     return NextResponse.next()
@@ -59,7 +59,7 @@ export async function middleware(request: NextRequest) {
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 
   if (!supabaseUrl || !supabaseKey) {
-    console.error('[Middleware] Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY')
+    console.error('[Proxy] Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY')
     if (process.env.NODE_ENV === 'production') {
       return new NextResponse('Server configuration error', { status: 500 })
     }
@@ -113,7 +113,7 @@ export async function middleware(request: NextRequest) {
           return supabaseResponse
         }
       } catch (e) {
-        console.warn('[Middleware] Bearer token verification failed:', e)
+        console.warn('[Proxy] Bearer token verification failed:', e)
       }
     }
 

@@ -309,7 +309,7 @@ export async function resolveApiKey(options: AIActionOptions): Promise<string | 
           source = 'supabase-admin';
           // Cache the result
           apiKeyCache.set(options.userId, { key: effectiveApiKey, timestamp: Date.now() });
-          console.log(`🔑 Using Pollinations API key from supabase Admin for user: ${options.userId}`);
+          console.log(`🔑 Using Pollinations API key from supabase Admin for user: ${options.userId?.slice(0, 8)}...`);
         } else {
           // Cache the miss too (avoid repeated supabase reads for users without keys)
           apiKeyCache.set(options.userId, { key: undefined, timestamp: Date.now() });
@@ -325,12 +325,11 @@ export async function resolveApiKey(options: AIActionOptions): Promise<string | 
     effectiveApiKey = process.env.POLLINATIONS_API_KEY;
     if (effectiveApiKey) {
       source = 'system-default';
-      console.log(`ℹ️ No user API key found for ${options.userId || 'anonymous'}. Using System Default Pollinations key.`);
+      console.log(`ℹ️ No user API key found. Using System Default Pollinations key.`);
     }
   }
 
-  const masked = effectiveApiKey ? `${effectiveApiKey.slice(0, 6)}...${effectiveApiKey.slice(-4)}` : 'none';
-  console.log(`🔑 resolveApiKey -> [${source}] ${effectiveApiKey ? 'Success' : 'Missing'} (key: ${masked})`);
+  console.log(`🔑 resolveApiKey -> [${source}] ${effectiveApiKey ? 'Success' : 'Missing'}`);
 
   return effectiveApiKey;
 }
@@ -1308,6 +1307,9 @@ export async function logAdminActivityAction(entry: any) {
   // Fire and forget (background execution)
   (async () => {
     try {
+      const { requireAdmin } = await import('@/lib/require-auth');
+      await requireAdmin();
+
       const { logActivityAdmin } = await import('@/lib/supabase-server');
       await logActivityAdmin(entry);
       // admin_stats incremental updates are deprecated —
@@ -1445,12 +1447,20 @@ export async function generateThumbnailAction(
 
 export async function syncUserStatisticsAction(userId: string) {
   try {
+    const { requireAuth } = await import('@/lib/require-auth');
+    const verifiedUserId = await requireAuth();
+
+    // Only allow users to sync their own statistics
+    if (verifiedUserId !== userId) {
+      return { success: false, error: 'Unauthorized: user ID mismatch.' };
+    }
+
     const { getSupabaseAdmin } = await import('@/lib/supabase-server');
     const supabase = getSupabaseAdmin();
 
     // 1. Full recompute via the database function
     const { data: profile, error: recomputeError } = await supabase
-      .rpc('recompute_user_profile', { p_user_id: userId });
+      .rpc('recompute_user_profile', { p_user_id: verifiedUserId });
 
     if (recomputeError) throw recomputeError;
 

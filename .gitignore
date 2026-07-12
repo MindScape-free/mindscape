@@ -52,6 +52,7 @@ service-account.json
 # temp folders
 tmp/
 src/tmp/
+scratch/
 .temp/
 .agents/
 .gemini/

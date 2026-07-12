@@ -6,12 +6,6 @@ const HARD_LIMIT_MB = 20;
 const SOFT_LIMIT = SOFT_LIMIT_MB * 1024 * 1024;
 const HARD_LIMIT = HARD_LIMIT_MB * 1024 * 1024;
 
-interface StorageItem<T> {
-  data: T;
-  compressed: boolean;
-  size: number;
-  timestamp: number;
-}
 
 interface CompressionResult {
   success: boolean;
@@ -75,12 +69,6 @@ export function safeSetItem<T>(key: string, value: T, compressThreshold = SOFT_L
     dataToStore = serialized;
   }
 
-  const storageItem: StorageItem<T> = {
-    data: compressed ? JSON.parse(serialized) : value,
-    compressed,
-    size: originalSize,
-    timestamp: Date.now(),
-  };
 
   const finalData = compressed 
     ? STORAGE_KEY_PREFIX + dataToStore 

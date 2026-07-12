@@ -6,6 +6,11 @@ let cachedAdmin: SupabaseClient | null = null;
 export function getSupabaseAdmin(): SupabaseClient {
   if (cachedAdmin) return cachedAdmin;
   const { supabaseUrl, supabaseServiceRoleKey, supabaseAnonKey } = getEnv();
+
+  if (!supabaseServiceRoleKey && process.env.NODE_ENV === 'production') {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is required in production for admin operations.');
+  }
+
   const key = supabaseServiceRoleKey || supabaseAnonKey;
 
   cachedAdmin = createClient(supabaseUrl, key, { auth: { persistSession: false } });

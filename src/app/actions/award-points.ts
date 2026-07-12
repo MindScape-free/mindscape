@@ -2,6 +2,7 @@
 
 import { awardPoints, AwardResult } from '@/lib/points-engine';
 import { PointEventType } from '@/types/points';
+import { requireAuth } from '@/lib/require-auth';
 
 export async function awardPointsAction(
   userId: string,
@@ -9,7 +10,13 @@ export async function awardPointsAction(
   metadata?: Record<string, any>
 ): Promise<{ data: AwardResult | null; error: string | null }> {
   try {
-    const result = await awardPoints(userId, eventType, metadata);
+    // Verify the caller is the same user they claim to be
+    const verifiedUserId = await requireAuth();
+    if (verifiedUserId !== userId) {
+      return { data: null, error: 'Unauthorized: user ID mismatch.' };
+    }
+
+    const result = await awardPoints(verifiedUserId, eventType, metadata);
     return { data: result, error: null };
   } catch (error) {
     console.error(`[awardPointsAction] Failed for ${eventType}:`, error);

@@ -49,7 +49,7 @@ import { getSupabaseClient } from '@/lib/supabase-db';
 import { useAIConfig } from '@/contexts/ai-config-context';
 import { OnboardingWizard, TRIGGER_ONBOARDING_EVENT } from '@/components/onboarding-wizard';
 import { trackGenerationStart } from '@/lib/tracker';
-
+import { ErrorBoundary } from '@/components/error-boundary';
 
 import dynamic from 'next/dynamic';
 import { useMultiSource } from '@/hooks/use-multi-source';
@@ -854,7 +854,9 @@ export default function Home() {
         <Sparkles className="h-6 w-6" />
       </button>
 
-      <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} topic={topic} />
+      <ErrorBoundary sectionName="Chat Panel">
+        <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} topic={topic} />
+      </ErrorBoundary>
       <OnboardingWizard />
     </div>
   );

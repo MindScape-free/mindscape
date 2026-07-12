@@ -85,6 +85,7 @@ export async function generateContentWithPollinations(
         apiKey?: string,
         skipApiKey?: boolean,
         attempt?: number,
+        timeout?: number,
         _stripParameters?: boolean,
         _isFailover?: boolean
     } = {}
@@ -110,7 +111,7 @@ export async function generateContentWithPollinations(
         model = options.model || 'openai';
     }
 
-    console.log(`🤖 Pollinations Expert Selector: Mode=${hasImages ? 'Vision' : 'Text'}, Model=${model}, Attempt=${attempt}`);
+    console.log(`🤖 Pollinations: Mode=${hasImages ? 'Vision' : 'Text'}, Model=${model}, Attempt=${attempt}`);
 
     try {
         // Only inject JSON rules if we are explicitly asking for a structured response
@@ -192,11 +193,16 @@ CRITICAL SAFETY & OUTPUT RULES:
             throw new Error(`Authentication failed: No API key available. Please add your Pollinations API key in settings.`);
         }
 
-        console.log(`🔑 Using Pollinations Key: ${effectiveApiKey.substring(0, 7)}... (Server-side)`);
+        console.log(`🔑 Pollinations Key: present (Server-side)`);
 
         let response: Response;
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+        // Scale timeout by capability: reasoning=40s, creative=20s, fast=10s
+        const capabilityTimeout = options.timeout || (
+            options.capability === 'reasoning' ? 40000 :
+            options.capability === 'creative' ? 20000 : 10000
+        );
+        const timeoutId = setTimeout(() => controller.abort(), capabilityTimeout);
 
         try {
             response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
