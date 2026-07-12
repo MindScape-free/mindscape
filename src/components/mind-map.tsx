@@ -362,6 +362,19 @@ export const MindMap = React.memo(({
   useEffect(() => {
     setMountNode(document.body);
   }, []);
+
+  // Mobile guard: Force accordion view on mobile devices and narrow windows
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window !== 'undefined' && window.innerWidth < 768 && viewMode !== 'accordion') {
+        setViewMode('accordion');
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [viewMode]);
+
   const [activeTab, setActiveTab] = useState<'visual' | 'radial' | 'accordion' | 'compare'>('visual');
   const useSearch = true; // Always ON in background
 
@@ -1650,7 +1663,6 @@ export const MindMap = React.memo(({
         isSummarizing={isSummarizing}
         status={status}
         isRegenerating={isRegenerating}
-        useSearch={true}
         useFileAware={useFileAware}
         onToggleFileAware={onToggleFileAware}
         hasSourceFile={!!data.sourceFileContent}
@@ -1704,7 +1716,7 @@ export const MindMap = React.memo(({
                 <ZapOff className="h-12 w-12 text-zinc-700" />
                 <h3 className="text-xl font-bold text-zinc-400">No Content Found</h3>
                 <p className="text-sm text-zinc-600 max-w-xs">
-                  The AI didn't return a structured map for this topic. Try a different topic or regenerate.
+                  The AI didn&apos;t return a structured map for this topic. Try a different topic or regenerate.
                 </p>
               </div>
             ) : (
@@ -1975,3 +1987,5 @@ export const MindMap = React.memo(({
     </div>
   );
 });
+
+MindMap.displayName = 'MindMap';

@@ -290,7 +290,7 @@ This ensures **zero hallucinated headings** and **structural accuracy** before A
 
 The structured content plus user configuration is sent to:
 
-- **Pollinations.ai** (primary provider) — or OpenRouter as backup
+- **Pollinations.ai** (sole provider, with OpenRouter fallback planned in future)
 - Multiple AI flows depending on source type:
   - `generate-mind-map` — general topic-to-map
   - `generate-mind-map-from-pdf` — PDF-specific
@@ -334,30 +334,37 @@ Users don't just view — they **interact**:
 
 # 🏆 Gamification System
 
-| Action | XP Reward |
-|---|---|
-| Create a mind map | +20 XP |
-| Complete a quiz | +15 XP |
-| Perfect quiz score | +10 XP bonus |
-| Daily login | +5 XP |
-| 7-day streak | +30 XP |
-| Pin a chat message | +5 XP |
-| Generate an image | +10 XP |
-| Get an explanation | +5 XP |
-| Rate confidence | +3 XP |
-| Translate a map | +10 XP |
+| Action | XP Reward | Daily Cap |
+|---|---|---|
+| Create a mind map | +20 XP | 10/day |
+| Complete a quiz | +15 XP | 5/day |
+| Perfect score bonus | +20 XP | 1/day |
+| Daily login | +5 XP | 1/day |
+| 3-day streak | +15 XP | 1 per milestone |
+| 7-day streak | +30 XP | 1 per milestone |
+| 30-day streak | +100 XP | 1 per milestone |
+| Pin a chat message | +5 XP | 20/day |
+| Generate an image | +10 XP | 10/day |
+| Get an explanation | +5 XP | 50/day |
+| Rate confidence | +3 XP | 50/day |
+| Translate a map | +10 XP | 5/day |
+| Chat message | +2 XP | 40/day |
+| Study time (10 min) | +3 XP | unlimited |
+| Knowledge Alchemy | +10 XP | 10/day |
 
-**10 Ranks**: Spark → Ember → Torch → Beacon → Luminary → Prism → Nova → Zenith → Singularity → **MindMaster** 🏆
+**10 Correct Ranks**: Spark → Thinker → Explorer → Mapper → Architect → Scholar → Sage → Luminary → Oracle → **MindMaster** 🏆
+
+*Note: The ranks in this document have been corrected to match the production code in `src/types/points.ts`. Previous documentation listed incorrect rank names.*
 
 ---
 
 # 🔧 Stack & Architecture
 
 ```
-Frontend:  Next.js 16 (App Router) + React 19 + TypeScript + Tailwind CSS
+Frontend:  Next.js 16 (App Router) + React 18 + TypeScript + Tailwind CSS
 UI:        Framer Motion + Radix UI + Lucide Icons + shadcn/ui
 Backend:   Next.js Server Actions + Supabase (Postgres + Auth)
-AI:        Pollinations.ai (primary) / OpenRouter (fallback)
+AI:        Pollinations.ai (sole provider)
            Models: Flux (images), Qwen (text), Gemini Search
 Storage:   Supabase DB + Session Storage (client cache)
 Auth:      Supabase Auth (email/password + Google OAuth)

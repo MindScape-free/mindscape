@@ -18,8 +18,8 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
-- **Stack**: Next.js 16 + TypeScript + Tailwind CSS + shadcn/ui + Framer Motion
-- **State**: Context providers (6 nested) + Custom hooks + localStorage
+- **Stack**: Next.js 16 + TypeScript + Tailwind CSS 3.4 + shadcn/ui + Framer Motion 11
+- **State**: Context providers (5 nested: Auth → AIConfig → Notifications → Activity → XP) + Custom hooks (19) + localStorage/sessionStorage
 - **Database**: Supabase PostgreSQL with 10+ tables
 - **AI**: Pollinations.ai for text & image generation
 
@@ -103,13 +103,13 @@ useMultiSource hook collects items → AI synthesizes into one unified map
 
 ## 4. Canvas Experience (Core — `/canvas`)
 
-`CanvasClient.tsx` (1559 lines) is the orchestrator:
+`CanvasClient.tsx` (~1200 lines) is the orchestrator:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  CanvasClient.tsx (orchestrator)                        │
 │                                                         │
-│  ├── MindMap component (2085 lines)                     │
+│  ├── MindMap component (~2000 lines)                    │
 │  │   ├── Accordion hierarchy (parent → children →       │
 │  │   │   nested children)                               │
 │  │   ├── Node actions: Explain, Example, Quiz, Image   │
@@ -317,20 +317,20 @@ Used as a quality gate — deterministic analysis output augments AI prompts wit
 
 ## 13. API Routes
 
-| Route | Method | Purpose |
-|---|---|---|
-| `/api/chat/stream` | POST | SSE streaming chat with search context |
-| `/api/generate-image` | POST/GET | Pollinations image gen (rate-limited) |
-| `/api/generate-audio` | POST | TTS audio summary |
-| `/api/generate-quiz-direct` | POST | Direct quiz generation |
-| `/api/extract` | POST | PDF/content extraction |
-| `/api/scrape-url` | POST | Website scraping via Jina |
-| `/api/youtube-transcript` | POST | YouTube transcript fetch |
-| `/api/models` | GET | Available AI models list |
-| `/api/admin/*` | Various | Dashboard data, stats, recompute |
-| `/api/analytics/track` | POST | Client-side analytics |
-| `/api/stats/public` | GET | Public platform stats |
-| `/api/og` | GET | Open Graph image generation |
+| Route | Method | Purpose | Implementation |
+|---|---|---|---|
+| `/api/chat/stream` | POST | SSE streaming chat with search context | `src/app/api/chat/stream/route.ts` |
+| `/api/generate-image` | POST/GET | Pollinations image gen (rate-limited) | `src/app/api/generate-image/route.ts` |
+| `/api/generate-audio` | POST | TTS audio summary | `src/app/api/generate-audio/route.ts` |
+| `/api/generate-quiz-direct` | POST | Direct quiz generation | `src/app/api/generate-quiz-direct/route.ts` |
+| `/api/extract` | POST | PDF/content extraction | `src/app/api/extract/route.ts` |
+| `/api/scrape-url` | POST | Website scraping via Jina/Cheerio | `src/app/api/scrape-url/route.ts` |
+| `/api/youtube-transcript` | POST | YouTube transcript fetch | `src/app/api/youtube-transcript/route.ts` |
+| `/api/models` | GET | Available AI models list | `src/app/api/models/route.ts` |
+| `/api/admin/*` | Various | Dashboard data, stats, recompute | `src/app/api/admin/*` |
+| `/api/analytics/track` | POST | Client-side analytics | `src/app/api/analytics/track/route.ts` |
+| `/api/stats/public` | GET | Public platform stats | `src/app/api/stats/public/route.ts` |
+| `/api/og` | GET | Open Graph image generation | `src/app/api/og/route.tsx` |
 
 ---
 
@@ -383,15 +383,16 @@ RootLayout (src/app/layout.tsx)
   ├── AuthProvider → AIConfigProvider → PollinationsAuthHandler
   │   → OnboardingWizard → NotificationProvider → ActivityProvider
   │   → XPProvider → TooltipProvider
-  │
-  ├── Navbar (global)
-  │   ├── Logo, Links (Canvas, Community, Library, Changelog)
-  │   ├── Points display (if logged in)
-  │   └── Auth buttons (Login / User menu)
-  │
-  ├── Page Content (varies by route)
-  │
-  └── Toaster (notification stack)
+  │   ├── PerformanceMonitor (wraps all children)
+  │   │   ├── BackgroundGlow
+  │   │   ├── Navbar (global)
+  │   │   │   ├── Logo, Links (Canvas, Community, Library, Changelog)
+  │   │   │   ├── Points display (if logged in)
+  │   │   │   └── Auth buttons (Login / User menu)
+  │   │   ├── Page Content (varies by route)
+  │   │   ├── Toaster (notification stack)
+  │   │   ├── ChangelogDialog
+  │   │   └── ChatPanel (floating, lazy-loaded)
 ```
 
 ---
@@ -439,12 +440,15 @@ RootLayout (src/app/layout.tsx)
 
 ## 18. Environment Variables
 
-```
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-SUPABASE_SERVICE_ROLE_KEY
-NEXT_PUBLIC_ADMIN_USER_IDS
-POLLINATIONS_API_KEY
-YOUTUBE_API_KEY
-NEXT_PUBLIC_APP_URL
-```
+Copy `.env.example` to `.env.local` and configure:
+
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-only) |
+| `NEXT_PUBLIC_ADMIN_USER_IDS` | Comma-separated admin user UUIDs |
+| `POLLINATIONS_API_KEY` | System fallback Pollinations API key |
+| `YOUTUBE_API_KEY` | Google YouTube Data API key |
+| `NEXT_PUBLIC_APP_URL` | App URL (e.g. http://localhost:3000) |
+| `AI_PROVIDER_TIMEOUT` | Optional: AI request timeout in ms (default: 120000) |

@@ -144,7 +144,7 @@ export function useMultiSource(options?: MultiSourceOptions) {
     } catch (err: any) {
       updateSourceItem(id, { status: 'error', error: err.message });
     }
-  }, [addSourceItem, updateSourceItem]);
+  }, [addSourceItem, updateSourceItem, options?.apiKey, options?.userId]);
 
   const clearSources = useCallback(() => {
     setSources([]);

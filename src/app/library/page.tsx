@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { LogIn, Search, Share2, Trash2, Eye, Loader2, Clock, Rocket, Info, ExternalLink, Download, ChevronRight, Sparkles, Copy, Check, Database, Plus, LayoutGrid, Globe, BarChart3, Binary, Layers, Image as ImageIcon } from 'lucide-react';
+import { LogIn, Search, Share2, Trash2, Loader2, Clock, Rocket, Info, ExternalLink, ChevronRight, Sparkles, Copy, Check, Database, Plus, Globe, BarChart3, Binary, Layers, Image as ImageIcon } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { GenerateMindMapOutput } from '@/ai/flows/generate-mind-map';
 import { generateMindMapAction } from '@/app/actions';
-import { Icons } from '@/components/icons';
+
 import { MindMapData } from '@/types/mind-map';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
@@ -33,7 +33,7 @@ import { useNotifications } from '@/contexts/notification-context';
 import { useAIConfig } from '@/contexts/ai-config-context';
 import { categorizeMindMapAction, suggestRelatedTopicsAction } from '@/app/actions/community';
 import { enhanceImagePromptAction, generateThumbnailAction } from '@/app/actions';
-import { RefreshCw, Zap, AlertCircle } from 'lucide-react';
+import { Zap, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FAQSection } from '@/components/faq-section';
 import { LIBRARY_FAQS } from '@/data/faq';
@@ -307,7 +307,11 @@ export default function DashboardPage() {
       }
     }
     return () => { isMounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMapForPreview, user, supabase]);
+  // `config.apiKey`, `config.pollinationsApiKey`, `config.provider`, `refreshBalance`
+  // intentionally omitted: the effect reads them from closure and should only trigger
+  // when the selected preview changes, not when AI config changes.
 
   // Calculate detailed stats for the previewed map
   const previewStats = useMemo(() => {

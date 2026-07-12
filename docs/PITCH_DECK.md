@@ -124,7 +124,7 @@ quadrantChart
          ↓
     [SKEE Engine] (Deterministic extraction)
          ↓
-    [AI Provider: Pollinations.ai / OpenRouter]
+    [AI Provider: Pollinations.ai (Planned: OpenRouter Fallback)]
          ↓
     [Schema Validation → mapToMindMapData sanitization]
          ↓
@@ -148,9 +148,9 @@ quadrantChart
 |---|---|
 | **Tech Stack** | Next.js 16, Supabase, Pollinations.ai, TypeScript |
 | **AI Models** | Flux (images), Qwen (text), Gemini Search |
-| **Frontend** | React 19, Framer Motion, Tailwind, Radix UI |
+| **Frontend** | React 18, Framer Motion, Tailwind, Radix UI |
 | **Auth** | Email/Password + Google OAuth |
-| **Code Quality** | Zero `as any` casts, 100% typed codebase |
+| **Code Quality** | TypeScript strict mode, Zod schema validation |
 | **Security** | Input sanitization, rate limiting, cache lifecycle management |
 
 ---

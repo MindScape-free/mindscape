@@ -3,7 +3,6 @@
 
 import {
   AnalyzeImageContentInput,
-  AnalyzeImageContentInputSchema,
   AnalyzeImageContentOutput,
   AnalyzeImageContentOutputSchema,
 } from '@/ai/schemas/analyze-image-content-schema';

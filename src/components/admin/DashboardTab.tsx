@@ -66,7 +66,7 @@ interface DashboardTabProps {
   setActiveTab: (tab: AdminTab) => void;
 }
 
-export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
+const DashboardTabInner: React.FC<DashboardTabProps> = ({
   stats,
   metrics,
   healthScore,
@@ -855,4 +855,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = React.memo(({
       )}
     </div>
   );
-});
+};
+
+export const DashboardTab = React.memo(DashboardTabInner);

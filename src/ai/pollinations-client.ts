@@ -238,7 +238,7 @@ CRITICAL SAFETY & OUTPUT RULES:
                 } else if (errorBody && typeof errorBody === 'object') {
                     errorMessage = JSON.stringify(errorBody);
                 }
-            } catch (e) {
+            } catch {
                 try {
                     errorMessage = await response.text() || response.statusText;
                 } catch {
@@ -320,7 +320,7 @@ CRITICAL SAFETY & OUTPUT RULES:
                 // 3. Try specialized 'jsonrepair' library
                 console.log('🔧 Attempting jsonrepair...');
                 parsedResponse = JSON.parse(jsonrepair(targetText));
-            } catch (repairError) {
+            } catch {
                 console.warn('⚠️ jsonrepair failed, falling back to manual structural repair...');
 
                 // 4. Manual Structural Repair for Truncated Responses

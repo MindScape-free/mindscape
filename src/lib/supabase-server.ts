@@ -58,7 +58,7 @@ export async function isUserAdminServer(userId: string): Promise<boolean> {
   if (!userId) return false;
   
   // 1. Check Env Variable (Master override)
-  const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '03504efc-d50a-4e84-ba24-1d82ef41fd82').split(',').map(s => s.trim());
+  const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
   if (adminIds.includes(userId)) return true;
 
   // 2. Check Database column

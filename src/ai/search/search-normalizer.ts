@@ -99,7 +99,7 @@ export function normalizeSearchResults(rawResults: any, query: string): SearchCo
         const citations = rawResults.citations || rawResults.choices?.[0]?.message?.citations || [];
         if (Array.isArray(citations) && citations.length > 0) {
             console.log(`🔗 Found ${citations.length} direct citation(s)`);
-            citations.forEach((citation, idx) => {
+            citations.forEach((citation) => {
                 if (typeof citation === 'string' && citation.startsWith('http')) {
                     sources.push({
                         title: getProfessionalTitle(citation),
@@ -138,8 +138,8 @@ export function normalizeSearchResults(rawResults: any, query: string): SearchCo
                                 }
                             }
                         }
-                    } catch (e) {
-                        console.warn('⚠️ Failed to parse tool call arguments:', e);
+                    } catch {
+                        console.warn('⚠️ Failed to parse tool call arguments');
                     }
                 }
             }
@@ -161,7 +161,7 @@ export function normalizeSearchResults(rawResults: any, query: string): SearchCo
             const urlRegex = /https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g;
             const urls = Array.from(new Set(content.match(urlRegex) || [])); // Unique URLs
 
-            for (const [idx, url] of urls.slice(0, 8).entries()) { // Scan more URLs
+            for (const url of urls.slice(0, 8)) { // Scan more URLs
                 try {
                     const urlObj = new URL(url);
                     // Filter out non-informative or common base domains that aren't real sources
@@ -172,7 +172,7 @@ export function normalizeSearchResults(rawResults: any, query: string): SearchCo
                         title: getProfessionalTitle(url),
                         url: url,
                     });
-                } catch (e) {
+                } catch {
                     console.warn(`⚠️ Invalid URL in search content, skipping: ${url}`);
                 }
             }
@@ -215,8 +215,8 @@ export function normalizeSearchResults(rawResults: any, query: string): SearchCo
                                 }
                             }
                         }
-                    } catch (e) {
-                        console.warn('⚠️ Failed to parse image from tool call arguments:', e);
+                    } catch {
+                        console.warn('⚠️ Failed to parse image from tool call arguments');
                     }
                 }
             }
@@ -285,7 +285,7 @@ export function filterAuthoritativeSources(sources: SearchSource[]): SearchSourc
                     break;
                 }
             }
-        } catch (e) {
+        } catch {
             // Invalid URL, give it a low score but don't fail
             console.warn(`⚠️ Invalid URL in source: ${source.url}`);
             score = -10;

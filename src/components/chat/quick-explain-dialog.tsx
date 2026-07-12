@@ -195,7 +195,7 @@ export function QuickExplainDrawer({
             bottom: 0,
             right: '100%',
             width: '380px',
-            zIndex: -1,
+            zIndex: 50,
           }}
           id="quick-explain-drawer"
           className="glassmorphism flex flex-col h-full shadow-2xl"

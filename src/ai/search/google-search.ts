@@ -88,7 +88,7 @@ Identify and provide direct image URLs (jpg, png, webp) for visual reference.`
             try {
                 const errorData = await response.json();
                 errorMessage = errorData.message || errorData.error?.message || JSON.stringify(errorData);
-            } catch (e) {
+            } catch {
                 try {
                     const text = await response.text();
                     if (text) errorMessage = text.substring(0, 500);

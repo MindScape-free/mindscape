@@ -29,7 +29,7 @@ export type SynthesizeNodesOutput = z.infer<typeof SynthesizeNodesOutputSchema>;
 export async function synthesizeNodes(
   input: SynthesizeNodesInput & { apiKey?: string; provider?: AIProvider }
 ): Promise<SynthesizeNodesOutput> {
-  const { nodeA, nodeB, topic, persona, apiKey, provider } = input;
+  const { nodeA, nodeB, topic, apiKey, provider } = input;
 
   const systemPrompt = `You are a **Knowledge Alchemist** ⚗️.
 Your task is to perform "Synthesis" between two distinct concepts within the context of "${topic}".

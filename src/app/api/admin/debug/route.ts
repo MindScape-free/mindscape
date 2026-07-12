@@ -1,10 +1,43 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase-server';
+import { getSupabaseAdmin, isUserAdminServer } from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
 
-export async function GET() {
+async function verifyAdmin(request: Request): Promise<{ authorized: boolean; uid?: string; error?: string }> {
   try {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return { authorized: false, error: 'Missing or invalid Authorization header' };
+    }
+
+    const idToken = authHeader.substring(7);
+    const supabase = getSupabaseAdmin();
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser(idToken);
+    
+    if (authError || !user) {
+      return { authorized: false, error: authError?.message || 'Token verification failed' };
+    }
+
+    const isAdmin = await isUserAdminServer(user.id);
+    if (!isAdmin) {
+      return { authorized: false, uid: user.id, error: 'Unauthorized: Not an admin' };
+    }
+
+    return { authorized: true, uid: user.id };
+  } catch (error: any) {
+    console.error('RBAC verification failed:', error.message);
+    return { authorized: false, error: error.message || 'Token verification failed' };
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const authCheck = await verifyAdmin(request);
+    if (!authCheck.authorized) {
+      return NextResponse.json({ error: authCheck.error || 'Unauthorized' }, { status: 403 });
+    }
+
     const supabase = getSupabaseAdmin();
     
     if (!supabase) {

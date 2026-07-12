@@ -156,6 +156,44 @@ function mapEventRow(row: any): UserEvent {
 
 /** Map a UserProfile to the shape expected by the admin dashboard UI (camelCase, .statistics sub-object) */
 function profileToLegacyUser(profile: UserProfile): any {
+  const normalizedPersonaCounts: Record<string, number> = { Teacher: 0, Concise: 0, Creative: 0, Sage: 0 };
+  if (profile.persona_breakdown) {
+    for (const [key, val] of Object.entries(profile.persona_breakdown)) {
+      const lowerKey = key.toLowerCase().trim();
+      let normalizedKey = 'Teacher';
+      if (lowerKey === 'concise') {
+        normalizedKey = 'Concise';
+      } else if (lowerKey === 'creative') {
+        normalizedKey = 'Creative';
+      } else if (lowerKey === 'sage' || lowerKey.includes('sage')) {
+        normalizedKey = 'Sage';
+      }
+      normalizedPersonaCounts[normalizedKey] = (normalizedPersonaCounts[normalizedKey] || 0) + safeInt(val);
+    }
+  }
+
+  const normalizedModeCounts = { single: 0, compare: 0, multi: 0 };
+  if (profile.mode_breakdown) {
+    normalizedModeCounts.single = safeInt(profile.mode_breakdown.single || profile.mode_breakdown.Single || 0);
+    normalizedModeCounts.compare = safeInt(profile.mode_breakdown.compare || profile.mode_breakdown.Compare || 0);
+    normalizedModeCounts.multi = safeInt(profile.mode_breakdown.multi || profile.mode_breakdown.Multi || 0);
+  }
+
+  const normalizedDepthCounts = { low: 0, medium: 0, deep: 0 };
+  if (profile.depth_breakdown) {
+    normalizedDepthCounts.low = safeInt(profile.depth_breakdown.low || profile.depth_breakdown.Low || 0);
+    normalizedDepthCounts.medium = safeInt(profile.depth_breakdown.medium || profile.depth_breakdown.Medium || 0);
+    normalizedDepthCounts.deep = safeInt(profile.depth_breakdown.deep || profile.depth_breakdown.Deep || 0);
+  }
+
+  const normalizedSourceCounts: Record<string, number> = { text: 0, website: 0, youtube: 0, pdf: 0, image: 0, multi: 0 };
+  if (profile.source_breakdown) {
+    for (const [key, val] of Object.entries(profile.source_breakdown)) {
+      const lowerKey = key.toLowerCase().trim();
+      normalizedSourceCounts[lowerKey] = (normalizedSourceCounts[lowerKey] || 0) + safeInt(val);
+    }
+  }
+
   return {
     id: profile.user_id,
     displayName: profile.display_name || profile.email?.split('@')[0] || 'Unknown',
@@ -170,6 +208,11 @@ function profileToLegacyUser(profile: UserProfile): any {
       currentStreak: profile.current_streak,
       longestStreak: profile.longest_streak,
       lastActiveDate: profile.last_active_date,
+      version: 2,
+      modeCounts: normalizedModeCounts,
+      depthCounts: normalizedDepthCounts,
+      sourceCounts: normalizedSourceCounts,
+      personaCounts: normalizedPersonaCounts,
     },
     activity: profile.daily_activity,
     unlockedAchievements: profile.unlocked_achievements,
@@ -297,19 +340,30 @@ function computeMapAnalytics(profiles: UserProfile[]): typeof DEFAULT_MAP_ANALYT
     // Aggregate source breakdown
     if (p.source_breakdown) {
       for (const [key, val] of Object.entries(p.source_breakdown)) {
-        result.sourceCounts[key] = (result.sourceCounts[key] || 0) + safeInt(val);
+        const lowerKey = key.toLowerCase().trim();
+        result.sourceCounts[lowerKey] = (result.sourceCounts[lowerKey] || 0) + safeInt(val);
       }
     }
 
     // Aggregate persona breakdown
     if (p.persona_breakdown) {
       for (const [key, val] of Object.entries(p.persona_breakdown)) {
-        result.personaCounts[key] = (result.personaCounts[key] || 0) + safeInt(val);
+        const lowerKey = key.toLowerCase().trim();
+        let normalizedKey = 'Teacher';
+        if (lowerKey === 'concise') {
+          normalizedKey = 'Concise';
+        } else if (lowerKey === 'creative') {
+          normalizedKey = 'Creative';
+        } else if (lowerKey === 'sage' || lowerKey.includes('sage')) {
+          normalizedKey = 'Sage';
+        }
+        result.personaCounts[normalizedKey] = (result.personaCounts[normalizedKey] || 0) + safeInt(val);
       }
     }
   }
 
-  result.totalAnalyzed = totalMaps;    result.avgNodesPerMap = totalMaps > 0 ? Math.round((totalNodes / totalMaps) * 10) / 10 : 0;
+  result.totalAnalyzed = totalMaps;
+  result.avgNodesPerMap = totalMaps > 0 ? Math.round((totalNodes / totalMaps) * 10) / 10 : 0;
 
   // Determine top persona
   let maxCount = 0;

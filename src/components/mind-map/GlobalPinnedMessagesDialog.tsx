@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -58,7 +58,7 @@ export function GlobalPinnedMessagesDialog({
 
   const { user, supabase } = useAuth();
 
-  const fetchAllPinnedMessages = async () => {
+  const fetchAllPinnedMessages = useCallback(async () => {
     if (!user || !supabase) return;
     setIsLoadingAllPins(true);
     try {
@@ -75,13 +75,16 @@ export function GlobalPinnedMessagesDialog({
     } finally {
       setIsLoadingAllPins(false);
     }
-  };
+  }, [user, supabase]);
 
   useEffect(() => {
     if (activeTab === 'all' && !allPinnedMessages.length) {
-      fetchAllPinnedMessages();
+      const timeout = setTimeout(() => {
+        fetchAllPinnedMessages();
+      }, 0);
+      return () => clearTimeout(timeout);
     }
-  }, [activeTab]);
+  }, [activeTab, allPinnedMessages.length, fetchAllPinnedMessages]);
 
   const currentPins = activeTab === 'map' ? pinnedMessages : allPinnedMessages;
 
@@ -125,7 +128,10 @@ export function GlobalPinnedMessagesDialog({
     return [...filtered].sort((a, b) =>
       sortBy === 'newest' ? b.createdAt - a.createdAt : a.createdAt - b.createdAt
     );
-  }, [currentPins, searchQuery, sortBy, allPinnedMessages]);
+  }, [currentPins, searchQuery, sortBy]);
+  // `allPinnedMessages` intentionally excluded: `currentPins` is derived from it,
+  // so changes to `allPinnedMessages` already trigger recomputation via `currentPins`.
+  // Including it would cause unnecessary re-runs when the `all` tab is not active.
 
   return (
     <>

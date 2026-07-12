@@ -17,7 +17,7 @@ export default function FeedbackPage() {
     const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    const fetchFeedback = async () => {
+    const fetchFeedback = React.useCallback(async () => {
         if (!supabase) return;
         setIsLoading(true);
         const { data } = await supabase
@@ -33,11 +33,11 @@ export default function FeedbackPage() {
         }));
         setFeedbacks(mappedData as Feedback[]);
         setIsLoading(false);
-    };
+    }, [supabase]);
 
     useEffect(() => {
         fetchFeedback();
-    }, [supabase]);
+    }, [fetchFeedback]);
 
     return (
         <div className="min-h-screen bg-[#0D0D0D] text-[#EAEAEA] font-sans selection:bg-primary/30 overflow-x-hidden">

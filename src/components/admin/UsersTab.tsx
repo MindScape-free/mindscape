@@ -32,7 +32,7 @@ const VIRTUALIZATION_THRESHOLD = 50;
 const CARD_HEIGHT = 150;
 const BUFFER_CARDS = 3;
 
-export const UsersTab: React.FC<UsersTabProps> = memo(({
+const UsersTabInner: React.FC<UsersTabProps> = ({
   searchTerm,
   setSearchTerm,
   sortBy,
@@ -235,14 +235,16 @@ export const UsersTab: React.FC<UsersTabProps> = memo(({
       )}
     </div>
   );
-});
+};
+
+export const UsersTab = memo(UsersTabInner);
 
 interface UserCardProps {
   user: any;
   onSelect: () => void;
 }
 
-const UserCard = memo(({ user: u, onSelect }: UserCardProps) => (
+const UserCardInner = ({ user: u, onSelect }: UserCardProps) => (
   <motion.button
     whileHover={{ y: -3, scale: 1.01 }}
     whileTap={{ scale: 0.99 }}
@@ -308,4 +310,6 @@ const UserCard = memo(({ user: u, onSelect }: UserCardProps) => (
       </div>
     </div>
   </motion.button>
-));
+);
+
+const UserCard = memo(UserCardInner);

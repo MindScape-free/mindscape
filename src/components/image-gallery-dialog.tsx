@@ -192,7 +192,7 @@ export function ImageGalleryDialog({
                         </div>
                         <p className="text-zinc-200 leading-relaxed italic line-clamp-4 bg-zinc-900/50 p-2 rounded-lg border border-zinc-800/50">
                           {/* @ts-ignore - backward compatibility */}
-                          "{image.settings?.enhancedPrompt || image.settings?.prompt || image.description}"
+                          &ldquo;{image.settings?.enhancedPrompt || image.settings?.prompt || image.description}&rdquo;
                         </p>
                       </div>
 
@@ -204,7 +204,7 @@ export function ImageGalleryDialog({
                             <span>Initial Concept</span>
                           </div>
                           <p className="text-zinc-400 leading-relaxed line-clamp-2 text-[11px] px-1">
-                            "{(image.settings as any).initialPrompt}"
+                            &ldquo;{(image.settings as any).initialPrompt}&rdquo;
                           </p>
                         </div>
                       )}

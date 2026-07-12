@@ -101,10 +101,11 @@ export function XPProvider({ children }: { children: React.ReactNode }) {
     }
 
     return () => { processingRef.current = false; };
-    // `supabase` is created fresh inside the callback via getSupabaseClient(),
-    // so it is not a stale-closure dependency. `awardXP` is already listed.
-    // `user?.id` covers the `user` object for identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, awardXP]);
+  // Deps: `user?.id` covers identity changes. `awardXP` is memoized.
+  // `supabase` is created fresh via getSupabaseClient() — not a stale closure.
+  // The `user` object itself is intentionally excluded: only `user.id` triggers refresh.
 
   const dismissToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));

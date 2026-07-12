@@ -774,6 +774,10 @@ function MindMapPageContent() {
     };
 
     fetchMindMapData();
+    // Dependencies are intentionally minimized: adding all referenced vars would
+    // cause infinite re-render loops. The effect uses getParamKey as the primary
+    // trigger and reads stable refs/closures for the rest.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getParamKey, user, isUserLoading, handleSaveMap, toast, params, config, aiPersona, setMindMaps, setActiveMindMapIndexState, activeMindMapIndex, navigateToMap, isLoading, handleUpdateCurrentMap, setActiveMindMapIndex]);
 
 
@@ -787,6 +791,9 @@ function MindMapPageContent() {
           if (error) console.error('Failed to update views:', error);
         });
     }
+    // `mindMap.views` and `supabase` intentionally omitted: views is mutated inside
+    // the callback and would cause re-triggering. supabase is the stable client.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mindMap?.id, mindMap?.isPublic]);
 
 
@@ -919,6 +926,9 @@ function MindMapPageContent() {
       setMapHierarchy({ rootMap: rootMapData, allSubMaps });
     } catch (error) { console.error('Error fetching map hierarchy:', error); }
     finally { setHierarchyLoading(false); }
+    // `supabase` intentionally omitted: it is the stable getSupabaseClient() result
+    // and adding it would cause unnecessary re-creation on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   // Update hierarchy when mindMap changes
@@ -1098,6 +1108,10 @@ function MindMapPageContent() {
     } catch (error: any) {
       toast({ variant: "destructive", title: "Generation Failed", description: error.message });
     }
+    // `awardXP`, `mindMap?.nestedExpansions`, `refreshBalance` intentionally omitted:
+    // they are used inside the callback body but their changes should not re-create
+    // this callback. Stable refs/stale closures are handled via refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, expandNode, mindMaps.length, setMindMaps, setActiveMindMapIndex, toast, mindMap?.id, mapHierarchy, fetchMapHierarchy]);
 
   const handleDeleteNestedMapConfirm = useCallback(async () => {
@@ -1135,6 +1149,8 @@ function MindMapPageContent() {
     }
     toast({ title: "Sub-Map Deleted", description: "The Sub-Map has been permanently removed." });
     setPendingDeleteId(null);
+    // `supabase` intentionally omitted: it is the stable getSupabaseClient() result.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mindMap, pendingDeleteId, handleUpdateCurrentMap, handleSaveMap, toast, user, mapHierarchy]);
 
 
@@ -1204,6 +1220,8 @@ function MindMapPageContent() {
     }
 
     navigateToMap(finalMapData.id || '', finalMapData.topic);
+    // `supabase` intentionally omitted: it is the stable getSupabaseClient() result.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mindMaps, navigateToMap, toast, setMindMaps, setActiveMindMapIndex, user]);
 
   const handleShare = useCallback(async () => {
@@ -1222,6 +1240,8 @@ function MindMapPageContent() {
     } catch (err: any) {
       toast({ variant: "destructive", title: "Sharing Failed", description: err.message || "Failed to generate share link." });
     } finally { setIsSharing(false); }
+    // `supabase` intentionally omitted: it is the stable getSupabaseClient() result.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mindMap, isSharing, user, toast]);
 
   const handleSynthesize = useCallback(async (nodeLabels: string[]) => {

@@ -1,38 +1,23 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient as createBrowserClient } from './client';
 import { getEnv } from './env';
 
 let clientInstance: SupabaseClient | null = null;
 
-function getSupabaseConfig() {
-  const { supabaseUrl, supabaseAnonKey } = getEnv();
-  return { url: supabaseUrl, key: supabaseAnonKey };
-}
-
 export function getSupabaseClient(): SupabaseClient {
   if (clientInstance) return clientInstance;
-  const { url, key } = getSupabaseConfig();
-
-  console.log('[Supabase] Initializing client with:', url);
-  clientInstance = createClient(url, key, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-    }
-  });
+  clientInstance = createBrowserClient();
   return clientInstance;
 }
 
 export function getSupabaseClientWithOptions(options?: { persistSession?: boolean }) {
-  // Always create a fresh client when options are specified (never return singleton)
   if (!options) {
     if (clientInstance) return clientInstance;
-    clientInstance = createClient(getSupabaseConfig().url, getSupabaseConfig().key, {
-      auth: { persistSession: true, autoRefreshToken: true },
-    });
+    clientInstance = createBrowserClient();
     return clientInstance;
   }
-  const { url, key } = getSupabaseConfig();
-  return createClient(url, key, {
+  const { supabaseUrl, supabaseAnonKey } = getEnv();
+  return createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: options.persistSession ?? true,
       autoRefreshToken: true,

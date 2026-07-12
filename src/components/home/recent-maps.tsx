@@ -32,9 +32,12 @@ export function RecentMaps() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (isUserLoading || !user) {
-      setIsLoading(false);
-      return;
+    if (isUserLoading) return;
+    if (!user) {
+      const timeoutId = setTimeout(() => {
+        setIsLoading(false);
+      }, 0);
+      return () => clearTimeout(timeoutId);
     }
 
     let mounted = true;

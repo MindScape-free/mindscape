@@ -16,7 +16,7 @@ interface LogsTabProps {
   setLogFilter: (filter: ActivityCategory) => void;
 }
 
-export const LogsTab: React.FC<LogsTabProps> = React.memo(({
+const LogsTabInner: React.FC<LogsTabProps> = ({
   activityLogs,
   isLogsLoading,
   loadActivityLogs,
@@ -149,4 +149,6 @@ export const LogsTab: React.FC<LogsTabProps> = React.memo(({
       </motion.div>
     </div>
   );
-});
+};
+
+export const LogsTab = React.memo(LogsTabInner);

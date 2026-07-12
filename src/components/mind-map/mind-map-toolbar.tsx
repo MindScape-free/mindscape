@@ -2,7 +2,6 @@
 
 import React from 'react';
 import {
-    Languages,
     Zap,
     Minimize2,
     Maximize2,
@@ -13,41 +12,27 @@ import {
     Library,
     Network,
     Image as ImageIcon,
-    Database,
     Loader2,
     RefreshCw,
     Copy,
-    Activity,
-    AlertCircle as AlertIcon,
     Table,
     Layers,
-    Share,
     BookOpen,
-    X,
-    Bot,
-    UserRound,
-    Palette,
-    Brain,
     BrainCircuit,
     Sparkles,
-    HelpCircle,
-    Search,
     FileText,
     Pin,
-    Trash2,
 } from 'lucide-react';
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
-    SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import {
     Tooltip,
     TooltipContent,
-    TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { languages } from '@/lib/languages';
@@ -86,15 +71,12 @@ interface MindMapToolbarProps {
     isSummarizing?: boolean;
     isSharing?: boolean;
     status?: MindMapStatus;
-    useSearch?: boolean;
-    onToggleSearch?: () => void;
     useFileAware?: boolean;
     onToggleFileAware?: () => void;
     hasSourceFile?: boolean;
     onViewSource?: () => void;
     pinnedMessagesCount?: number;
     onOpenPinnedMessages?: () => void;
-    onOpenChat?: () => void;
     isSynthesisMode?: boolean;
     onToggleSynthesis?: () => void;
 }
@@ -131,15 +113,12 @@ export const MindMapToolbar = ({
     isSummarizing,
     isSharing = false,
     status = 'idle',
-    useSearch = false,
-    onToggleSearch,
     useFileAware = false,
     onToggleFileAware,
     hasSourceFile = false,
     onViewSource,
     pinnedMessagesCount = 0,
     onOpenPinnedMessages,
-    onOpenChat,
     isSynthesisMode = false,
     onToggleSynthesis,
 }: MindMapToolbarProps) => {
@@ -174,22 +153,24 @@ export const MindMapToolbar = ({
                                 <TooltipContent className="glassmorphism"><p>Explore View</p></TooltipContent>
                             </Tooltip>
 
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => onViewModeChange('map')}
-                                        className={cn(
-                                            "h-8 w-8 rounded-lg transition-all",
-                                            viewMode === 'map' ? "bg-purple-500/20 text-purple-400 shadow-sm" : "text-zinc-500 hover:text-zinc-300"
-                                        )}
-                                    >
-                                        <Layers className="w-4 h-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="glassmorphism"><p>Map View</p></TooltipContent>
-                            </Tooltip>
+                            <div className="hidden md:inline-flex">
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => onViewModeChange('map')}
+                                            className={cn(
+                                                "h-8 w-8 rounded-lg transition-all",
+                                                viewMode === 'map' ? "bg-purple-500/20 text-purple-400 shadow-sm" : "text-zinc-500 hover:text-zinc-300"
+                                            )}
+                                        >
+                                            <Layers className="w-4 h-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="glassmorphism"><p>Map View</p></TooltipContent>
+                                </Tooltip>
+                            </div>
 
                         </div>
                     )}

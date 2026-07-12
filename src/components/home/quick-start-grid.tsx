@@ -378,12 +378,15 @@ export function QuickStartGrid({ onSelectTopic, visible = true }: QuickStartGrid
   }, []);
 
   useEffect(() => {
-    let filtered = QUICK_START_TOPICS;
-    if (selectedCategory !== 'All') {
-      filtered = QUICK_START_TOPICS.filter(t => t.category === selectedCategory);
-    }
-    setShuffled([...filtered].sort(() => 0.5 - Math.random()));
-    setVisibleCount(8);
+    const timeoutId = setTimeout(() => {
+      let filtered = QUICK_START_TOPICS;
+      if (selectedCategory !== 'All') {
+        filtered = QUICK_START_TOPICS.filter(t => t.category === selectedCategory);
+      }
+      setShuffled([...filtered].sort(() => 0.5 - Math.random()));
+      setVisibleCount(8);
+    }, 0);
+    return () => clearTimeout(timeoutId);
   }, [selectedCategory]);
 
   if (!visible) return null;

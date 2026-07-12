@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, createRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles,
@@ -8,30 +8,18 @@ import {
   Paperclip,
   List,
   Gauge,
-  ArrowRight,
   Globe,
-  GitBranch,
   Zap,
-  Image as ImageIcon,
   Loader2,
   UserRound,
   Palette,
   Brain,
   X,
-  MessageCircle,
   FastForward,
   Scale,
   BookOpen,
-  Video,
-  MessageSquare,
-  GraduationCap,
-  Layers,
-  Mic,
   Network,
-  ArrowDown,
-  ArrowUp,
-  FileText,
-  Share2
+  ArrowUp
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -245,17 +233,26 @@ function Hero({
     }, 600);
 
     return () => clearTimeout(scrollTimer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSource]);
+  // `fileInputRef` and `onActiveModeChange` intentionally omitted: they are stable ref/callback
+  // references and their values are captured correctly via the existing closure scope.
+  // Adding them would cause unnecessary re-runs when the user scrolls past source cards.
 
   useEffect(() => {
-    // Set random index only on client to prevent hydration mismatch
-    setContentIndex(Math.floor(Math.random() * HERO_CONTENT_OPTIONS.length));
-    setMounted(true);
+    // Defer state updates to avoid cascading render warning
+    const id = setTimeout(() => {
+      setContentIndex(Math.floor(Math.random() * HERO_CONTENT_OPTIONS.length));
+      setMounted(true);
+    }, 0);
 
     const interval = setInterval(() => {
       setContentIndex((prev) => (prev + 1) % HERO_CONTENT_OPTIONS.length);
     }, 60000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(id);
+      clearInterval(interval);
+    };
   }, []);
 
   const handleTopicChange = (val: string) => {

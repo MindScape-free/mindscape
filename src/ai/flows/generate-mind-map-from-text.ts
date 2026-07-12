@@ -3,7 +3,6 @@
 
 import {
   GenerateMindMapFromTextInput,
-  GenerateMindMapFromTextInputSchema,
   GenerateMindMapFromTextOutput,
   GenerateMindMapFromTextOutputSchema,
 } from '@/ai/schemas/generate-mind-map-from-text-schema';

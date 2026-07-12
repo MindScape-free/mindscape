@@ -14,7 +14,7 @@ const SYSTEM_GUARANTEES = `SYSTEM GUARANTEES:
 export async function suggestRelatedTopics(
     input: { topic: string; summary?: string; provider?: AIProvider; apiKey?: string }
 ): Promise<{ topics: string[] }> {
-    const { topic, summary, provider = 'pollinations', apiKey } = input;
+    const { topic, summary, apiKey } = input;
 
     const systemPrompt = `${SYSTEM_GUARANTEES}
 

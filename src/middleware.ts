@@ -14,6 +14,7 @@ const publicRoutes = new Set([
   '/api/auth',
   '/api/stats/public',
   '/api/models',
+  '/api/analytics/track', // Public analytics — handles anonymous events (user_id = null)
   '/robots.txt',
   '/sitemap.xml',
 ])

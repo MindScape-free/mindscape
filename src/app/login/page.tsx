@@ -13,9 +13,9 @@ function LoginForm() {
 
   useEffect(() => {
     if (!isUserLoading && user) {
-      router.push(redirect);
+      window.location.replace(redirect);
     }
-  }, [user, isUserLoading, redirect, router]);
+  }, [user, isUserLoading, redirect]);
 
   const handleSuccess = () => {
     router.push(redirect);

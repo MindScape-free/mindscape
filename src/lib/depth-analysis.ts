@@ -1,5 +1,3 @@
-'use client';
-
 import { DepthSuggestion, DepthAnalysis } from '@/types/mind-map';
 
 const KEYWORD_CATEGORIES = {
@@ -54,6 +52,13 @@ const LOW_TOPICS = new Set([
   'money', 'coin', 'paper', 'pencil', 'bag', 'shoe', 'hat', 'shirt', 'pants',
 ]);
 
+/**
+ * Async wrapper of analyzeTopicComplexity for server-side usage.
+ */
+export async function analyzeTopicComplexityAsync(topic: string): Promise<DepthAnalysis> {
+  return analyzeTopicComplexity(topic);
+}
+
 export function analyzeTopicComplexity(topic: string): DepthAnalysis {
   const t = topic.toLowerCase().trim();
   const words = t.split(/\s+/);
@@ -92,6 +97,13 @@ export function analyzeTopicComplexity(topic: string): DepthAnalysis {
   return scores;
 }
 
+/**
+ * Async wrapper of getSuggestedItemCount for server-side usage.
+ */
+export async function getSuggestedItemCountAsync(depth: 'low' | 'medium' | 'deep', analysis: DepthAnalysis): Promise<{ min: number; max: number; label: string }> {
+  return getSuggestedItemCount(depth, analysis);
+}
+
 export function getSuggestedItemCount(depth: 'low' | 'medium' | 'deep', analysis: DepthAnalysis): { min: number; max: number; label: string } {
   const baseRanges = {
     low: { min: 24, max: 40, label: 'Quick Overview' },
@@ -107,6 +119,21 @@ export function getSuggestedItemCount(depth: 'low' | 'medium' | 'deep', analysis
     max: base.max + bonus,
     label: base.label,
   };
+}
+
+/**
+ * Async wrapper of resolveDepthWithConfidence for server-side usage.
+ */
+export async function resolveDepthWithConfidenceAsync(topic: string): Promise<DepthSuggestion> {
+  return resolveDepthWithConfidence(topic);
+}
+
+/**
+ * Fast rule-based complexity analyzer - returns just the depth string.
+ */
+export async function resolveDepthFast(topic: string): Promise<'low' | 'medium' | 'deep'> {
+  const suggestion = await resolveDepthWithConfidenceAsync(topic);
+  return suggestion.depth;
 }
 
 export function resolveDepthWithConfidence(topic: string): DepthSuggestion {

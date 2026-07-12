@@ -1,6 +1,6 @@
 'use server';
 
-import { GenerateComparisonMapInputSchema, CompareMindMapSchema } from './schema';
+import { CompareMindMapSchema } from './schema';
 import { systemPrompt, userPromptTemplate } from './prompt';
 import { generateContent, AIProvider } from '@/ai/client-dispatcher';
 import { z } from 'zod';

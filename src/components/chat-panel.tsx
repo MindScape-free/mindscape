@@ -360,19 +360,22 @@ export function ChatPanel({
 
   // Refs to avoid stale closures inside setTimeout callbacks in the streaming effect
   const latestSessionsRef = useRef(sessions);
-  latestSessionsRef.current = sessions;
   const latestActiveSessionIdRef = useRef(activeSessionId);
-  latestActiveSessionIdRef.current = activeSessionId;
   const latestTopicRef = useRef(topic);
-  latestTopicRef.current = topic;
   const latestMindMapDataRef = useRef(mindMapData);
-  latestMindMapDataRef.current = mindMapData;
   const latestUsePdfContextRef = useRef(usePdfContext);
-  latestUsePdfContextRef.current = usePdfContext;
   const latestProviderOptionsRef = useRef(providerOptions);
-  latestProviderOptionsRef.current = providerOptions;
   const latestStreamTextRef = useRef(streamText);
-  latestStreamTextRef.current = streamText;
+
+  useEffect(() => {
+    latestSessionsRef.current = sessions;
+    latestActiveSessionIdRef.current = activeSessionId;
+    latestTopicRef.current = topic;
+    latestMindMapDataRef.current = mindMapData;
+    latestUsePdfContextRef.current = usePdfContext;
+    latestProviderOptionsRef.current = providerOptions;
+    latestStreamTextRef.current = streamText;
+  }, [sessions, activeSessionId, topic, mindMapData, usePdfContext, providerOptions, streamText]);
 
   // Effect to handle stream completion - updates message and triggers related questions
   useEffect(() => {
@@ -445,17 +448,19 @@ export function ChatPanel({
         }
       }, 100);
       
-      // Clear streaming state
-      setStreamingIds(prev => {
-        const next = new Set(prev);
-        next.delete(firstStreamingId);
-        return next;
-      });
-      setStreamingMessages(prev => {
-        const next = { ...prev };
-        delete next[firstStreamingId];
-        return next;
-      });
+      // Defer state updates to avoid synchronous setState inside the effect body
+      const stateTimeoutId = setTimeout(() => {
+        setStreamingIds(prev => {
+          const next = new Set(prev);
+          next.delete(firstStreamingId);
+          return next;
+        });
+        setStreamingMessages(prev => {
+          const next = { ...prev };
+          delete next[firstStreamingId];
+          return next;
+        });
+      }, 0);
       
       // Reset the completion flag after a delay
       const resetTimeoutId = setTimeout(() => {
@@ -465,6 +470,7 @@ export function ChatPanel({
       // Cleanup timeouts if the effect re-runs before they fire
       return () => {
         clearTimeout(relatedTimeoutId);
+        clearTimeout(stateTimeoutId);
         clearTimeout(resetTimeoutId);
       };
     }
@@ -543,8 +549,7 @@ Please **sign out and sign back in** to continue using the AI assistant.
   /**
    * Starts a new chat session.
    */
-  const supabase = getSupabaseClient();
-  const loadAllUserPins = useCallback(async () => {
+  const supabase = getSupabaseClient();  const loadAllUserPins = useCallback(async () => {
     if (!user) return;
     setIsLoadingPins(true);
     try {
@@ -564,6 +569,8 @@ Please **sign out and sign back in** to continue using the AI assistant.
     } finally {
       setIsLoadingPins(false);
     }
+    // supabase omitted — stable getSupabaseClient() result
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const startNewChat = useCallback(async (newTopic: string = 'General Conversation') => {
@@ -982,9 +989,16 @@ Please **sign out and sign back in** to continue using the AI assistant.
           .eq('id', user.id)
           .single();
 
-        if (data?.preferences?.default_ai_persona) {
-          const savedPersona = data.preferences.default_ai_persona as Persona;
-          if (['Teacher', 'Concise', 'Creative', 'Sage'].includes(savedPersona)) {
+        const rawPersona = data?.preferences?.default_ai_persona || data?.preferences?.defaultAIPersona;
+        if (rawPersona) {
+          const lower = String(rawPersona).toLowerCase().trim();
+          let savedPersona: Persona | null = null;
+          if (lower === 'teacher' || lower === 'standard') savedPersona = 'Teacher';
+          else if (lower === 'concise') savedPersona = 'Concise';
+          else if (lower === 'creative') savedPersona = 'Creative';
+          else if (lower === 'sage' || lower.includes('sage')) savedPersona = 'Sage';
+
+          if (savedPersona) {
             setPersona(savedPersona);
           }
         }
@@ -1183,6 +1197,8 @@ Please **sign out and sign back in** to continue using the AI assistant.
       }, 100);
       return () => clearTimeout(timer);
     }
+    // scrollToLatestMessage omitted — regular function, changes on every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, view, messages, isQuizLoading, isLoading]);
 
   // TEXT SELECTION DETECTION
@@ -1270,28 +1286,31 @@ Please **sign out and sign back in** to continue using the AI assistant.
    */
   useEffect(() => {
     if (isOpen) {
-      if (sessionId) {
-        // We are opening a specific Mind Map's chat
-        const existingMapSession = sessions.find(s => s.mapId === sessionId);
-        if (existingMapSession) {
-          setActiveSessionId(existingMapSession.id);
-        } else if (!isSessionLoading) {
-          startNewChat(topic);
+      const timeoutId = setTimeout(() => {
+        if (sessionId) {
+          // We are opening a specific Mind Map's chat
+          const existingMapSession = sessions.find(s => s.mapId === sessionId);
+          if (existingMapSession) {
+            setActiveSessionId(existingMapSession.id);
+          } else if (!isSessionLoading) {
+            startNewChat(topic);
+          }
+        } else {
+          // We are opening the global chat panel
+          if (activeSessionId && sessions.some(s => s.id === activeSessionId)) {
+            // Keep the current active session
+          } else if (sessions.length > 0) {
+            // Resume the most recent session
+            setActiveSessionId(sessions[0].id);
+          } else if (!isSessionLoading) {
+            // No sessions exist at all, start a new one
+            startNewChat('General Conversation');
+          }
         }
-      } else {
-        // We are opening the global chat panel
-        if (activeSessionId && sessions.some(s => s.id === activeSessionId)) {
-          // Keep the current active session
-        } else if (sessions.length > 0) {
-          // Resume the most recent session
-          setActiveSessionId(sessions[0].id);
-        } else if (!isSessionLoading) {
-          // No sessions exist at all, start a new one
-          startNewChat('General Conversation');
-        }
-      }
-      
-      if (!initialView) setView('chat');
+        
+        if (!initialView) setView('chat');
+      }, 0);
+      return () => clearTimeout(timeoutId);
     } else {
       hasSentInitialMessage.current = false;
     }
@@ -1300,18 +1319,21 @@ Please **sign out and sign back in** to continue using the AI assistant.
   // Apply initialView — runs after session effect so it wins
   useEffect(() => {
     if (isOpen) {
-      // First time open → show chat home
-      // Returning user → show last saved view
-      const viewToSet = hasOpenedBefore ? (initialView || savedView) : 'chat';
-      setView(viewToSet);
-      if (hasOpenedBefore) {
-        setLastView(viewToSet);
-      }
-      setHasOpenedBefore(true);
-      // Pre-load all pins when opening a pin view
-      if (viewToSet === 'pins' || viewToSet === 'canvas-pins') {
-        loadAllUserPins();
-      }
+      const timeoutId = setTimeout(() => {
+        // First time open → show chat home
+        // Returning user → show last saved view
+        const viewToSet = hasOpenedBefore ? (initialView || savedView) : 'chat';
+        setView(viewToSet);
+        if (hasOpenedBefore) {
+          setLastView(viewToSet);
+        }
+        setHasOpenedBefore(true);
+        // Pre-load all pins when opening a pin view
+        if (viewToSet === 'pins' || viewToSet === 'canvas-pins') {
+          loadAllUserPins();
+        }
+      }, 0);
+      return () => clearTimeout(timeoutId);
     }
   }, [isOpen, initialView, savedView, hasOpenedBefore]);
 

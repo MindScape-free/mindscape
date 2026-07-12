@@ -30,7 +30,7 @@ export const calculatorTool = {
       const sanitized = expression.replace(/[^0-9+\-*/().\s,]/g, '');
       const result = Function(`"use strict"; return (${sanitized})`)();
       return { expression, result };
-    } catch (err) {
+    } catch {
       return { error: 'Failed to evaluate expression. Use standard mathematical operators.' };
     }
   },

@@ -62,7 +62,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     let cancelled = false;
 
-    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
+    const checkAdminStatus = async (userId: string) => {
+      const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '').split(',').map(id => id.trim()).filter(Boolean);
+      if (adminIds.includes(userId)) return true;
+      try {
+        const { data } = await supabase.from('users').select('is_admin').eq('id', userId).single();
+        return data?.is_admin === true;
+      } catch (err) {
+        console.error('Admin status check failed:', err);
+        return false;
+      }
+    };
+
+    supabase.auth.getSession().then(async ({ data: { session } }: { data: { session: Session | null } }) => {
       if (cancelled) return;
       if (session?.user) {
         const userData = session.user;
@@ -75,13 +87,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         });
         setSession(session);
 
-        const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '03504efc-d50a-4e84-ba24-1d82ef41fd82').split(',').map(id => id.trim());
-        setIsAdmin(adminIds.includes(userData.id));
+        const isSystemAdmin = await checkAdminStatus(userData.id);
+        if (!cancelled) setIsAdmin(isSystemAdmin);
       }
       if (!cancelled) setIsUserLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
       if (cancelled) return;
       if (session?.user) {
         const userData = session.user;
@@ -94,8 +106,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         });
         setSession(session);
 
-        const adminIds = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS || '03504efc-d50a-4e84-ba24-1d82ef41fd82').split(',').map(id => id.trim());
-        setIsAdmin(adminIds.includes(userData.id));
+        const isSystemAdmin = await checkAdminStatus(userData.id);
+        if (!cancelled) setIsAdmin(isSystemAdmin);
       } else {
         setUser(null);
         setSession(null);
@@ -108,7 +120,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [supabase]);
 
   const signIn = async (email: string, password: string) => {
     if (!supabase) return { error: new Error('Supabase not initialized') };

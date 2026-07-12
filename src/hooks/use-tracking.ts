@@ -207,23 +207,23 @@ export function useSessionTracking(userId?: string) {
       });
       logUserEvent(userId, 'search_performed', { query, resultsCount, filters }, 'app');
     },
-    [userId]
+    [userId, metricsRef]
   );
 
   const trackMapViewed = useCallback((mapId: string) => {
     metricsRef.current.mapsViewed++;
     metricsRef.current.lastActivity = Date.now();
-  }, []);
+  }, [metricsRef]);
 
   const trackAIGeneration = useCallback(() => {
     metricsRef.current.aiGenerations++;
     metricsRef.current.lastActivity = Date.now();
-  }, []);
+  }, [metricsRef]);
 
   const trackChatStarted = useCallback(() => {
     metricsRef.current.chatsStarted++;
     metricsRef.current.lastActivity = Date.now();
-  }, []);
+  }, [metricsRef]);
 
   const trackSessionEnd = useCallback(async () => {
     const metrics = metricsRef.current;
@@ -249,7 +249,7 @@ export function useSessionTracking(userId?: string) {
       { sessionDuration, searches: metrics.searches },
       'app'
     );
-  }, [userId]);
+  }, [userId, metricsRef]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -273,7 +273,7 @@ export function useSessionTracking(userId?: string) {
         metrics,
       });
     };
-  }, []);
+  }, [metricsRef]);
 
   return {
     trackSearch,

@@ -12,7 +12,6 @@ import {
   AIResponse,
   AIProviderCapability,
   ProviderHealthStatus,
-  AIStreamChunk,
   AIStreamCallback,
 } from './types';
 import { postProcess, isReasoningOnly } from './post-processor';
@@ -332,7 +331,7 @@ export class PollinationsAdapter implements IAIProvider {
       });
 
       if (!response.ok) {
-        await this.handleErrorResponse(response, request, model, attempt);
+        await this.handleErrorResponse(response);
       }
 
       const data = await response.json();
@@ -387,7 +386,7 @@ export class PollinationsAdapter implements IAIProvider {
     return messages;
   }
 
-  private async handleErrorResponse(response: Response, request: AIRequest, model: string, attempt: number): Promise<never> {
+  private async handleErrorResponse(response: Response): Promise<never> {
     const status = response.status;
     let errorMessage = response.statusText;
 

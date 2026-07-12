@@ -759,8 +759,12 @@ export function ExplanationDialog({
                 setLoadingMessageIndex((prev) => (prev + 1) % loadingMessages.length);
             }, 2000);
             return () => clearInterval(interval);
+        } else {
+            const timeout = setTimeout(() => {
+                setLoadingMessageIndex(0);
+            }, 0);
+            return () => clearTimeout(timeout);
         }
-        setLoadingMessageIndex(0);
     }, [isLoading, loadingMessages.length]);
 
     const hasExistingContent = content.length > 0;

@@ -9,7 +9,7 @@ Complete system architecture covering all layers from user interface to external
 ```mermaid
 flowchart TB
     subgraph CLIENTS["Client (Browser)"]
-        NEXT["Next.js 16 App Router<br/>React 19 + TypeScript"]
+        NEXT["Next.js 16 App Router<br/>React 18 + TypeScript"]
     end
 
     subgraph VERCEL["Vercel Hosting"]
@@ -20,7 +20,7 @@ flowchart TB
 
     subgraph PROVIDERS["AI Providers"]
         POLL["Pollinations.ai<br/>Image: Flux<br/>Text: Qwen<br/>Search: Gemini"]
-        OR["OpenRouter<br/>(Fallback Provider)"]
+        OR["OpenRouter<br/>(Planned — not yet implemented)"]
     end
 
     subgraph SUPABASE["Supabase"]
@@ -38,7 +38,7 @@ flowchart TB
     NEXT <--> SSR
     NEXT <--> API
     SSR --> POLL
-    SSR --> OR
+    SSR -.->|Planned| OR
     SSR --> SUPABASE
     API --> POLL
     API --> SUPABASE
@@ -159,11 +159,11 @@ flowchart LR
     AI_FLOWS --> DISPATCH[<b>AI Dispatcher</b><br/>Routes to provider]
 
     DISPATCH --> POLL_A["Pollinations Client<br/>Primary provider"]
-    DISPATCH --> OR_A["OpenRouter Client<br/>Fallback provider"]
+    DISPATCH -.->|Planned| OR_A["OpenRouter Client<br/>Not yet implemented"]
     DISPATCH --> MONITOR["Provider Monitor<br/>Health tracking"]
 
     POLL_A --> POLL_API{External APIs}
-    OR_A --> POLL_API
+    OR_A -.-> POLL_API
 
     POLL_API --> GEN_IMG["gen.pollinations.ai<br/>Image generation"]
     POLL_API --> GEN_TEXT["text.pollinations.ai<br/>Text generation"]
@@ -300,7 +300,7 @@ flowchart TD
     REQ[AI Request] --> DISPATCHER{AIDispatcher}
 
     DISPATCHER -->|Primary Route| POLL["Pollinations.ai"]
-    DISPATCHER -->|Fallback| OR["OpenRouter"]
+    DISPATCHER -.->|"Planned Fallback<br/>(not yet implemented)"| OR["OpenRouter"]
 
     POLL --> MODELS{Model Selection by Task}
 
@@ -309,8 +309,8 @@ flowchart TD
     MODELS -->|"Text Generation<br/>With Search"| GEMINI["Gemini Search<br/>pollinations/gemini-search"]
     MODELS -->|"Reasoning Tasks"| REASONING["DeepSeek / Reasoning<br/>When depth='deep'"]
 
-    OR --> OPENMODELS{OpenRouter Models}
-    OPENMODELS --> GPT4["GPT-4o / Claude<br/>(if user configured)"]
+    OR -.-> OPENMODELS{OpenRouter Models}
+    OPENMODELS -.-> GPT4["GPT-4o / Claude<br/>(if user configured)"]
 
     POLL --> MON["Provider Monitor<br/>Health tracking"]
     MON --> REPORT["Health Report<br/>getAIHealthReportAction()"]
@@ -336,6 +336,15 @@ flowchart TD
 erDiagram
     users ||--o{ mindmaps : creates
     users ||--o{ chat_sessions : has
+    users ||--o{ shared_mindmaps : shares
+    users ||--o{ user_settings : configures
+    users ||--o{ user_events : logs
+    users ||--o{ user_profiles : profiles
+    users ||--o{ user_points : points
+    users ||--o{ point_transactions : transactions
+    users ||--o{ feedback : submits
+    users ||--o{ user_daily_challenges : challenges
+
     users {
         uuid id PK
         text email
@@ -344,7 +353,82 @@ erDiagram
         boolean is_admin
         jsonb preferences
         jsonb statistics
-        int xp_points
+        jsonb activity
+        text[] unlocked_achievements
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    user_settings {
+        uuid user_id PK FK
+        text pollinations_api_key
+        text image_model
+        text text_model
+        bigint api_key_created_at
+        bigint api_key_last_used
+    }
+
+    user_events {
+        bigint id PK
+        uuid user_id FK
+        text event_type
+        jsonb event_data
+        text source
+        text ip_address
+        text user_agent
+        text session_id
+        timestamptz created_at
+    }
+
+    user_profiles {
+        uuid user_id PK FK
+        text email
+        text display_name
+        text photo_url
+        timestamptz created_at
+        int total_maps
+        int total_compare_maps
+        int total_multi_maps
+        int total_chats
+        int total_nodes
+        int total_images
+        int total_expansions
+        int study_time_minutes
+        int current_streak
+        int longest_streak
+        date last_active_date
+        jsonb mode_breakdown
+        jsonb depth_breakdown
+        jsonb source_breakdown
+        jsonb persona_breakdown
+        jsonb daily_activity
+        text[] unlocked_achievements
+        timestamptz updated_at
+    }
+
+    platform_stats {
+        text id PK default "global"
+        int total_users
+        int total_maps
+        int total_maps_ever
+        int total_chats
+        int total_nodes
+        int total_images
+        bigint total_events
+        int new_users_24h
+        int new_maps_24h
+        int active_users_24h
+        int active_users_7d
+        int new_users_7d
+        int new_maps_7d
+        int health_score
+        double precision engagement_rate
+        text top_persona
+        text top_source_type
+        double precision avg_maps_per_user
+        double precision avg_nodes_per_map
+        jsonb daily_snapshot
+        timestamptz updated_at
     }
 
     mindmaps ||--o{ mindmaps : "parent/child (nested)"
@@ -364,8 +448,12 @@ erDiagram
         jsonb content
         jsonb pinned_messages
         text thumbnail_url
+        text thumbnail_prompt
         text source_url
-        text source_type
+        text source_file_type
+        text video_id
+        jsonb search_sources
+        text search_timestamp
         timestamp created_at
         timestamp updated_at
     }
@@ -373,29 +461,139 @@ erDiagram
     shared_mindmaps {
         text id PK
         uuid original_author_id FK
+        uuid original_map_id
+        text author_name
+        text author_avatar
         text topic
         text summary
         jsonb content
         boolean is_shared
         boolean is_public
-        text author_name
+        text[] public_categories
+        int views
         timestamp shared_at
+        timestamp updated_at
+    }
+
+    public_mindmaps {
+        text id PK
+        uuid original_map_id
+        uuid original_author_id FK
+        text author_name
+        text author_avatar
+        text topic
+        text summary
+        jsonb content
+        boolean is_public
+        text[] public_categories
+        int views
+        int public_views
+        text depth
+        text thumbnail_url
+        text short_title
+        timestamp published_at
+        timestamp updated_at
     }
 
     chat_sessions {
         uuid id PK
         uuid user_id FK
-        text title
         uuid map_id FK
+        text title
+        text map_title
         jsonb messages
         jsonb quiz_history
         text weak_tags
+        jsonb pinned_messages
         timestamp created_at
         timestamp updated_at
     }
 
-    users ||--o{ shared_mindmaps : shares
+    user_points {
+        uuid user_id PK FK
+        jsonb ledger
+        jsonb daily_caps
+        jsonb history_days
+        timestamptz updated_at
+    }
+
+    point_transactions {
+        uuid id PK
+        uuid user_id FK
+        text event_type
+        int base_points
+        int bonus_points
+        int total_points
+        double precision multiplier
+        bigint timestamp
+        jsonb metadata
+    }
+
+    feedback {
+        uuid id PK
+        uuid user_id FK
+        text type
+        text title
+        text description
+        text status
+        timestamp created_at
+        timestamp resolved_at
+    }
+
+    ai_calls {
+        bigint id PK
+        text task_type
+        text provider
+        text model
+        int duration_ms
+        boolean was_error
+        text error_message
+        text prompt
+        uuid user_id FK
+        boolean repair_applied
+        boolean salvaged
+        jsonb metadata
+        timestamptz created_at
+    }
+
+    admin_activity_log {
+        uuid id PK
+        text type
+        uuid target_id
+        text target_type
+        text details
+        uuid performed_by FK
+        text performed_by_email
+        jsonb metadata
+        timestamptz timestamp
+    }
+
+    user_daily_challenges {
+        uuid id PK
+        uuid user_id FK
+        text date_string
+        uuid map_id
+        int xp_awarded
+        timestamptz completed_at
+    }
 ```
+
+### Database Migration Files
+
+| File | Description |
+|---|---|
+| `20260614150709_initial_schema.sql` | Placeholder for initial schema (remote pull needed) |
+| `20260621000001_user_events_tables.sql` | Creates user_events, user_profiles, platform_stats tables + recompute functions |
+| `20260621000002_recompute_cron.sql` | Enables pg_cron: 5-min incremental recompute + 6-hr full recompute |
+| `20260621000003-05_*_fix_*.sql` | Fixes for node count fallback, sub-map filtering, health score alignment |
+| `20260621000006_recompute_health_score.sql` | Aligns health score formula with admin-sync |
+| `20260621000007_recompute_user_profile_filter_submaps.sql` | Excludes sub-maps from user profile totals |
+| `20260621000008-10_*_trigger.sql` | DB triggers: auto-log map created/updated/deleted to user_events |
+| `20260621000011_recompute_handle_map_deleted.sql` | Handles map deletion events in recompute |
+| `20260621000012_drop_admin_stats.sql` | Drops deprecated admin_stats table |
+| `20260621000013_unify_user_profiles.sql` | Unifies user_profiles schema |
+| `20260624000001_telemetry_tables.sql` | Adds telemetry tables |
+| `20260705000001_forking_and_challenges.sql` | Adds forking + daily challenge tables |
 
 ---
 
@@ -526,7 +724,7 @@ flowchart TB
 
     SA --> SUPABASE_DB[Supabase<br/>PostgreSQL]
     SA --> POLLINATIONS[Pollinations.ai<br/>Image + Text APIs]
-    SA --> OPENROUTER[OpenRouter<br/>Fallback AI]
+    SA -.-> OPENROUTER[OpenRouter<br/>Fallback AI (Planned)]
     SA --> GOOGLE[Google APIs<br/>YouTube transcripts]
     SA --> WEB_SCRAPE[Web Scraping<br/>URL content extraction]
 
@@ -534,7 +732,7 @@ flowchart TB
 
     SUPABASE_DB --> AUTH_SVC[Supabase Auth<br/>JWT + Sessions]
 
-    CLIENT["Client Browser<br/>React 19"] --> VERCEL_EDGE
+    CLIENT["Client Browser<br/>React 18"] --> VERCEL_EDGE
 ```
 
 ---
@@ -548,7 +746,34 @@ flowchart TB
 | **Explicit field mapping in `mapToMindMapData()`** | No `...raw` spread — prevents AI property injection |
 | **In-memory server caches with sweep intervals** | Avoids repeated Supabase reads without unbounded memory growth |
 | **Session Storage for client-side nav** | Survives page navigation without SSR/API round-trips |
-| **Pollinations.ai as primary, OpenRouter fallback** | Zero-cost for images (Flux), pay-per-use fallback |
-| **React Contexts for app-wide state** | Auth + Config + XP + Notifications need global access |
+| **Pollinations.ai as sole provider** | Zero-cost for images (Flux). OpenRouter fallback is planned but not yet implemented |
+| **React Contexts for app-wide state** | Auth + Config + Notifications + Activity + XP need global access |
 | **Supabase RLS for data access** | Every DB query is user-scoped at the database level |
 | **BYOP (Bring Your Own Pollen)** | Users bring their own API key — no platform cost for AI |
+| **Session Storage for session-based generation** | File content, URL data, and session params survive navigation without server round-trips |
+| **In-memory rate limiting** | Per-endpoint rate limits with auto-eviction; works best-effort in serverless |
+| **DB Triggers for event capture** | `mindmaps` table triggers auto-log to user_events, preventing missed analytics when app code fails |
+| **pg_cron for stats recompute** | Every 5 minutes for active profiles + platform stats; full recompute every 6 hours |
+
+---
+
+## 📚 Reference Handbooks
+
+For detailed implementation and operational information, refer to:
+- [Website Feature Blueprint](blueprint.md) — Comprehensive feature maps and flows
+- [Component Inventory](COMPONENT_INVENTORY.md) — Grid of all UI and map components
+- [API & Actions Reference](API_REFERENCE.md) — Input/output schema specs
+- [Security Audit Register](SECURITY_AUDIT.md) — RLS policies, diagnostics, and vulnerabilities
+- [Performance Optimization Audit](PERFORMANCE_AUDIT.md) — Bundle, caching, and canvas analysis
+- [Technical Debt Registry](TECHNICAL_DEBT.md) — Compilation, hook, and code health logs
+- [Product Improvement Roadmap](IMPROVEMENT_ROADMAP.md) — Future timeline plan
+- [Page-by-Page Walkthrough](PAGE_WISE_WALKTHROUGH.md) — Detailed page-by-page user experience guide
+- [Onboarding Flow](ONBOARDING_FLOW.md) — User onboarding paths for 3 personas
+- [Admin Data Flow](ADMIN_DATA_FLOW.md) — Admin dashboard data pipeline
+- [Developer Onboarding Guide](DEVELOPER_ONBOARDING.md) — New developer setup and codebase navigation
+- [Deployment Handbook](DEPLOYMENT_HANDBOOK.md) — Production deployment and maintenance
+- [Testing Guide](TESTING_GUIDE.md) — Test strategy, writing tests, CI integration
+- [Design System](DESIGN_SYSTEM.md) — Color tokens, typography, animations, component patterns
+- [Coding Standards](CODING_STANDARDS.md) — Code convention and folder standards
+- [Pitch Deck](PITCH_DECK.md) — Product pitch deck
+- [Documentation Coverage](DOCUMENTATION_COVERAGE_REPORT.md) — Document coverage audit & operational gap analysis

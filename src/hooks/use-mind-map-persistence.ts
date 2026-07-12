@@ -35,7 +35,15 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
     if (!user || !supabase) return;
     getUserProfile(supabase, user.id).then(profile => {
       if (isCancelled) return;
-      if (profile?.preferences?.defaultAIPersona) setAiPersona(profile.preferences.defaultAIPersona);
+      const rawPersona = profile?.preferences?.defaultAIPersona || profile?.preferences?.default_ai_persona;
+      if (rawPersona) {
+        const lower = String(rawPersona).toLowerCase().trim();
+        let normalized = 'Teacher';
+        if (lower === 'concise') normalized = 'Concise';
+        else if (lower === 'creative') normalized = 'Creative';
+        else if (lower === 'sage' || lower.includes('sage')) normalized = 'Sage';
+        setAiPersona(normalized);
+      }
     });
     return () => { isCancelled = true; };
   }, [user, supabase]);

@@ -34,7 +34,7 @@ export const MindflowMinimap = ({
         }
     }, [containerRef]);
 
-    if (!containerRef.current) return null;
+    if (viewport.w === 0 || viewport.h === 0) return null;
 
     const MINIMAP_WIDTH = 200;
     const padding = 10;
