@@ -102,6 +102,7 @@ export interface OrchestratorOptions {
   providerOverride?: string;             // Force specific provider
   maxCostPerCall?: number;               // USD guard
   shadowProvider?: string;               // Run secondary for comparison (no user impact)
+  apiKeys?: Record<string, string>;      // Provider-specific API keys
 }
 
 // ── Telemetry ──────────────────────────────────────────────────────────

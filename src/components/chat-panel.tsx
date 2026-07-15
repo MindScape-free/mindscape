@@ -209,10 +209,14 @@ export function ChatPanel({
   const { awardXP } = useXP();
   const providerOptions = useMemo(() => ({
     provider: providerOptionsConfig.provider,
-    apiKey: providerOptionsConfig.provider === 'pollinations' ? providerOptionsConfig.pollinationsApiKey : providerOptionsConfig.apiKey,
+    apiKey: providerOptionsConfig.provider === 'pollinations'
+      ? providerOptionsConfig.pollinationsApiKey
+      : providerOptionsConfig.provider === 'nvidia'
+        ? providerOptionsConfig.nvidiaApiKey
+        : providerOptionsConfig.openrouterApiKey || providerOptionsConfig.apiKey,
     model: providerOptionsConfig.textModel || providerOptionsConfig.pollinationsModel,
     userId: user?.id,
-  }), [providerOptionsConfig.provider, providerOptionsConfig.apiKey, providerOptionsConfig.pollinationsApiKey, providerOptionsConfig.textModel, providerOptionsConfig.pollinationsModel, user?.id]);
+  }), [providerOptionsConfig.provider, providerOptionsConfig.apiKey, providerOptionsConfig.openrouterApiKey, providerOptionsConfig.pollinationsApiKey, providerOptionsConfig.nvidiaApiKey, providerOptionsConfig.textModel, providerOptionsConfig.pollinationsModel, user?.id]);
 
   // 1. MIGRATION & PERSISTENCE
   const { 
@@ -691,6 +695,7 @@ Please **sign out and sign back in** to continue using the AI assistant.
       sessionId: sessionId || activeSessionId,
       attachments: combinedAttachments as any,
       apiKey: providerOptions.apiKey,
+      provider: providerOptionsConfig.provider,
       token: session?.access_token,
       model: providerOptionsConfig.textModel || providerOptionsConfig.pollinationsModel || 'openai',
       agentMode,
@@ -2463,6 +2468,76 @@ Please **sign out and sign back in** to continue using the AI assistant.
                 <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
 
                 <div className="relative">
+                  {/* Provider Selector on the Left */}
+                  <div className="absolute left-2.5 top-1/2 -translate-y-1/2 z-10 flex items-center">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className={cn(
+                            "h-7 px-2 rounded-lg text-xs font-bold gap-1.5 transition-all border border-white/5 shadow-none select-none",
+                            providerOptionsConfig.provider === 'openrouter'
+                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                              : providerOptionsConfig.provider === 'nvidia'
+                                ? "bg-lime-500/10 text-lime-400 border-lime-500/20 hover:bg-lime-500/20"
+                                : "bg-violet-500/10 text-violet-400 border-violet-500/20 hover:bg-violet-500/20"
+                          )}
+                          title={`Active Provider: ${providerOptionsConfig.provider === 'openrouter' ? 'OpenRouter' : providerOptionsConfig.provider === 'nvidia' ? 'NVIDIA' : 'Pollinations'}. Click to switch.`}
+                        >
+                          <div className={cn(
+                            "w-1.5 h-1.5 rounded-full animate-pulse",
+                            providerOptionsConfig.provider === 'openrouter'
+                              ? "bg-emerald-400"
+                              : providerOptionsConfig.provider === 'nvidia'
+                                ? "bg-lime-400"
+                                : "bg-violet-400"
+                          )} />
+                          <span>
+                            {providerOptionsConfig.provider === 'openrouter'
+                              ? 'OR'
+                              : providerOptionsConfig.provider === 'nvidia'
+                                ? 'NV'
+                                : 'PL'}
+                          </span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-36 glassmorphism border-white/10 z-[110]">
+                        <DropdownMenuItem
+                          onClick={() => updateConfig({ provider: 'nvidia' })}
+                          className={cn(
+                            "text-xs font-bold font-orbitron uppercase tracking-wider gap-2 px-3 py-2 cursor-pointer",
+                            providerOptionsConfig.provider === 'nvidia' ? "text-lime-400 bg-lime-500/10 focus:bg-lime-500/20" : "text-zinc-400"
+                          )}
+                        >
+                          <div className="w-1.5 h-1.5 rounded-full bg-lime-400" />
+                          NVIDIA
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => updateConfig({ provider: 'openrouter' })}
+                          className={cn(
+                            "text-xs font-bold font-orbitron uppercase tracking-wider gap-2 px-3 py-2 cursor-pointer",
+                            providerOptionsConfig.provider === 'openrouter' ? "text-emerald-400 bg-emerald-500/10 focus:bg-emerald-500/20" : "text-zinc-400"
+                          )}
+                        >
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          OpenRouter
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => updateConfig({ provider: 'pollinations' })}
+                          className={cn(
+                            "text-xs font-bold font-orbitron uppercase tracking-wider gap-2 px-3 py-2 cursor-pointer",
+                            providerOptionsConfig.provider === 'pollinations' ? "text-violet-400 bg-violet-500/10 focus:bg-violet-500/20" : "text-zinc-400"
+                          )}
+                        >
+                          <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+                          Pollinations
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
                   <input
                     type="file"
                     ref={fileInputRef}
@@ -2492,7 +2567,7 @@ Please **sign out and sign back in** to continue using the AI assistant.
                     disabled={isLoading}
                     rows={1}
                     className={cn(
-                      "flex w-full resize-none bg-transparent border border-white/10 focus:border-primary/50 min-h-[48px] max-h-[120px] rounded-2xl pl-4 pr-[140px] py-3 text-sm transition-all placeholder:text-zinc-600 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 overflow-y-auto block disabled:cursor-not-allowed disabled:opacity-50",
+                      "flex w-full resize-none bg-transparent border border-white/10 focus:border-primary/50 min-h-[48px] max-h-[120px] rounded-2xl pl-16 pr-[140px] py-3 text-sm transition-all placeholder:text-zinc-600 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 overflow-y-auto block disabled:cursor-not-allowed disabled:opacity-50",
                       isListening && "border-primary"
                     )}
                     style={{ lineHeight: '1.5' }}

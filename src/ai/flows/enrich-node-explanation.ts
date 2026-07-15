@@ -68,6 +68,7 @@ export interface NodeEnrichmentInput {
   mainTopic: string;
   apiKey?: string;
   provider?: AIProvider;
+  model?: string;
 }
 
 // ── Prompt ─────────────────────────────────────────────────────────────────
@@ -88,7 +89,7 @@ PRIORITY ORDER:
 export async function enrichNodeExplanation(
   input: NodeEnrichmentInput
 ): Promise<NodeEnrichmentOutput> {
-  const { nodeName, nodeDescription, mainTopic, provider, apiKey } = input;
+  const { nodeName, nodeDescription, mainTopic, provider, apiKey, model } = input;
 
   const systemPrompt = `${SYSTEM_GUARANTEES}
 
@@ -158,6 +159,7 @@ Return ONLY this JSON object, no other text:
       const result = await generateContent({
         provider,
         apiKey,
+        model,
         systemPrompt,
         userPrompt,
         schema: NodeEnrichmentOutputSchema,

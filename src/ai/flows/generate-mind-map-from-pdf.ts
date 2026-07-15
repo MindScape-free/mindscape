@@ -47,9 +47,9 @@ function buildPersona(persona: string): string {
 }
 
 export async function generateMindMapFromPdf(
-    input: GenerateMindMapFromTextInput & { apiKey?: string; provider?: AIProvider; strict?: boolean }
+    input: GenerateMindMapFromTextInput & { apiKey?: string; provider?: AIProvider; model?: string; strict?: boolean }
 ): Promise<GenerateMindMapFromTextOutput> {
-    const { provider, apiKey, context, targetLang, text, persona, strict, depth = 'low' } = input;
+    const { provider, apiKey, model, context, targetLang, text, persona, strict, depth = 'low' } = input;
 
     console.log(`📄 PDF Pipeline: Starting. Raw text length: ${text.length} chars`);
 
@@ -168,7 +168,7 @@ RULES:
             console.log(`📄 PMG Pipeline: Generation attempt ${attempt + 1}/${MAX_GENERATION_RETRIES}...`);
             const capability = depth === 'deep' ? 'reasoning' : (depth === 'medium' ? 'creative' : 'fast');
             const result = await generateContent({
-                provider, apiKey, systemPrompt, userPrompt,
+                provider, apiKey, model, systemPrompt, userPrompt,
                 schema: GenerateMindMapFromTextOutputSchema,
                 strict,
                 options: { capability },

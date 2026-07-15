@@ -39,7 +39,7 @@ const KNOWLEDGE_BASE = [
 export function NeuralLoader({ message, sourceType }: { message?: string, sourceType?: string }) {
     const [currentStep, setCurrentStep] = useState(0);
     const [seconds, setSeconds] = useState(0);
-    const [knowledgeIndex, setKnowledgeIndex] = useState(() => Math.floor(Math.random() * KNOWLEDGE_BASE.length));
+    const [knowledgeIndex, setKnowledgeIndex] = useState(0);
 
     const generationSteps = [...baseSteps];
     if (sourceType === 'youtube') generationSteps.unshift('Transcribing Video Content...');
@@ -56,6 +56,9 @@ export function NeuralLoader({ message, sourceType }: { message?: string, source
     }, []);
 
     useEffect(() => {
+        // Hydration fix: Set to a random quote on client mount
+        setKnowledgeIndex(Math.floor(Math.random() * KNOWLEDGE_BASE.length));
+        
         // Start rotation
         const knowledgeInterval = setInterval(() => {
             setKnowledgeIndex(prev => (prev + 1) % KNOWLEDGE_BASE.length);

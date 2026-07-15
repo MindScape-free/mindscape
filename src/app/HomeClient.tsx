@@ -47,6 +47,12 @@ import { Badge } from '@/components/ui/badge';
 import { useUser } from '@/lib/auth-context';
 import { getSupabaseClient } from '@/lib/supabase-db';
 import { useAIConfig } from '@/contexts/ai-config-context';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { OnboardingWizard, TRIGGER_ONBOARDING_EVENT } from '@/components/onboarding-wizard';
 import { trackGenerationStart } from '@/lib/tracker';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -295,11 +301,11 @@ function Hero({
   const [pdfProgress, setPdfProgress] = useState<any>(null);
   const [openSelect, setOpenSelect] = useState<string | null>(null);
   const { user } = useUser();
-  const { config } = useAIConfig();
-  const isSetupComplete = !!user && config?.pollinationsApiKey;
+  const { config, updateConfig } = useAIConfig();
+  const isSetupComplete = !!user && !!(config?.pollinationsApiKey || config?.openrouterApiKey || config?.nvidiaApiKey);
 
   const { sources, addSource, addFile, removeSource, buildPayload, contextUsage, canGenerate, clearSources } = useMultiSource({
-    apiKey: config.pollinationsApiKey,
+    apiKey: config.pollinationsApiKey || config.openrouterApiKey || config.nvidiaApiKey,
     userId: user?.id
   });
 
@@ -521,12 +527,81 @@ function Hero({
                 <div className="relative flex items-center gap-2">
                   <div className={cn("relative flex-1 flex transition-all duration-500", isCompareMode ? "flex-col sm:flex-row gap-3" : "flex-row")}>
                     <div className="relative flex-1">
+                      {/* Provider Selector on the Left */}
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10 flex items-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className={cn(
+                                "h-9 px-2.5 rounded-full text-xs font-bold gap-1.5 transition-all border border-white/5 shadow-none select-none",
+                                config.provider === 'openrouter'
+                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                                  : config.provider === 'nvidia'
+                                    ? "bg-lime-500/10 text-lime-400 border-lime-500/20 hover:bg-lime-500/20"
+                                    : "bg-violet-500/10 text-violet-400 border-violet-500/20 hover:bg-violet-500/20"
+                              )}
+                              title={`Active Provider: ${config.provider === 'openrouter' ? 'OpenRouter' : config.provider === 'nvidia' ? 'NVIDIA' : 'Pollinations'}. Click to switch.`}
+                            >
+                              <div className={cn(
+                                "w-1.5 h-1.5 rounded-full animate-pulse",
+                                config.provider === 'openrouter'
+                                  ? "bg-emerald-400"
+                                  : config.provider === 'nvidia'
+                                    ? "bg-lime-400"
+                                    : "bg-violet-400"
+                              )} />
+                              <span>
+                                {config.provider === 'openrouter'
+                                  ? 'OR'
+                                  : config.provider === 'nvidia'
+                                    ? 'NV'
+                                    : 'PL'}
+                              </span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="w-36 glassmorphism border-white/10 z-[110]">
+                            <DropdownMenuItem
+                              onClick={() => updateConfig({ provider: 'nvidia' })}
+                              className={cn(
+                                "text-xs font-bold font-orbitron uppercase tracking-wider gap-2 px-3 py-2 cursor-pointer",
+                                config.provider === 'nvidia' ? "text-lime-400 bg-lime-500/10 focus:bg-lime-500/20" : "text-zinc-400"
+                              )}
+                            >
+                              <div className="w-1.5 h-1.5 rounded-full bg-lime-400" />
+                              NVIDIA
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => updateConfig({ provider: 'openrouter' })}
+                              className={cn(
+                                "text-xs font-bold font-orbitron uppercase tracking-wider gap-2 px-3 py-2 cursor-pointer",
+                                config.provider === 'openrouter' ? "text-emerald-400 bg-emerald-500/10 focus:bg-emerald-500/20" : "text-zinc-400"
+                              )}
+                            >
+                              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                              OpenRouter
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => updateConfig({ provider: 'pollinations' })}
+                              className={cn(
+                                "text-xs font-bold font-orbitron uppercase tracking-wider gap-2 px-3 py-2 cursor-pointer",
+                                config.provider === 'pollinations' ? "text-violet-400 bg-violet-500/10 focus:bg-violet-500/20" : "text-zinc-400"
+                              )}
+                            >
+                              <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+                              Pollinations
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                       <input
                         ref={topicInputRef}
                         placeholder={isCompareMode ? 'First topic...' : 'Enter topic or URL...'}
                         value={topic}
                         onChange={(e) => handleTopicChange(e.target.value)}
-                        className="w-full h-16 rounded-3xl bg-black/40 px-8 text-zinc-100 outline-none placeholder:text-zinc-600 border border-white/5 focus:border-primary/50 text-lg font-medium"
+                        className="w-full h-16 rounded-3xl bg-black/40 pl-20 pr-8 text-zinc-100 outline-none placeholder:text-zinc-600 border border-white/5 focus:border-primary/50 text-lg font-medium"
                         onKeyDown={(e) => e.key === 'Enter' && handleInternalSubmit()}
                       />
                       <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">

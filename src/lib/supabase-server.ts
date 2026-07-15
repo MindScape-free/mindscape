@@ -20,6 +20,8 @@ export function getSupabaseAdmin(): SupabaseClient {
 
 export interface UserImageSettings {
   pollinationsApiKey?: string;
+  openrouterApiKey?: string;
+  nvidiaApiKey?: string;
   preferredModel?: string;
   apiKeyCreatedAt?: number;
   apiKeyLastUsed?: number;
@@ -30,13 +32,15 @@ export async function getUserImageSettingsAdmin(userId: string): Promise<UserIma
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('user_settings')
-      .select('pollinations_api_key, image_model, api_key_created_at, api_key_last_used')
+      .select('pollinations_api_key, openrouter_api_key, nvidia_api_key, image_model, api_key_created_at, api_key_last_used')
       .eq('user_id', userId)
       .single();
 
     if (error || !data) return null;
     return {
       pollinationsApiKey: data.pollinations_api_key,
+      openrouterApiKey: data.openrouter_api_key,
+      nvidiaApiKey: data.nvidia_api_key,
       preferredModel: data.image_model,
       apiKeyCreatedAt: data.api_key_created_at,
       apiKeyLastUsed: data.api_key_last_used,

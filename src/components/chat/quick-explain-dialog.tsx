@@ -18,6 +18,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { MarkdownRenderer } from './markdown-renderer';
 import { EntityAction } from './entity-action-menu';
+import { Quiz, QuizResult } from '@/ai/schemas/quiz-schema';
+import { QuizResultCard } from './quiz-result';
 
 export interface ExplanationHistoryItem {
   topic: string;
@@ -65,6 +67,7 @@ export function QuickExplainDrawer({
 
   const [activeView, setActiveView] = useState<'explain' | 'history' | 'detail'>('explain');
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<ExplanationHistoryItem | null>(null);
+  const [quizResults, setQuizResults] = useState<{ quiz: Quiz; result: QuizResult } | null>(null);
 
   useEffect(() => {
     if (!isLoading) return;
@@ -94,6 +97,11 @@ export function QuickExplainDrawer({
 
   useEffect(() => {
     if (!isOpen || !topic || activeView !== 'explain') return;
+
+    // Reset quiz results when a new explanation is fetched
+    if (topic) {
+      setQuizResults(null);
+    }
 
     // Check if we already have this topic explained in the session history to avoid AI call loops
     const existingItem = historyExplanations.find(
@@ -170,6 +178,39 @@ export function QuickExplainDrawer({
 
     fetchExplanation();
   }, [isOpen, topic, context, apiKey, authToken, activeView, historyExplanations]);
+
+  /**
+   * Handles quiz submission inside the explanation drawer
+   */
+  const handleQuizSubmit = useCallback(async (quiz: Quiz, answers: Record<string, string>) => {
+    if (!quiz || !quiz.questions) return;
+
+    const results: QuizResult = {
+      score: 0,
+      totalQuestions: quiz.questions.length,
+      correctAnswers: [],
+      wrongAnswers: [],
+      weakAreas: {},
+      strongAreas: []
+    };
+
+    const strongAreaTags = new Set<string>();
+
+    quiz.questions.forEach(q => {
+      if (answers[q.id] === q.correctOptionId) {
+        results.score++;
+        results.correctAnswers.push(q.id);
+        strongAreaTags.add(q.conceptTag);
+      } else {
+        results.wrongAnswers.push(q.id);
+        results.weakAreas[q.conceptTag] = (results.weakAreas[q.conceptTag] || 0) + 1;
+      }
+    });
+
+    results.strongAreas = Array.from(strongAreaTags).filter(tag => !results.weakAreas[tag]);
+
+    setQuizResults({ quiz, result: results });
+  }, []);
 
   const handleAskInChat = useCallback((topicText: string) => {
     onAskInChat?.(`Tell me more about ${topicText}`);
@@ -294,12 +335,22 @@ export function QuickExplainDrawer({
                           <div className="p-1 rounded-lg bg-primary/10 border border-primary/20 flex-shrink-0 mt-0.5">
                             <Lightbulb className="h-3.5 w-3.5 text-primary" />
                           </div>
-                          <div className="text-[13px] text-zinc-300 leading-relaxed font-normal select-text flex-1 min-w-0 break-words">
+                          <div className="text-[13px] text-zinc-300 leading-relaxed font-normal select-text flex-1 min-w-0 break-words space-y-6">
                             <MarkdownRenderer
                               content={explanation}
                               onEntityAction={onEntityAction}
                               onEntityClick={handleAskInChat}
+                              onQuizSubmit={handleQuizSubmit}
                             />
+                            {quizResults && quizResults.quiz && quizResults.result && (
+                              <div className="border-t border-white/10 pt-6">
+                                <QuizResultCard
+                                  result={quizResults.result}
+                                  quiz={quizResults.quiz}
+                                  onRegenerate={() => setQuizResults(null)}
+                                />
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>

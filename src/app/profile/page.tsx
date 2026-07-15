@@ -45,8 +45,9 @@ import {
 import { trackStudyTime } from '@/lib/tracker';
 import { ModelSelector, CompactModelSelector } from '@/components/model-selector';
 import { Eye, EyeOff, Menu } from 'lucide-react';
-import { getUserImageSettings, saveUserApiKey, deleteUserApiKey } from '@/lib/supabase-db';
+import { getUserImageSettings, saveUserApiKey, deleteUserApiKey, saveUserOpenRouterKey, deleteUserOpenRouterKey, saveUserNvidiaKey, deleteUserNvidiaKey } from '@/lib/supabase-db';
 import { useAIConfig } from '@/contexts/ai-config-context';
+import { AIProvider } from '@/ai/client-dispatcher';
 
 // Types
 // Types
@@ -89,10 +90,12 @@ interface UserProfile {
         nodesCreated?: number;
     }>;
     apiSettings?: {
-        provider?: 'pollinations';
+        provider?: 'pollinations' | 'openrouter' | 'nvidia';
         imageProvider?: 'pollinations';
         pollinationsModel?: string;
         pollinationsApiKey?: string;
+        openrouterApiKey?: string;
+        nvidiaApiKey?: string;
         imageModel?: string;
         textModel?: string;
     };
@@ -101,7 +104,7 @@ function ProfileContent() {
     const router = useRouter();
     const { user, signOut, resetPassword: authResetPassword } = useAuth();
     const supabase = getSupabaseClient();
-    const { pollenBalance, refreshBalance, updateConfig } = useAIConfig();
+    const { config, pollenBalance, refreshBalance, updateConfig } = useAIConfig();
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -125,6 +128,10 @@ function ProfileContent() {
     const [preferredTextModel, setPreferredTextModel] = useState('openai');
     const [isSavingKey, setIsSavingKey] = useState(false);
     const [apiKeyInput, setApiKeyInput] = useState('');
+    const [openRouterKeyInput, setOpenRouterKeyInput] = useState('');
+    const [showOpenRouterKey, setShowOpenRouterKey] = useState(false);
+    const [nvidiaKeyInput, setNvidiaKeyInput] = useState('');
+    const [showNvidiaKey, setShowNvidiaKey] = useState(false);
     const [isLoadingBalance, setIsLoadingBalance] = useState(false);
     const [balanceError, setBalanceError] = useState<string | null>(null);
     const [lastBalanceCheck, setLastBalanceCheck] = useState<Date | null>(null);
@@ -135,7 +142,41 @@ function ProfileContent() {
     const [userHeatmapMonth, setUserHeatmapMonth] = useState<Date>(new Date());
     const [selectedSourceMap, setSelectedSourceMap] = useState<any | null>(null);
 
-
+    // Capture Pollinations ENTER token redirect from URL query parameters
+    useEffect(() => {
+        const token = searchParams.get('token');
+        if (token && user) {
+            setIsSavingKey(true);
+            saveUserApiKey(supabase, user.id, token, preferredModel, preferredTextModel)
+                .then(() => {
+                    updateConfig({ pollinationsApiKey: token });
+                    setApiKeyInput(token);
+                    setProfile(prev => {
+                        if (!prev) return null;
+                        return {
+                            ...prev,
+                            apiSettings: {
+                                ...prev?.apiSettings,
+                                pollinationsApiKey: token,
+                            }
+                        };
+                    });
+                    toast({ title: 'Success', description: 'Pollinations key connected successfully.' });
+                    
+                    // Cleanup query param from URL bar
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('token');
+                    window.history.replaceState({}, '', url.toString());
+                })
+                .catch(err => {
+                    console.error('Error saving Pollinations token:', err);
+                    toast({ variant: 'destructive', title: 'Connection Error', description: 'Failed to save Pollinations token.' });
+                })
+                .finally(() => {
+                    setIsSavingKey(false);
+                });
+        }
+    }, [searchParams, user, supabase, preferredModel, preferredTextModel, updateConfig, toast]);
 
     // Load profile data
     useEffect(() => {
@@ -208,6 +249,8 @@ function ProfileContent() {
                 getUserImageSettings(supabase, user.id).then(settings => {
                     if (settings) {
                         setApiKeyInput(settings.pollinationsApiKey || '');
+                        setOpenRouterKeyInput(settings.openrouterApiKey || '');
+                        setNvidiaKeyInput(settings.nvidiaApiKey || '');
                         
                         let prefModel = settings.preferredModel || 'flux';
                         if (prefModel === 'flux-pro' || prefModel === 'klein-large') prefModel = 'flux';
@@ -220,9 +263,11 @@ function ProfileContent() {
                             return {
                                 ...prev,
                                 apiSettings: {
-                                    provider: 'pollinations',
+                                    provider: config.provider,
                                     imageProvider: 'pollinations',
                                     pollinationsApiKey: settings.pollinationsApiKey || '',
+                                    openrouterApiKey: settings.openrouterApiKey || '',
+                                    nvidiaApiKey: settings.nvidiaApiKey || '',
                                     imageModel: prefModel,
                                     textModel: settings.textModel || 'openai',
                                 }
@@ -489,6 +534,138 @@ function ProfileContent() {
             });
         } catch (error: any) {
             console.error('Error disconnecting API key:', error);
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to disconnect key.' });
+        } finally {
+            setIsSavingKey(false);
+        }
+    };
+
+    const handleSaveOpenRouterKey = async () => {
+        if (!user || !openRouterKeyInput.trim()) {
+            toast({ variant: 'destructive', title: 'Input Required', description: 'Please enter an OpenRouter key first.' });
+            return;
+        }
+
+        setIsSavingKey(true);
+        try {
+            await saveUserOpenRouterKey(supabase, user.id, openRouterKeyInput.trim());
+            updateConfig({ openrouterApiKey: openRouterKeyInput.trim() });
+            
+            setProfile(prev => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    apiSettings: {
+                        ...prev.apiSettings,
+                        openrouterApiKey: openRouterKeyInput.trim(),
+                    }
+                };
+            });
+            
+            toast({ 
+                title: 'Success', 
+                description: 'OpenRouter API Key saved successfully.' 
+            });
+
+        } catch (error: any) {
+            console.error('Error saving OpenRouter API key:', error);
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to save OpenRouter key.' });
+        } finally {
+            setIsSavingKey(false);
+        }
+    };
+
+    const handleDisconnectOpenRouterKey = async () => {
+        if (!user) return;
+        setIsSavingKey(true);
+        try {
+            await deleteUserOpenRouterKey(supabase, user.id);
+            setOpenRouterKeyInput('');
+            updateConfig({ openrouterApiKey: '' });
+            
+            setProfile(prev => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    apiSettings: {
+                        ...prev.apiSettings,
+                        openrouterApiKey: '',
+                    }
+                };
+            });
+            
+            toast({ 
+                title: 'Success', 
+                description: 'OpenRouter API Key disconnected.' 
+            });
+        } catch (error: any) {
+            console.error('Error disconnecting OpenRouter API key:', error);
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to disconnect key.' });
+        } finally {
+            setIsSavingKey(false);
+        }
+    };
+
+    const handleSaveNvidiaKey = async () => {
+        if (!user || !nvidiaKeyInput.trim()) {
+            toast({ variant: 'destructive', title: 'Input Required', description: 'Please enter an NVIDIA key first.' });
+            return;
+        }
+
+        setIsSavingKey(true);
+        try {
+            await saveUserNvidiaKey(supabase, user.id, nvidiaKeyInput.trim());
+            updateConfig({ nvidiaApiKey: nvidiaKeyInput.trim() });
+            
+            setProfile(prev => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    apiSettings: {
+                        ...prev.apiSettings,
+                        nvidiaApiKey: nvidiaKeyInput.trim(),
+                    }
+                };
+            });
+            
+            toast({ 
+                title: 'Success', 
+                description: 'NVIDIA API Key saved successfully.' 
+            });
+
+        } catch (error: any) {
+            console.error('Error saving NVIDIA API key:', error);
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to save NVIDIA key.' });
+        } finally {
+            setIsSavingKey(false);
+        }
+    };
+
+    const handleDisconnectNvidiaKey = async () => {
+        if (!user) return;
+        setIsSavingKey(true);
+        try {
+            await deleteUserNvidiaKey(supabase, user.id);
+            setNvidiaKeyInput('');
+            updateConfig({ nvidiaApiKey: '' });
+            
+            setProfile(prev => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    apiSettings: {
+                        ...prev.apiSettings,
+                        nvidiaApiKey: '',
+                    }
+                };
+            });
+            
+            toast({ 
+                title: 'Success', 
+                description: 'NVIDIA API Key disconnected.' 
+            });
+        } catch (error: any) {
+            console.error('Error disconnecting NVIDIA API key:', error);
             toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to disconnect key.' });
         } finally {
             setIsSavingKey(false);
@@ -1217,76 +1394,292 @@ function ProfileContent() {
                                             </div>
                                         </div>
 
-                                        <div className="space-y-6 relative z-10">
-                                            <button
-                                                onClick={() => {
-                                                    const params = new URLSearchParams({ 
-                                                        redirect_url: window.location.href,
-                                                        permissions: 'profile,balance,usage,keys,models',
-                                                        scope: 'profile,balance,usage,keys,models',
-                                                        budget: '1000'
-                                                    });
-                                                    window.location.href = `https://enter.pollinations.ai/authorize?${params}`;
-                                                }}
-                                                className="w-full flex items-center justify-center gap-3 h-14 rounded-2xl bg-gradient-to-r from-violet-600/10 to-pink-600/10 border border-violet-500/20 hover:border-violet-400/50 hover:bg-white/5 transition-all group shadow-xl"
+                                        {/* Provider Selector */}
+                                        <div className="space-y-3">
+                                            <div className="flex items-center justify-between px-1">
+                                                <Label className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-600">Active Provider</Label>
+                                            </div>
+                                            <Select 
+                                                value={config.provider}
+                                                onValueChange={(val: AIProvider) => updateConfig({ provider: val })}
                                             >
-                                                <Sparkles className="h-4 w-4 text-violet-300 group-hover:scale-110 transition-transform" />
-                                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-100">Connect to Pollinations</span>
-                                            </button>
+                                                <SelectTrigger className="w-full h-16 bg-black/40 border-white/10 rounded-xl px-5 text-xs font-bold transition-all hover:border-white/20">
+                                                    <SelectValue>
+                                                        <div className="flex items-center gap-3">
+                                                            {config.provider === 'nvidia' ? (
+                                                                <>
+                                                                    <div className="p-2 rounded-lg bg-lime-500/10 border border-lime-500/20">
+                                                                        <Brain className="h-4 w-4 text-lime-400" />
+                                                                    </div>
+                                                                    <div className="text-left">
+                                                                        <p className="text-sm font-black text-white">NVIDIA NIM</p>
+                                                                        <p className="text-[9px] text-lime-400 font-bold">Llama 3.1 & Nemotron · API Key</p>
+                                                                    </div>
+                                                                </>
+                                                            ) : config.provider === 'openrouter' ? (
+                                                                <>
+                                                                    <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                                                                        <BrainCircuit className="h-4 w-4 text-emerald-400" />
+                                                                    </div>
+                                                                    <div className="text-left">
+                                                                        <p className="text-sm font-black text-white">OpenRouter</p>
+                                                                        <p className="text-[9px] text-emerald-400 font-bold">Gemma 4 · Free model chain</p>
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <div className="p-2 rounded-lg bg-violet-500/10 border border-violet-500/20">
+                                                                        <Sparkles className="h-4 w-4 text-violet-400" />
+                                                                    </div>
+                                                                    <div className="text-left">
+                                                                        <p className="text-sm font-black text-white">Pollinations</p>
+                                                                        <p className="text-[9px] text-violet-400 font-bold">Image & text models</p>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </SelectValue>
+                                                </SelectTrigger>
+                                                <SelectContent className="z-[250] bg-zinc-900 border-zinc-800 rounded-xl min-w-[240px]">
+                                                    <SelectItem
+                                                        value="nvidia"
+                                                        className="py-3 px-4 text-xs font-bold focus:bg-white/5 focus:text-white rounded-lg cursor-pointer transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="p-1.5 rounded-lg bg-lime-500/10 border border-lime-500/20">
+                                                                <Brain className="h-4 w-4 text-lime-400" />
+                                                            </div>
+                                                            <div className="text-left">
+                                                                <p className="text-sm font-black text-white">NVIDIA NIM</p>
+                                                                <p className="text-[9px] text-zinc-500 font-bold">Llama 3.1 & Nemotron · Requires API key</p>
+                                                            </div>
+                                                        </div>
+                                                    </SelectItem>
+                                                    <SelectItem
+                                                        value="openrouter"
+                                                        className="py-3 px-4 text-xs font-bold focus:bg-white/5 focus:text-white rounded-lg cursor-pointer transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                                                                <BrainCircuit className="h-4 w-4 text-emerald-400" />
+                                                            </div>
+                                                            <div className="text-left">
+                                                                <p className="text-sm font-black text-white">OpenRouter</p>
+                                                                <p className="text-[9px] text-zinc-500 font-bold">Free models · No key needed</p>
+                                                            </div>
+                                                        </div>
+                                                    </SelectItem>
+                                                    <SelectItem
+                                                        value="pollinations"
+                                                        className="py-3 px-4 text-xs font-bold focus:bg-white/5 focus:text-white rounded-lg cursor-pointer transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="p-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20">
+                                                                <Sparkles className="h-4 w-4 text-violet-400" />
+                                                            </div>
+                                                            <div className="text-left">
+                                                                <p className="text-sm font-black text-white">Pollinations</p>
+                                                                <p className="text-[9px] text-zinc-500 font-bold">Pollen balance · Requires API key</p>
+                                                            </div>
+                                                        </div>
+                                                    </SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
 
-                                            <div className="space-y-3">
-                                                <div className="flex items-center justify-between px-1">
-                                                    <Label className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-600">Encrypted Token</Label>
-                                                </div>
-                                                <div className="relative group">
-                                                    <Input
-                                                        type={showApiKey ? "text" : "password"}
-                                                        value={apiKeyInput}
-                                                        onChange={(e) => setApiKeyInput(e.target.value)}
-                                                        className="h-12 bg-black/40 border-white/5 rounded-xl px-5 pr-24 font-mono text-xs tracking-widest"
-                                                        placeholder="sk_..."
-                                                    />
-                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                        <Separator className="bg-white/5" />
+
+                                        <div className="space-y-6 relative z-10">
+                                            {/* Pollinations Active Configuration */}
+                                            {config.provider === 'pollinations' && (
+                                                <div className="space-y-6 animate-fadeIn">
+                                                    {!profile.apiSettings?.pollinationsApiKey && (
                                                         <button
-                                                            type="button"
-                                                            onClick={() => setShowApiKey(v => !v)}
-                                                            className="h-8 w-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/5 transition-all"
+                                                            onClick={() => {
+                                                                const params = new URLSearchParams({ 
+                                                                    redirect_url: window.location.href,
+                                                                    permissions: 'profile,balance,usage,keys,models',
+                                                                    scope: 'profile,balance,usage,keys,models',
+                                                                    budget: '1000'
+                                                                });
+                                                                window.location.href = `https://enter.pollinations.ai/authorize?${params}`;
+                                                            }}
+                                                            className="w-full flex items-center justify-center gap-3 h-14 rounded-2xl bg-gradient-to-r from-violet-600/10 to-pink-600/10 border border-violet-500/20 hover:border-violet-400/50 hover:bg-white/5 transition-all group shadow-xl"
                                                         >
-                                                            {showApiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                            <Sparkles className="h-4 w-4 text-violet-300 group-hover:scale-110 transition-transform" />
+                                                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-100">Connect to Pollinations</span>
                                                         </button>
-                                                        {profile.apiSettings?.pollinationsApiKey && (
-                                                            <Button 
-                                                                onClick={handleDisconnectApiKey} 
-                                                                disabled={isSavingKey}
-                                                                className="h-8 px-4 rounded-lg bg-red-600/10 border border-red-500/20 text-red-400 text-[8px] uppercase font-black hover:bg-red-500 hover:text-white"
-                                                            >
-                                                                {isSavingKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Disconnect"}
-                                                            </Button>
-                                                        )}
-                                                        <Button 
-                                                            onClick={handleSaveApiKey} 
-                                                            disabled={isSavingKey}
-                                                            className="h-8 px-4 rounded-lg bg-violet-600/10 border border-violet-500/20 text-violet-400 text-[8px] uppercase font-black"
-                                                        >
-                                                            {isSavingKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Verify"}
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                                    )}
 
-                                            <div className="p-5 rounded-2xl bg-black/40 border border-white/5 flex items-center justify-between gap-4 shadow-inner">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-2.5 h-2.5 rounded-full ${profile.apiSettings?.pollinationsApiKey ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-zinc-800'}`} />
-                                                    <div className="space-y-0.5">
-                                                        <p className="text-[8px] text-zinc-600 uppercase tracking-widest font-black">Link State</p>
-                                                        <p className="text-xs font-black text-white">{profile.apiSettings?.pollinationsApiKey ? "BOUND" : "SHARED"}</p>
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-center justify-between px-1">
+                                                            <Label className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-600">Encrypted Token</Label>
+                                                        </div>
+                                                        <div className="relative group">
+                                                            <Input
+                                                                type={showApiKey ? "text" : "password"}
+                                                                value={apiKeyInput}
+                                                                onChange={(e) => setApiKeyInput(e.target.value)}
+                                                                className={`h-12 bg-black/40 border-white/5 rounded-xl px-5 font-mono text-xs tracking-widest transition-all ${profile.apiSettings?.pollinationsApiKey ? 'pr-[200px]' : 'pr-32'}`}
+                                                                placeholder="sk_..."
+                                                            />
+                                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setShowApiKey(v => !v)}
+                                                                    className="h-8 w-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/5 transition-all"
+                                                                >
+                                                                    {showApiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                                </button>
+                                                                {profile.apiSettings?.pollinationsApiKey && (
+                                                                    <Button 
+                                                                        onClick={handleDisconnectApiKey} 
+                                                                        disabled={isSavingKey}
+                                                                        className="h-8 px-4 rounded-lg bg-red-600/10 border border-red-500/20 text-red-400 text-[8px] uppercase font-black hover:bg-red-500 hover:text-white"
+                                                                    >
+                                                                        {isSavingKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Disconnect"}
+                                                                    </Button>
+                                                                )}
+                                                                <Button 
+                                                                    onClick={handleSaveApiKey} 
+                                                                    disabled={isSavingKey}
+                                                                    className="h-8 px-4 rounded-lg bg-violet-600/10 border border-violet-500/20 text-violet-400 text-[8px] uppercase font-black hover:bg-violet-500 hover:text-white"
+                                                                >
+                                                                    {isSavingKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Verify"}
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="p-5 rounded-2xl bg-black/40 border border-white/5 flex items-center justify-between gap-4 shadow-inner">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-2.5 h-2.5 rounded-full ${profile.apiSettings?.pollinationsApiKey ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-zinc-800'}`} />
+                                                            <div className="space-y-0.5">
+                                                                <p className="text-[8px] text-zinc-600 uppercase tracking-widest font-black">Link State</p>
+                                                                <p className="text-xs font-black text-white">{profile.apiSettings?.pollinationsApiKey ? "BOUND" : "SHARED"}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-0.5 text-right">
+                                                            <p className="text-[8px] text-zinc-600 uppercase tracking-widest font-black">Pollen</p>
+                                                            <p className="text-lg font-black text-white tracking-tighter">{(pollenBalance || 0).toLocaleString()}</p>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <div className="space-y-0.5 text-right">
-                                                    <p className="text-[8px] text-zinc-600 uppercase tracking-widest font-black">Pollen</p>
-                                                    <p className="text-lg font-black text-white tracking-tighter">{(pollenBalance || 0).toLocaleString()}</p>
+                                            )}
+
+                                            {/* OpenRouter Active Configuration */}
+                                            {config.provider === 'openrouter' && (
+                                                <div className="space-y-6 animate-fadeIn">
+                                                    {!profile.apiSettings?.openrouterApiKey && (
+                                                        <a
+                                                            href="https://openrouter.ai/keys"
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="w-full flex items-center justify-center gap-3 h-14 rounded-2xl bg-gradient-to-r from-emerald-600/10 to-teal-600/10 border border-emerald-500/20 hover:border-emerald-400/50 hover:bg-white/5 transition-all group shadow-xl text-center"
+                                                        >
+                                                            <Sparkles className="h-4 w-4 text-emerald-300 group-hover:scale-110 transition-transform" />
+                                                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100">Get OpenRouter API Key</span>
+                                                        </a>
+                                                    )}
+
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-center justify-between px-1">
+                                                            <Label className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-600">OpenRouter Key (Optional)</Label>
+                                                        </div>
+                                                        <div className="relative group">
+                                                            <Input
+                                                                type={showOpenRouterKey ? "text" : "password"}
+                                                                value={openRouterKeyInput}
+                                                                onChange={(e) => setOpenRouterKeyInput(e.target.value)}
+                                                                className={`h-12 bg-black/40 border-white/5 rounded-xl px-5 font-mono text-xs tracking-widest text-white placeholder-zinc-700 transition-all ${profile.apiSettings?.openrouterApiKey ? 'pr-[200px]' : 'pr-32'}`}
+                                                                placeholder="sk-or-v1-..."
+                                                            />
+                                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setShowOpenRouterKey(v => !v)}
+                                                                    className="h-8 w-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/5 transition-all"
+                                                                >
+                                                                    {showOpenRouterKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                                </button>
+                                                                {profile.apiSettings?.openrouterApiKey && (
+                                                                    <Button 
+                                                                        onClick={handleDisconnectOpenRouterKey} 
+                                                                        disabled={isSavingKey}
+                                                                        className="h-8 px-4 rounded-lg bg-red-600/10 border border-red-500/20 text-red-400 text-[8px] uppercase font-black hover:bg-red-500 hover:text-white"
+                                                                    >
+                                                                        {isSavingKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Disconnect"}
+                                                                    </Button>
+                                                                )}
+                                                                <Button 
+                                                                    onClick={handleSaveOpenRouterKey} 
+                                                                    disabled={isSavingKey}
+                                                                    className="h-8 px-4 rounded-lg bg-emerald-600/10 border border-emerald-500/20 text-emerald-400 text-[8px] uppercase font-black hover:bg-emerald-500 hover:text-white"
+                                                                >
+                                                                    {isSavingKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            )}
+
+                                            {/* NVIDIA Active Configuration */}
+                                            {config.provider === 'nvidia' && (
+                                                <div className="space-y-6 animate-fadeIn">
+                                                    {!profile.apiSettings?.nvidiaApiKey && (
+                                                        <a
+                                                            href="https://build.nvidia.com/settings/api-keys"
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="w-full flex items-center justify-center gap-3 h-14 rounded-2xl bg-gradient-to-r from-lime-600/10 to-green-600/10 border border-lime-500/20 hover:border-lime-400/50 hover:bg-white/5 transition-all group shadow-xl text-center"
+                                                        >
+                                                            <Sparkles className="h-4 w-4 text-lime-300 group-hover:scale-110 transition-transform" />
+                                                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-lime-100">Get NVIDIA NIM API Key</span>
+                                                        </a>
+                                                    )}
+
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-center justify-between px-1">
+                                                            <Label className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-600">NVIDIA NIM Key (Optional)</Label>
+                                                        </div>
+                                                        <div className="relative group">
+                                                            <Input
+                                                                type={showNvidiaKey ? "text" : "password"}
+                                                                value={nvidiaKeyInput}
+                                                                onChange={(e) => setNvidiaKeyInput(e.target.value)}
+                                                                className={`h-12 bg-black/40 border-white/5 rounded-xl px-5 font-mono text-xs tracking-widest text-white placeholder-zinc-700 transition-all ${profile.apiSettings?.nvidiaApiKey ? 'pr-[200px]' : 'pr-32'}`}
+                                                                placeholder="nvapi-..."
+                                                            />
+                                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setShowNvidiaKey(v => !v)}
+                                                                    className="h-8 w-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/5 transition-all"
+                                                                >
+                                                                    {showNvidiaKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                                </button>
+                                                                {profile.apiSettings?.nvidiaApiKey && (
+                                                                    <Button 
+                                                                        onClick={handleDisconnectNvidiaKey} 
+                                                                        disabled={isSavingKey}
+                                                                        className="h-8 px-4 rounded-lg bg-red-600/10 border border-red-500/20 text-red-400 text-[8px] uppercase font-black hover:bg-red-500 hover:text-white"
+                                                                    >
+                                                                        {isSavingKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Disconnect"}
+                                                                    </Button>
+                                                                )}
+                                                                <Button 
+                                                                    onClick={handleSaveNvidiaKey} 
+                                                                    disabled={isSavingKey}
+                                                                    className="h-8 px-4 rounded-lg bg-lime-600/10 border border-lime-500/20 text-lime-400 text-[8px] uppercase font-black hover:bg-lime-500 hover:text-white"
+                                                                >
+                                                                    {isSavingKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -1392,13 +1785,43 @@ function ProfileContent() {
                                                     </div>
                                                 </div>
                                                 <div className="w-56 flex justify-end">
-                                                    <CompactModelSelector
-                                                        type="text"
-                                                        value={preferredTextModel}
-                                                        onChange={handleSaveTextModelPreference}
-                                                        freeOnly={true}
-                                                        className="w-full h-9 bg-black/40 border-white/5 rounded-lg px-3 text-xs font-bold truncate"
-                                                    />
+                                                    {config.provider === 'nvidia' ? (
+                                                        <div className="flex items-center gap-2 w-full">
+                                                            <div className="flex-1 px-3 py-2 bg-lime-500/10 border border-lime-500/20 rounded-lg">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-lime-400 animate-pulse" />
+                                                                    <span className="text-[10px] font-bold text-lime-400 truncate">
+                                                                        Nemotron 51B (auto)
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-[8px] text-lime-500/60 mt-0.5">
+                                                                      NVIDIA NIM API active
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    ) : config.provider === 'openrouter' ? (
+                                                        <div className="flex items-center gap-2 w-full">
+                                                            <div className="flex-1 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                                                    <span className="text-[10px] font-bold text-emerald-400 truncate">
+                                                                        Gemma 4 (auto)
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-[8px] text-emerald-500/60 mt-0.5">
+                                                                      Free model chain active
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <CompactModelSelector
+                                                            type="text"
+                                                            value={preferredTextModel}
+                                                            onChange={handleSaveTextModelPreference}
+                                                            freeOnly={true}
+                                                            className="w-full h-9 bg-black/40 border-white/5 rounded-lg px-3 text-xs font-bold truncate"
+                                                        />
+                                                    )}
                                                 </div>
                                             </div>
 

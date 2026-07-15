@@ -20,9 +20,9 @@ const SYSTEM_GUARANTEES = `SYSTEM GUARANTEES:
 - Do NOT explain, only generate`;
 
 export async function generateRelatedQuestions(
-    input: RelatedQuestionsInput & { apiKey?: string; provider?: AIProvider; strict?: boolean; pdfContext?: string }
+    input: RelatedQuestionsInput & { apiKey?: string; provider?: AIProvider; model?: string; strict?: boolean; pdfContext?: string }
 ): Promise<RelatedQuestionsOutput> {
-    const { topic, mindMapData, history, provider, apiKey, strict, pdfContext } = input;
+    const { topic, mindMapData, history, provider, apiKey, model, strict, pdfContext } = input;
 
     const historyText = history?.map(h => `${h.role}: ${h.content}`).join('\n') || '';
     const mapContext = mindMapData ? `Map structure: ${JSON.stringify(mindMapData).substring(0, 2000)}` : '';
@@ -66,7 +66,7 @@ Return ONLY: { "questions": ["Q1?", "Q2?", "Q3?"] }`;
     const userPrompt = `Generate the related questions.`;
 
     try {
-        return await generateContent({ provider, apiKey, systemPrompt, userPrompt, schema: RelatedQuestionsOutputSchema, strict });
+        return await generateContent({ provider, apiKey, model, systemPrompt, userPrompt, schema: RelatedQuestionsOutputSchema, strict });
     } catch (e: any) {
         console.error(`❌ Related questions failed:`, e.message);
         return { questions: [] };

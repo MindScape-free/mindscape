@@ -38,7 +38,7 @@ export function Navbar() {
   const { user, isUserLoading, isAdmin, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const { resetConfig, pollenBalance, isBalanceLoading } = useAIConfig();
+  const { config, updateConfig, resetConfig, pollenBalance, isBalanceLoading } = useAIConfig();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isPointsOpen, setIsPointsOpen] = useState(false);
@@ -182,25 +182,29 @@ export function Navbar() {
 
             {/* Right Section: Auth & Profile */}
             <div className="flex flex-1 items-center justify-end gap-2 xl:gap-3">
-              {user && (
+              {user && (config.provider === 'pollinations' || (rankInfo && ledger)) && (
                 <div className="hidden sm:flex items-center gap-1 p-1 rounded-2xl bg-zinc-900/50 border border-white/5 shadow-inner">
-                  <Link
-                    href="/profile?tab=lab"
-                    className="flex items-center gap-2 px-2.5 py-1 rounded-xl text-violet-400 hover:bg-violet-500/10 transition-all group min-w-[70px] justify-center"
-                  >
-                    <span className="text-base group-hover:scale-110 transition-transform inline-block">🍄</span>
-                    {isBalanceLoading ? (
-                      <div className="h-4 w-10 bg-violet-500/20 animate-pulse rounded" />
-                    ) : pollenBalance !== null ? (
-                      <span className="text-xs font-black tracking-wider font-orbitron">
-                        {pollenBalance.toLocaleString()}
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-black text-violet-400/50">--</span>
-                    )}
-                  </Link>
+                  {config.provider === 'pollinations' && (
+                    <Link
+                      href="/profile?tab=lab"
+                      className="flex items-center gap-2 px-2.5 py-1 rounded-xl text-violet-400 hover:bg-violet-500/10 transition-all group min-w-[70px] justify-center"
+                    >
+                      <span className="text-base group-hover:scale-110 transition-transform inline-block">🍄</span>
+                      {isBalanceLoading ? (
+                        <div className="h-4 w-10 bg-violet-500/20 animate-pulse rounded" />
+                      ) : pollenBalance !== null ? (
+                        <span className="text-xs font-black tracking-wider font-orbitron">
+                          {pollenBalance.toLocaleString()}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-black text-violet-400/50">--</span>
+                      )}
+                    </Link>
+                  )}
 
-                  <div className="w-[1px] h-4 bg-white/10 mx-0.5" />
+                  {config.provider === 'pollinations' && rankInfo && ledger && (
+                    <div className="w-[1px] h-4 bg-white/10 mx-0.5" />
+                  )}
 
                   {rankInfo && ledger && (
                     <button

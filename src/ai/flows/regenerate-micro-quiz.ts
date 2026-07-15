@@ -19,7 +19,8 @@ export async function regenerateMicroQuiz(
     nodeName: string,
     nodeDescription: string,
     mainTopic: string,
-    apiKey?: string
+    apiKey?: string,
+    model?: string
 ): Promise<MicroQuizOutput> {
     const systemPrompt = `You are a quiz generator for a mind map learning platform.
 
@@ -46,6 +47,7 @@ Return ONLY this JSON:
         try {
             const result = await generateContent({
                 apiKey,
+                model,
                 systemPrompt,
                 userPrompt,
                 schema: MicroQuizSchema,

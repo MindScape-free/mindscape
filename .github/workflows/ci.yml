@@ -1,0 +1,57 @@
+# ── MindScape CI ─────────────────────────────────────────────────────────
+# Runs on every push to main and every pull request.
+#
+# Type check:  BLOCKING gate — catches TS2451 (duplicate vars), TS2448,
+#              and all type errors that ESLint alone misses.
+# ESLint:      NON-BLOCKING — pre-existing issues tracked separately.
+# Tests:       NON-BLOCKING — pre-existing failures tracked separately.
+# ──────────────────────────────────────────────────────────────────────────
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ── 1. TypeScript Type Check (BLOCKING) ──────────────────────────
+      # Catches TS2451 (redeclared variables), TS2448 (used before decl),
+      # and all other type errors. This is the primary quality gate.
+      - name: TypeScript type check
+        run: npm run typecheck
+
+      # ── 2. ESLint (NON-BLOCKING) ─────────────────────────────────────
+      # Pre-existing issues (471 errors) don't block CI.
+      # continue-on-error shows the step as yellow/failed in the UI
+      # without failing the entire workflow, so issues stay visible.
+      - name: ESLint
+        run: npm run lint -- --format unix
+        continue-on-error: true
+
+      # ── 3. Jest Tests (NON-BLOCKING) ─────────────────────────────────
+      - name: Tests
+        run: npm test
+        continue-on-error: true

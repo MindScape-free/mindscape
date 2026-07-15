@@ -87,6 +87,8 @@ interface ModelSelectorProps {
     type?: 'text' | 'image';
 }
 
+import { useAIConfig } from '@/contexts/ai-config-context';
+
 export function ModelSelector({
     value,
     onChange,
@@ -95,6 +97,7 @@ export function ModelSelector({
     freeOnly = false,
     type = 'image'
 }: ModelSelectorProps) {
+    const { config } = useAIConfig();
     const [availableModels, setAvailableModels] = useState<ModelItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -102,7 +105,7 @@ export function ModelSelector({
         const loadModels = async () => {
             setIsLoading(true);
             try {
-                const res = await fetch(`/api/models?type=${type}`);
+                const res = await fetch(`/api/models?type=${type}&provider=${config.provider}`);
                 if (!res.ok) throw new Error('API Error');
                 const data = await res.json();
                 if (data.models) {
@@ -115,7 +118,7 @@ export function ModelSelector({
             }
         };
         loadModels();
-    }, [type]);
+    }, [type, config.provider]);
 
     // freeOnly: use the isFree flag from the API
     const models = freeOnly 
@@ -130,6 +133,14 @@ export function ModelSelector({
     }
 
     const selectedModel = models.find(m => m.value === value) || models[0];
+
+    // Auto-update parent state if the current value is invalid for the new provider
+    useEffect(() => {
+        if (!isLoading && models.length > 0 && selectedModel && selectedModel.value !== value) {
+            onChange(selectedModel.value);
+        }
+    }, [isLoading, models, selectedModel, value, onChange]);
+
     if (!selectedModel) return null;
 
     return (
@@ -204,13 +215,14 @@ export function ModelSelector({
  * Compact model selector for inline use
  */
 export function CompactModelSelector({ value, onChange, className, freeOnly = false, type = 'image' }: ModelSelectorProps) {
+    const { config } = useAIConfig();
     const [availableModels, setAvailableModels] = useState<ModelItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         const loadModels = async () => {
             try {
-                const res = await fetch(`/api/models?type=${type}`);
+                const res = await fetch(`/api/models?type=${type}&provider=${config.provider}`);
                 if (!res.ok) throw new Error('API Error');
                 const data = await res.json();
                 if (data.models) {
@@ -223,7 +235,7 @@ export function CompactModelSelector({ value, onChange, className, freeOnly = fa
             }
         };
         loadModels();
-    }, [type]);
+    }, [type, config.provider]);
 
     // freeOnly: use the isFree flag from the API
     const models = freeOnly 

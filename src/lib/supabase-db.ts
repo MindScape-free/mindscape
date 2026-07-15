@@ -33,6 +33,8 @@ export function getSupabaseClientWithOptions(options?: { persistSession?: boolea
 
 export interface UserImageSettings {
   pollinationsApiKey?: string;
+  openrouterApiKey?: string;
+  nvidiaApiKey?: string;
   preferredModel?: string;
   imageModel?: string;
   textModel?: string;
@@ -43,13 +45,15 @@ export interface UserImageSettings {
 export async function getUserImageSettings(supabase: SupabaseClient, userId: string): Promise<UserImageSettings | null> {
   const { data, error } = await supabase
     .from('user_settings')
-    .select('pollinations_api_key, image_model, text_model, api_key_created_at, api_key_last_used')
+    .select('pollinations_api_key, openrouter_api_key, nvidia_api_key, image_model, text_model, api_key_created_at, api_key_last_used')
     .eq('user_id', userId)
     .single();
 
   if (error || !data) return null;
   return {
     pollinationsApiKey: data.pollinations_api_key,
+    openrouterApiKey: data.openrouter_api_key,
+    nvidiaApiKey: data.nvidia_api_key,
     imageModel: data.image_model,
     textModel: data.text_model,
     apiKeyCreatedAt: data.api_key_created_at,
@@ -79,6 +83,56 @@ export async function deleteUserApiKey(supabase: SupabaseClient, userId: string)
     pollinations_api_key: null,
     api_key_last_used: null,
   }).eq('user_id', userId);
+}
+
+export async function saveUserOpenRouterKey(
+  supabase: SupabaseClient,
+  userId: string,
+  apiKey: string
+): Promise<void> {
+  await supabase.from('user_settings').upsert({
+    user_id: userId,
+    openrouter_api_key: apiKey,
+    api_key_created_at: Date.now(),
+    api_key_last_used: Date.now(),
+  }, { onConflict: 'user_id' });
+}
+
+export async function deleteUserOpenRouterKey(supabase: SupabaseClient, userId: string): Promise<void> {
+  await supabase.from('user_settings').update({
+    openrouter_api_key: null,
+  }).eq('user_id', userId);
+}
+
+export async function saveUserNvidiaKey(
+  supabase: SupabaseClient,
+  userId: string,
+  apiKey: string
+): Promise<void> {
+  await supabase.from('user_settings').upsert({
+    user_id: userId,
+    nvidia_api_key: apiKey,
+    api_key_created_at: Date.now(),
+    api_key_last_used: Date.now(),
+  }, { onConflict: 'user_id' });
+}
+
+export async function deleteUserNvidiaKey(supabase: SupabaseClient, userId: string): Promise<void> {
+  await supabase.from('user_settings').update({
+    nvidia_api_key: null,
+  }).eq('user_id', userId);
+}
+
+export async function saveUserProvider(
+  supabase: SupabaseClient,
+  userId: string,
+  provider: string
+): Promise<void> {
+  await supabase.from('user_settings').upsert({
+    user_id: userId,
+    provider: provider,
+    api_key_last_used: Date.now(),
+  }, { onConflict: 'user_id' });
 }
 
 // ── User Profile ───────────────────────────────────────────────────────────

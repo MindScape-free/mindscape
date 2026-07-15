@@ -4,19 +4,22 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { AIProvider } from '@/ai/client-dispatcher';
 import { useUser } from '@/lib/auth-context';
-import { getSupabaseClient } from '@/lib/supabase-db';
+import { getSupabaseClient, saveUserProvider } from '@/lib/supabase-db';
 import { checkPollenBalanceAction } from '@/app/actions';
 
 interface AIConfig {
     provider: AIProvider;
     apiKey: string;
     pollinationsApiKey: string;
+    openrouterApiKey: string;
+    nvidiaApiKey: string;
     temperature: number;
     topP: number;
     textModel?: string;
     imageModel?: string;
     pollinationsModel?: string; // Legacy
     pollenBalance?: number | null;
+    manualProvider?: AIProvider; // Set when user explicitly chooses a provider via the UI
 }
 
 interface AIConfigContextType {
@@ -29,9 +32,11 @@ interface AIConfigContextType {
 }
 
 const DEFAULT_CONFIG: AIConfig = {
-    provider: 'pollinations',
+    provider: 'openrouter',
     apiKey: '',
     pollinationsApiKey: '',
+    openrouterApiKey: '',
+    nvidiaApiKey: '',
     temperature: 0.7,
     topP: 0.9,
 };
@@ -70,8 +75,41 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
     }, [config]);
 
     const updateConfig = useCallback((updates: Partial<AIConfig>) => {
+        const hasExplicitProvider = 'provider' in updates;
+
         setConfig(current => {
             const newConfig = { ...current, ...updates };
+
+            // When the user explicitly selects a provider from the UI,
+            // record it as manualProvider so it persists across syncs
+            if (hasExplicitProvider && updates.provider) {
+                newConfig.manualProvider = updates.provider;
+                
+                // Save default provider to Supabase user_settings
+                if (user) {
+                    const supabase = getSupabaseClient();
+                    saveUserProvider(supabase, user.id, updates.provider)
+                        .catch(err => console.error('Failed to save provider choice to Supabase:', err));
+                }
+            }
+
+            // Auto-switch: only when the user hasn't made an explicit choice
+            if (!hasExplicitProvider) {
+                // If a manual selection was made previously, respect it
+                if (newConfig.manualProvider) {
+                    newConfig.provider = newConfig.manualProvider;
+                } else {
+                    // No manual choice: auto-switch based on available keys
+                    if (newConfig.nvidiaApiKey) {
+                        newConfig.provider = 'nvidia';
+                    } else if (newConfig.openrouterApiKey) {
+                        newConfig.provider = 'openrouter';
+                    } else if (newConfig.pollinationsApiKey) {
+                        newConfig.provider = 'pollinations';
+                    }
+                }
+            }
+
             setStoredConfig(newConfig);
             return newConfig;
         });
@@ -81,7 +119,7 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
         if (updates.pollenBalance !== undefined) {
              setPollenBalance(updates.pollenBalance ?? null);
         }
-    }, [setStoredConfig]);
+    }, [setStoredConfig, user]);
 
     const resetConfig = useCallback(() => {
         setConfig(DEFAULT_CONFIG);
@@ -92,6 +130,13 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
     const refreshBalance = useCallback(async (apiKeyOverride?: string, force = false) => {
         // Skip on server - this can only work client-side with auth
         if (typeof window === 'undefined') return;
+
+        // Pollen balance is a Pollinations-specific concept — skip for other providers.
+        // Checking NVIDIA/OpenRouter balance would always return null/misleading data.
+        if (configRef.current.provider !== 'pollinations') {
+            setPollenBalance(null);
+            return;
+        }
         
         const apiKey = apiKeyOverride ?? configRef.current.pollinationsApiKey;
         if (!user || !apiKey || (isRefreshingRef.current && !force)) {
@@ -180,6 +225,28 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
                 ...configRef.current,
                 ...remoteConfig,
             };
+
+            // If remoteConfig contains an explicit saved provider choice, respect it
+            if (remoteConfig.provider) {
+                merged.provider = remoteConfig.provider;
+                merged.manualProvider = remoteConfig.provider;
+            } else {
+                // Respect manual provider selection when syncing from Supabase
+                const manualProv = configRef.current.manualProvider;
+                if (manualProv) {
+                    merged.provider = manualProv;
+                } else {
+                    // No manual choice: auto-switch based on available keys
+                    if (merged.nvidiaApiKey) {
+                        merged.provider = 'nvidia';
+                    } else if (merged.openrouterApiKey) {
+                        merged.provider = 'openrouter';
+                    } else if (merged.pollinationsApiKey) {
+                        merged.provider = 'pollinations';
+                    }
+                }
+            }
+
             const newConfigStr = JSON.stringify(merged);
             if (newConfigStr !== lastStoredConfigRef.current) {
                 lastStoredConfigRef.current = newConfigStr;
@@ -198,16 +265,22 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
         const fetchSettings = async () => {
             const { data, error } = await supabase
                 .from('user_settings')
-                .select('pollinations_api_key, image_model, text_model')
+                .select('pollinations_api_key, openrouter_api_key, nvidia_api_key, image_model, text_model, provider')
                 .eq('user_id', user.id)
                 .single();
 
             if (!error && data) {
-                applyRemoteConfig({
+                const remoteUpdates: Partial<AIConfig> = {
                     pollinationsApiKey: data.pollinations_api_key || '',
+                    openrouterApiKey: data.openrouter_api_key || '',
+                    nvidiaApiKey: data.nvidia_api_key || '',
                     imageModel: data.image_model || '',
                     textModel: data.text_model || '',
-                });
+                };
+                if (data.provider) {
+                    remoteUpdates.provider = data.provider as AIProvider;
+                }
+                applyRemoteConfig(remoteUpdates);
             }
             setHydrated(true);
         };
@@ -226,11 +299,17 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
                 console.log('🔔 AI Config Realtime update:', payload);
                 const data = payload.new as any;
                 if (data) {
-                    applyRemoteConfig({
+                    const remoteUpdates: Partial<AIConfig> = {
                         pollinationsApiKey: data.pollinations_api_key || '',
+                        openrouterApiKey: data.openrouter_api_key || '',
+                        nvidiaApiKey: data.nvidia_api_key || '',
                         imageModel: data.image_model || '',
                         textModel: data.text_model || '',
-                    });
+                    };
+                    if (data.provider) {
+                        remoteUpdates.provider = data.provider as AIProvider;
+                    }
+                    applyRemoteConfig(remoteUpdates);
                 }
             })
             .subscribe();

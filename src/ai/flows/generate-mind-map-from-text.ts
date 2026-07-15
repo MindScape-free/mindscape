@@ -39,9 +39,9 @@ function buildPersona(persona: string): string {
 }
 
 export async function generateMindMapFromText(
-  input: GenerateMindMapFromTextInput & { apiKey?: string; provider?: AIProvider; strict?: boolean }
+  input: GenerateMindMapFromTextInput & { apiKey?: string; provider?: AIProvider; model?: string; strict?: boolean }
 ): Promise<GenerateMindMapFromTextOutput> {
-  const { provider, apiKey, context, targetLang, text, persona, strict, depth = 'low' } = input;
+  const { provider, apiKey, model, context, targetLang, text, persona, strict, depth = 'low' } = input;
 
   const sourceCount = context ? (context.split('--- SOURCE:').length - 1) : 0;
   const isMultiSource = sourceCount > 0;
@@ -141,7 +141,7 @@ RULES:
   const capability = depth === 'deep' ? 'reasoning' : (depth === 'medium' ? 'creative' : 'fast');
 
   try {
-    return await generateContent({ provider, apiKey, systemPrompt, userPrompt, schema: GenerateMindMapFromTextOutputSchema, strict, capability });
+    return await generateContent({ provider, apiKey, model, systemPrompt, userPrompt, schema: GenerateMindMapFromTextOutputSchema, strict, capability });
   } catch (e: any) {
     console.error(`❌ Text-to-map failed:`, e.message);
     throw e;

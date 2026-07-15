@@ -16,6 +16,7 @@ export interface EnvVars {
   supabaseServiceRoleKey?: string;
   pollinationsApiKey?: string;
   youtubeApiKey?: string;
+  nvidiaApiKey?: string;
   appUrl: string;
   adminUserIds: string[];
   aiProviderTimeout: number;
@@ -52,6 +53,7 @@ export function getEnv(): EnvVars {
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
     pollinationsApiKey: process.env.POLLINATIONS_API_KEY,
     youtubeApiKey: process.env.YOUTUBE_API_KEY,
+    nvidiaApiKey: process.env.NVIDIA_API_KEY,
     appUrl: process.env.NEXT_PUBLIC_APP_URL,
     adminUserIds: process.env.NEXT_PUBLIC_ADMIN_USER_IDS,
     aiProviderTimeout: process.env.AI_PROVIDER_TIMEOUT,
@@ -77,6 +79,7 @@ export function getEnv(): EnvVars {
       ['SUPABASE_SERVICE_ROLE_KEY', 'Admin ops fall back to anon key (limited).'],
       ['POLLINATIONS_API_KEY', 'Users must provide their own API key for AI.'],
       ['YOUTUBE_API_KEY', 'YouTube transcript extraction will not work.'],
+      ['NVIDIA_API_KEY', 'System default NVIDIA API key.'],
       ['NEXT_PUBLIC_APP_URL', 'Using default http://localhost:3000.'],
       ['NEXT_PUBLIC_ADMIN_USER_IDS', 'Admin checks rely on DB is_admin column only.'],
     ];
@@ -91,9 +94,10 @@ export function getEnv(): EnvVars {
     supabaseServiceRoleKey: raw.supabaseServiceRoleKey || undefined,
     pollinationsApiKey: raw.pollinationsApiKey || undefined,
     youtubeApiKey: raw.youtubeApiKey || undefined,
+    nvidiaApiKey: raw.nvidiaApiKey || undefined,
     appUrl: raw.appUrl || 'http://localhost:3000',
     adminUserIds: (raw.adminUserIds || '').split(',').map(s => s.trim()).filter(Boolean),
-    aiProviderTimeout: parseInt(raw.aiProviderTimeout || '30000', 10),
+    aiProviderTimeout: parseInt(raw.aiProviderTimeout || '120000', 10),
   };
 
   return _cached;

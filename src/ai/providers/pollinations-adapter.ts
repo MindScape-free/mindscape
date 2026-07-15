@@ -180,22 +180,25 @@ export class PollinationsAdapter implements IAIProvider {
     const model = request.model || selectModel(request.capability || 'creative', request.attempt || 0);
     const apiKey = request.apiKey;
 
-    if (!apiKey) throw new Error('No API key provided for Pollinations streaming');
-
     const messages = this.buildMessages(request);
     const body: any = { messages, model: model.trim().replace(/\s+/g, '-').toLowerCase(), stream: true };
 
     const controller = new AbortController();
-    const timeout = request.timeout || 30_000;
+    const { getEnv } = await import('@/lib/env');
+    const timeout = request.timeout || getEnv().aiProviderTimeout || 120_000;
     const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    const headers: any = {
+      'Content-Type': 'application/json',
+    };
+    if (apiKey && apiKey.trim() !== '') {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
 
     try {
       const response = await fetch(this.STREAM_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
+        headers,
         body: JSON.stringify(body),
         signal: controller.signal,
       });
@@ -285,9 +288,6 @@ export class PollinationsAdapter implements IAIProvider {
 
   private async callAPI(request: AIRequest, model: string, attempt: number): Promise<any> {
     const apiKey = request.apiKey;
-    if (!apiKey || apiKey.trim() === '') {
-      throw new Error('Authentication failed: No API key available. Please add your Pollinations API key in settings.');
-    }
 
     const isStructured = request.schema || request.systemPrompt.toLowerCase().includes('json');
     const messages = this.buildMessages(request, isStructured);
@@ -316,16 +316,21 @@ export class PollinationsAdapter implements IAIProvider {
     }
 
     const controller = new AbortController();
-    const timeout = request.timeout || 30_000;
+    const { getEnv } = await import('@/lib/env');
+    const timeout = request.timeout || getEnv().aiProviderTimeout || 120_000;
     const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    const headers: any = {
+      'Content-Type': 'application/json',
+    };
+    if (apiKey && apiKey.trim() !== '') {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
 
     try {
       const response = await fetch(this.BASE_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
+        headers,
         body: JSON.stringify(body),
         signal: controller.signal,
       });

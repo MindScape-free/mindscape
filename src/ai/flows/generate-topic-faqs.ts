@@ -16,9 +16,9 @@ const SYSTEM_GUARANTEES = `SYSTEM GUARANTEES:
 - Do NOT explain, only generate`;
 
 export async function generateTopicFAQs(
-  input: TopicFAQsInput & { apiKey?: string; provider?: AIProvider; strict?: boolean }
+  input: TopicFAQsInput & { apiKey?: string; provider?: AIProvider; model?: string; strict?: boolean }
 ): Promise<TopicFAQsOutput> {
-  const { topic, summary, provider, apiKey, strict } = input;
+  const { topic, summary, provider, apiKey, model, strict } = input;
 
   const systemPrompt = `${SYSTEM_GUARANTEES}
 
@@ -39,7 +39,7 @@ Return ONLY: { "faqs": [{ "question": "Q?", "answer": "A." }] }`;
   const userPrompt = `Generate 4-6 FAQs about "${topic}".`;
 
   try {
-    return await generateContent({ provider, apiKey, systemPrompt, userPrompt, schema: TopicFAQsOutputSchema, strict });
+    return await generateContent({ provider, apiKey, model, systemPrompt, userPrompt, schema: TopicFAQsOutputSchema, strict });
   } catch (e: any) {
     console.error('Failed to generate topic FAQs:', e.message);
     return { faqs: [] };

@@ -37,9 +37,9 @@ function buildPersona(persona: string): string {
 }
 
 export async function generateMindMapFromWebsite(
-  input: GenerateMindMapFromWebsiteInput & { apiKey?: string; provider?: AIProvider; strict?: boolean }
+  input: GenerateMindMapFromWebsiteInput & { apiKey?: string; provider?: AIProvider; model?: string; strict?: boolean }
 ): Promise<GenerateMindMapFromWebsiteOutput> {
-  const { provider, apiKey, context, targetLang, content, persona, strict, depth = 'low' } = input;
+  const { provider, apiKey, model, context, targetLang, content, persona, strict, depth = 'low' } = input;
 
   const densityMap: Record<string, string> = {
     low:    `subTopics: 4 | categories per subTopic: 2–3 | subCategories per category: 3–4`,
@@ -136,7 +136,8 @@ RULES:
   try {
     return await generateContent({ 
       provider, 
-      apiKey, 
+      apiKey,
+      model, 
       systemPrompt, 
       userPrompt, 
       schema: GenerateMindMapFromWebsiteOutputSchema, 

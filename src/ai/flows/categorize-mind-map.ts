@@ -21,9 +21,9 @@ const SYSTEM_GUARANTEES = `SYSTEM GUARANTEES:
 - Do NOT explain, only generate`;
 
 export async function categorizeMindMap(
-    input: CategorizeMindMapInput & { apiKey?: string; provider?: AIProvider }
+    input: CategorizeMindMapInput & { apiKey?: string; provider?: AIProvider; model?: string }
 ): Promise<CategorizeMindMapOutput> {
-    const { topic, summary, provider, apiKey } = input;
+    const { topic, summary, provider, apiKey, model } = input;
 
     const systemPrompt = `${SYSTEM_GUARANTEES}
 
@@ -44,6 +44,7 @@ Return ONLY: { "categories": ["Cat1", "Cat2", "Cat3"] }`;
     return await generateContent({
         provider,
         apiKey,
+        model,
         capability: 'creative',
         systemPrompt,
         userPrompt,

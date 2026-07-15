@@ -15,6 +15,7 @@ export type {
 } from './types';
 
 export { PollinationsAdapter } from './pollinations-adapter';
+export { NvidiaAdapter } from './nvidia-adapter';
 export { orchestrate, orchestrateStream } from './orchestrator';
 export {
   postProcess,

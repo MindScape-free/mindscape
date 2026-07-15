@@ -46,9 +46,9 @@ function buildPersona(persona: string): string {
 }
 
 export async function generateMindMapFromImage(
-  input: GenerateMindMapFromImageInput & { apiKey?: string; provider?: AIProvider; strict?: boolean }
+  input: GenerateMindMapFromImageInput & { apiKey?: string; provider?: AIProvider; model?: string; strict?: boolean }
 ): Promise<GenerateMindMapFromImageOutput> {
-  const { provider, apiKey, strict, depth = 'low' } = input;
+  const { provider, apiKey, model, strict, depth = 'low' } = input;
 
   const densityMap: Record<string, string> = {
     low:    `subTopics: ≥4 | categories: ≥2 | subCategories: ≥3`,
@@ -119,7 +119,7 @@ RULES:
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      return await generateContent({ provider, apiKey, systemPrompt, userPrompt, images, schema: AIGeneratedMindMapSchema, strict });
+      return await generateContent({ provider, apiKey, model, systemPrompt, userPrompt, images, schema: AIGeneratedMindMapSchema, strict });
     } catch (e: any) {
       console.error(`❌ Image-to-map attempt ${attempt} failed:`, e.message);
       if (attempt === 2) throw e;

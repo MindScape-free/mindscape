@@ -24,9 +24,9 @@ PRIORITY ORDER:
 CONFLICT RESOLVER: If instructions conflict → schema > brevity > ignore style`;
 
 export async function summarizeTopic(
-    input: { mindMapData: MindMapData; apiKey?: string; provider?: AIProvider }
+    input: { mindMapData: MindMapData; apiKey?: string; provider?: AIProvider; model?: string }
 ): Promise<z.infer<typeof SummarizeTopicOutputSchema>> {
-    const { provider = 'pollinations', apiKey, mindMapData } = input;
+    const { provider = 'pollinations', apiKey, model, mindMapData } = input;
     const topic = mindMapData.topic;
     const isCompare = mindMapData.mode === 'compare';
 
@@ -84,7 +84,7 @@ Return ONLY: { "summary": "text" }`;
         : `Summarize mind map for "${topic}":\n\n${summaryContext}`;
 
     try {
-        const result = await generateContent({ provider, apiKey, systemPrompt, userPrompt, schema: SummarizeTopicOutputSchema });
+        const result = await generateContent({ provider, apiKey, model, systemPrompt, userPrompt, schema: SummarizeTopicOutputSchema });
         if (!result?.summary) return { summary: `A structured exploration of ${topic} covering its core dimensions and key relationships.` };
         return result;
     } catch (e: any) {

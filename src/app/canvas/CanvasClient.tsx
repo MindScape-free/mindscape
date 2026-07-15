@@ -72,6 +72,9 @@ import { useAIConfig } from '@/contexts/ai-config-context';
 import { useMindMapRouter } from '@/hooks/use-mind-map-router';
 import { useMindMapPersistence } from '@/hooks/use-mind-map-persistence';
 import { useMindMapPinnedMessages } from '@/hooks/use-mind-map-pinned-messages';
+import { useCanvasSourceFiles } from '@/hooks/use-canvas-source-files';
+import { useCanvasChatState } from '@/hooks/use-canvas-chat-state';
+import { useCanvasDialogs } from '@/hooks/use-canvas-dialogs';
 import { Profiler } from '@/components/debug/profiler';
 import { useAIHealth } from '@/hooks/use-ai-health';
 import { useActivity } from '@/contexts/activity-context';
@@ -88,22 +91,8 @@ function MindMapPageContent() {
   const { awardXP } = useXP();
 
   const [mode, setMode] = useState<string | null>(null);
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatInitialMessage, setChatInitialMessage] = useState<string | undefined>(undefined);
-  const [chatInitialView, setChatInitialView] = useState<'chat' | 'history' | 'pins' | 'canvas-pins' | undefined>(undefined);
-  const [chatMode, setChatMode] = useState<'chat' | 'quiz'>('chat');
-  const [chatTopic, setChatTopic] = useState<string | undefined>(undefined);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [isRegenDialogOpen, setIsRegenDialogOpen] = useState(false);
-  const [tempPersona, setTempPersona] = useState<string>('Teacher');
-  const [tempDepth, setTempDepth] = useState<'low' | 'medium' | 'deep'>('low');
-  const [dynamicItemRange, setDynamicItemRange] = useState<{ min: number; max: number }>({ min: 24, max: 40 });
-
-  const [useFileAwareContext, setUseFileAwareContext] = useState(false);
   const [pinnedMessagesCount, setPinnedMessagesCount] = useState(0);
-
-  // Delete confirmation state
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   // Dynamic Topic-specific FAQs
   const [dynamicFAQs, setDynamicFAQs] = useState<Array<{ question: string; answer: string }> | null>(null);
@@ -164,8 +153,7 @@ function MindMapPageContent() {
       return result;
     }
   }), [params.persona, aiPersona, params.lang, params.depth, params.useSearch, config.provider, config.apiKey, config.pollinationsApiKey, config.textModel, config.pollinationsModel, user?.id, refreshBalance]);
-  // Keep a ref of the current source context for the persistence adapter closure
-  const sourceContextRefs = useRef({ content: null as string | null, type: null as string | null, originalPdf: null as string | null });
+  // sourceContextRefs is provided by useCanvasSourceFiles() above
 
   // 2. HOOK INITIALIZATION
   const {
@@ -179,7 +167,7 @@ function MindMapPageContent() {
     push: expandNode,
     navigate: setActiveMindMapIndex,
     update: handleUpdateCurrentMap,
-    sync: handleSaveMapFromHook,
+
     setStack: setMindMaps,
     setActiveIndex: setActiveMindMapIndexState,
     replace: handleReplaceCurrentMap,
@@ -233,30 +221,35 @@ function MindMapPageContent() {
   const [isSharing, setIsSharing] = useState(false);
   const [localGeneratingNodeId, setLocalGeneratingNodeId] = useState<string | null>(null);
 
-  // Source File Data State
-  const [sourceFileContent, setSourceFileContent] = useState<string | null>(null);
-  const [sourceFileType, setSourceFileType] = useState<string | null>(null);
-  const [originalPdfFileContent, setOriginalPdfFileContent] = useState<string | null>(null);
-  const [sourceFile2Content, setSourceFile2Content] = useState<string | null>(null);
-  const [sourceFile2Type, setSourceFile2Type] = useState<string | null>(null);
-  const [originalPdf2FileContent, setOriginalPdf2FileContent] = useState<string | null>(null);
-  const [isSourceFileModalOpen, setIsSourceFileModalOpen] = useState(false);
+  const {
+    sourceFileContent, sourceFileType, originalPdfFileContent,
+    sourceFile2Content, sourceFile2Type, originalPdf2FileContent,
+    isSourceFileModalOpen, sourceContextRefs,
+    setSourceFileContent, setSourceFileType, setOriginalPdfFileContent,
+    setSourceFile2Content, setSourceFile2Type, setOriginalPdf2FileContent,
+    setIsSourceFileModalOpen,
+    syncFromMapData: syncSourceFromMapData,
+    syncFromSession: syncSourceFromSession,
+    closeSourceModal,
+  } = useCanvasSourceFiles();
 
-  // Toolbar pin button → open chat panel at canvas-pins view
-  const handleToggleFileAware = useCallback(() => {
-    setUseFileAwareContext(prev => !prev);
-  }, []);
+  // Chat state
+  const {
+    isChatOpen, chatInitialMessage, chatInitialView, chatMode, chatTopic, useFileAwareContext,
+    handleToggleFileAware, handleOpenPinnedMessages,
+    handleExplainInChat: chatExplainInChat,
+    handleStartQuizForTopic: chatStartQuizForTopic,
+    setIsChatOpen, setChatInitialMessage, setChatInitialView, setChatMode, setChatTopic, setUseFileAwareContext,
+    closeChat,
+  } = useCanvasChatState();
 
-  const handleOpenPinnedMessages = useCallback(() => {
-    setChatInitialView('canvas-pins');
-    setIsChatOpen(true);
-  }, []);
-
-
-  // Sync refs whenever state changes
-  useEffect(() => {
-    sourceContextRefs.current = { content: sourceFileContent, type: sourceFileType, originalPdf: originalPdfFileContent };
-  }, [sourceFileContent, sourceFileType, originalPdfFileContent]);
+  // Dialog state
+  const {
+    isRegenDialogOpen, tempPersona, tempDepth, dynamicItemRange,
+    pendingDeleteId,
+    setTempPersona, setTempDepth, setDynamicItemRange, setIsRegenDialogOpen, setPendingDeleteId,
+    closeRegenDialog, cancelDelete, requestDelete,
+  } = useCanvasDialogs();
 
   const isLoading = (hookStatus === 'generating' && generationScope === 'foreground') || isInitialLoading;
   const error = hookError || initialError;
@@ -811,9 +804,10 @@ function MindMapPageContent() {
             handleSaveMap(dataToSave, existingMapWithId?.id).then((savedId: any) => {
               if (savedId && !existingMapWithId?.id) {
                 setMindMaps((prev: any[]) => prev.map(m =>
-                  m.topic === result.data!.topic ? { ...m, id: savedId } : m
+                  m.topic === (result.data!.topic || params.topic) ? { ...m, id: savedId } : m
                 ));
                 handleUpdateCurrentMap({ id: savedId });
+                currentMapIdRef.current = savedId;
                 navigateToMap(savedId!);
 
                 // Award points for creating a new map
@@ -868,6 +862,12 @@ function MindMapPageContent() {
   }, [mindMap?.id, mindMap?.isPublic]);
 
 
+  const handleSaveMapFromHook = useCallback(async (silent = true) => {
+    if (!mindMapRef.current || params.isSelfReference) return;
+    const activeId = mindMapRef.current.id || currentMapIdRef.current || undefined;
+    await handleSaveMap(mindMapRef.current, activeId, silent);
+  }, [handleSaveMap, params.isSelfReference]);
+
   // 4. Auto-Save Effect
 
   useEffect(() => {
@@ -895,7 +895,13 @@ function MindMapPageContent() {
 
   // Ref to track mindMap for stable callbacks
   const mindMapRef = useRef(mindMap);
-  useEffect(() => { mindMapRef.current = mindMap; }, [mindMap]);
+  const currentMapIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    mindMapRef.current = mindMap;
+    if (mindMap?.id) {
+      currentMapIdRef.current = mindMap.id;
+    }
+  }, [mindMap]);
 
   // Fetch complete map hierarchy (root + all sub-maps) — single query
   const fetchMapHierarchy = useCallback(async (currentMapData: MindMapData) => {
@@ -1072,7 +1078,8 @@ function MindMapPageContent() {
         handleUpdateCurrentMap(resolved);
         setHasUnsavedChanges(true);
         // Save immediately - mindMapRef now has the correct data
-        handleSaveMap(mergedMap, currentMap?.id, true);
+        const activeId = currentMap?.id || currentMapIdRef.current || undefined;
+        handleSaveMap(mergedMap, activeId, true);
       } else {
         handleUpdateCurrentMap(resolved);
         setHasUnsavedChanges(true);

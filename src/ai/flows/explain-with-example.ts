@@ -30,9 +30,9 @@ PRIORITY ORDER:
 CONFLICT RESOLVER: If instructions conflict → schema > brevity > ignore style`;
 
 export async function explainWithExample(
-  input: ExplainWithExampleInput & { apiKey?: string; provider?: AIProvider; strict?: boolean }
+  input: ExplainWithExampleInput & { apiKey?: string; provider?: AIProvider; model?: string; strict?: boolean }
 ): Promise<ExplainWithExampleOutput> {
-  const { provider, apiKey, mainTopic, topicName, explanationMode, strict, pdfContext } = input;
+  const { provider, apiKey, model, mainTopic, topicName, explanationMode, strict, pdfContext } = input;
 
   const systemPrompt = `${SYSTEM_GUARANTEES}
 
@@ -59,7 +59,7 @@ Return ONLY: { "example": "Your example text here" }`;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      return await generateContent({ provider, apiKey, systemPrompt, userPrompt, schema: ExplainWithExampleOutputSchema, strict });
+      return await generateContent({ provider, apiKey, model, systemPrompt, userPrompt, schema: ExplainWithExampleOutputSchema, strict });
     } catch (e: any) {
       console.error(`❌ Example attempt ${attempt} failed:`, e.message);
       if (attempt === 2) throw e;

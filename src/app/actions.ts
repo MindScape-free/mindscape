@@ -1,5 +1,6 @@
 'use server';
 
+import crypto from 'crypto';
 import { AIProvider } from '@/ai/client-dispatcher';
 import { providerMonitor } from '@/ai/provider-monitor';
 import {
@@ -85,6 +86,7 @@ export interface AIActionOptions {
   provider?: AIProvider;
   model?: string;
   userId?: string;
+  apiKeys?: Record<string, string>;
 }
 
 /**
@@ -273,7 +275,7 @@ export interface GenerateMindMapFromImageInput {
 // Server-side API key cache: userId -> { key, timestamp }
 // Avoids repeated supabase reads for the same user within a short window
 // Evicts entries older than TTL on every access
-const apiKeyCache = new Map<string, { key: string | undefined; timestamp: number }>();
+const apiKeyCache = new Map<string, { key: string | undefined; apiKeys?: Record<string, string>; timestamp: number }>();
 const API_KEY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // Periodically sweep stale entries to prevent unbounded growth
@@ -288,15 +290,17 @@ if (typeof setInterval !== 'undefined') {
 
 export async function resolveApiKey(options: AIActionOptions): Promise<string | undefined> {
   let effectiveApiKey = options.apiKey;
+  const provider = options.provider || 'pollinations';
   let source = effectiveApiKey ? 'options' : 'none';
 
   // If no API key provided, try to fetch from user profile on server
-  if (!effectiveApiKey && options.userId && (options.provider === 'pollinations' || !options.provider)) {
-    // Check cache first
-    const cached = apiKeyCache.get(options.userId);
+  if (!effectiveApiKey && options.userId) {
+    const cacheKey = `${options.userId}-${provider}`;
+    const cached = apiKeyCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < API_KEY_CACHE_TTL) {
       effectiveApiKey = cached.key;
-      source = 'supabase-cache';
+      if (cached.apiKeys) options.apiKeys = cached.apiKeys;
+      source = `supabase-cache-${provider}`;
     } else {
       try {
         const { getUserImageSettingsAdmin } = await import('@/lib/supabase-server');
@@ -304,15 +308,55 @@ export async function resolveApiKey(options: AIActionOptions): Promise<string | 
           throw new Error('getUserImageSettingsAdmin is not a function');
         }
         const userSettings = await getUserImageSettingsAdmin(options.userId);
-        if (userSettings?.pollinationsApiKey) {
-          effectiveApiKey = userSettings.pollinationsApiKey;
-          source = 'supabase-admin';
+        if (userSettings) {
+          options.apiKeys = {
+            openrouter: userSettings.openrouterApiKey || '',
+            pollinations: userSettings.pollinationsApiKey || '',
+            nvidia: userSettings.nvidiaApiKey || '',
+          };
+
+          // Determine effective provider
+          let effectiveProvider = provider;
+
+          // If current provider has no key, find a fallback key
+          if (effectiveProvider === 'nvidia' && !userSettings.nvidiaApiKey) {
+            effectiveProvider = userSettings.openrouterApiKey ? 'openrouter' : (userSettings.pollinationsApiKey ? 'pollinations' : 'nvidia');
+          } else if (effectiveProvider === 'openrouter' && !userSettings.openrouterApiKey) {
+            effectiveProvider = userSettings.nvidiaApiKey ? 'nvidia' : (userSettings.pollinationsApiKey ? 'pollinations' : 'openrouter');
+          } else if (effectiveProvider === 'pollinations' && !userSettings.pollinationsApiKey) {
+            effectiveProvider = userSettings.nvidiaApiKey ? 'nvidia' : (userSettings.openrouterApiKey ? 'openrouter' : 'pollinations');
+          }
+
+          // If no provider override was requested, set the primary one
+          if (!options.provider) {
+            if (userSettings.nvidiaApiKey) {
+              effectiveProvider = 'nvidia';
+            } else if (userSettings.openrouterApiKey) {
+              effectiveProvider = 'openrouter';
+            } else if (userSettings.pollinationsApiKey) {
+              effectiveProvider = 'pollinations';
+            }
+          }
+
+          options.provider = effectiveProvider as any;
+
+          if (effectiveProvider === 'nvidia' && userSettings.nvidiaApiKey) {
+            effectiveApiKey = userSettings.nvidiaApiKey;
+            source = 'supabase-admin-nvidia';
+          } else if (effectiveProvider === 'openrouter' && userSettings.openrouterApiKey) {
+            effectiveApiKey = userSettings.openrouterApiKey;
+            source = 'supabase-admin-openrouter';
+          } else if (effectiveProvider === 'pollinations' && userSettings.pollinationsApiKey) {
+            effectiveApiKey = userSettings.pollinationsApiKey;
+            source = 'supabase-admin-pollinations';
+          }
+
           // Cache the result
-          apiKeyCache.set(options.userId, { key: effectiveApiKey, timestamp: Date.now() });
-          console.log(`🔑 Using Pollinations API key from supabase Admin for user: ${options.userId?.slice(0, 8)}...`);
+          apiKeyCache.set(cacheKey, { key: effectiveApiKey, apiKeys: options.apiKeys, timestamp: Date.now() });
+          console.log(`🔑 Using ${effectiveProvider} API key from supabase Admin for user: ${options.userId?.slice(0, 8)}...`);
         } else {
-          // Cache the miss too (avoid repeated supabase reads for users without keys)
-          apiKeyCache.set(options.userId, { key: undefined, timestamp: Date.now() });
+          // Cache the miss too (avoid repeated supabase reads)
+          apiKeyCache.set(cacheKey, { key: undefined, timestamp: Date.now() });
         }
       } catch (err: any) {
         console.warn(`⚠️ resolveApiKey: Failed to fetch user API key from supabase Admin (${err.message}). Using server default.`);
@@ -322,10 +366,21 @@ export async function resolveApiKey(options: AIActionOptions): Promise<string | 
 
   // Use server-side environment variable as primary default
   if (!effectiveApiKey) {
-    effectiveApiKey = process.env.POLLINATIONS_API_KEY;
-    if (effectiveApiKey) {
-      source = 'system-default';
-      console.log(`ℹ️ No user API key found. Using System Default Pollinations key.`);
+    if (provider === 'nvidia') {
+      effectiveApiKey = process.env.NVIDIA_API_KEY;
+      if (effectiveApiKey) {
+        source = 'system-default-nvidia';
+      }
+    } else if (provider === 'openrouter') {
+      effectiveApiKey = process.env.OPENROUTER_API_KEY;
+      if (effectiveApiKey) {
+        source = 'system-default-openrouter';
+      }
+    } else {
+      effectiveApiKey = process.env.POLLINATIONS_API_KEY;
+      if (effectiveApiKey) {
+        source = 'system-default-pollinations';
+      }
     }
   }
 
@@ -366,6 +421,36 @@ export async function generateMindMapAction(
       return { data: cached, error: null };
     }
 
+    // ⚡ Persistent DB Cache Check (48 hours TTL)
+    const dbQueryKey = crypto.createHash('sha256').update(JSON.stringify({
+      topic,
+      rawDepth,
+      persona: input.persona || 'teacher',
+      useSearch: !!input.useSearch,
+      contextHash: input.context ? crypto.createHash('sha256').update(input.context).digest('hex') : null
+    })).digest('hex');
+
+    const { getSupabaseAdmin } = await import('@/lib/supabase-server');
+    const supabase = getSupabaseAdmin();
+
+    try {
+      const { data: cacheRow } = await supabase
+        .from('map_cache')
+        .select('content, created_at')
+        .eq('query_key', dbQueryKey)
+        .gt('created_at', new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString())
+        .maybeSingle();
+
+      if (cacheRow?.content) {
+        console.log(`⚡ [DB Cache Hit] Found persistent mind map for topic: "${topic}"`);
+        // Backfill the memory cache as well
+        apiCache.set(cacheKey, cacheRow.content);
+        return { data: cacheRow.content as unknown as MindMapData, error: null };
+      }
+    } catch (cacheErr) {
+      console.warn('⚠️ Failed to check database cache:', cacheErr);
+    }
+
     let normalizedDepth: 'low' | 'medium' | 'deep';
     if (rawDepth === ('auto' as any)) {
       normalizedDepth = await resolveDepthFast(topic);
@@ -379,20 +464,25 @@ export async function generateMindMapAction(
 
     let searchContext = null;
     if (input.useSearch) {
-      try {
-        console.log(`🔍 [Action] Waiting for search context for: "${topic}"`);
-        const searchResult = await generateSearchContext({
-          query: topic,
-          depth: normalizedDepth === 'deep' ? 'deep' : 'basic',
-          apiKey: effectiveApiKey,
-          provider: options.provider,
-        });
-        if (searchResult.data) {
-          searchContext = searchResult.data;
-          console.log(`✅ [Action] Search context retrieved: ${searchContext.sources.length} sources`);
+      const hasSearchKey = !!(options.apiKeys?.pollinations || process.env.POLLINATIONS_API_KEY || (options.provider === 'pollinations' ? effectiveApiKey : undefined));
+      if (options.provider === 'openrouter' && !hasSearchKey) {
+        console.log(`🔍 [Action] Skipping search context (OpenRouter active and no Pollinations API key available).`);
+      } else {
+        try {
+          console.log(`🔍 [Action] Waiting for search context for: "${topic}"`);
+          const searchResult = await generateSearchContext({
+            query: topic,
+            depth: normalizedDepth === 'deep' ? 'deep' : 'basic',
+            apiKey: effectiveApiKey,
+            provider: options.provider,
+          });
+          if (searchResult.data) {
+            searchContext = searchResult.data;
+            console.log(`✅ [Action] Search context retrieved: ${searchContext.sources.length} sources`);
+          }
+        } catch (e) {
+          console.warn(`⚠️ [Action] Search failed, continuing without search context:`, e);
         }
-      } catch (e) {
-        console.warn(`⚠️ [Action] Search failed, continuing without search context:`, e);
       }
     }
 
@@ -416,7 +506,23 @@ export async function generateMindMapAction(
       sanitized.searchTimestamp = searchContext.timestamp;
     }
 
+    // Save to memory cache
     apiCache.set(cacheKey, sanitized);
+
+    // Save to database cache (stale limit: 48 hours)
+    try {
+      await supabase
+        .from('map_cache')
+        .upsert({
+          query_key: dbQueryKey,
+          content: sanitized as any,
+          created_at: new Date().toISOString()
+        });
+      console.log(`💾 [DB Cache Save] Persisted generated mind map for topic: "${topic}"`);
+    } catch (cacheErr) {
+      console.warn('⚠️ Failed to save mind map to database cache:', cacheErr);
+    }
+
     return { data: sanitized, error: null };
   } catch (error) {
     console.error('Error in generateMindMapAction:', error);
@@ -1084,6 +1190,40 @@ export async function generateTopicFAQsAction(
 
 export async function getAIHealthReportAction() {
   return providerMonitor.getReport();
+}
+
+/**
+ * Returns the current OpenRouter model status — which model was actually used
+ * in the most recent request and where we are in the fallback chain.
+ * Falls back to 'pollinations' data if OpenRouter isn't the active provider.
+ */
+export async function getAIProviderStatusAction(options: { provider?: string } = {}): Promise<{
+  model: string;
+  fallbackIndex: number;
+  chain: string[];
+  provider: string;
+}> {
+  if (options.provider === 'openrouter' || !options.provider) {
+    try {
+      const { getOpenRouterStatus } = await import('@/ai/providers/openrouter-adapter');
+      if (typeof getOpenRouterStatus === 'function') {
+        const status = getOpenRouterStatus();
+        return {
+          ...status,
+          provider: 'openrouter',
+        };
+      }
+    } catch {
+      // Fall through to default
+    }
+  }
+
+  return {
+    model: 'pollinations',
+    fallbackIndex: 0,
+    chain: ['pollinations'],
+    provider: 'pollinations',
+  };
 }
 
 /**

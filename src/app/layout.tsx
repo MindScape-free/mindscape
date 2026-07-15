@@ -135,7 +135,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn('dark', spaceGrotesk.variable, orbitron.variable)} suppressHydrationWarning>
+    <html lang="en" className={cn('dark', spaceGrotesk.variable, orbitron.variable)} suppressHydrationWarning data-scroll-behavior="smooth">
       <head>
         <link rel="icon" href="/MindScape-Logo.png" sizes="any" />
         <StructuredData type="Organization" data={{}} />

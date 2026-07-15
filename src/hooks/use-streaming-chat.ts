@@ -30,6 +30,7 @@ interface StreamInput {
   sessionId?: string;
   model?: string;
   apiKey?: string;
+  provider?: string;
   token?: string;
   agentMode?: boolean;
   /**

@@ -307,11 +307,7 @@ export async function POST(req: NextRequest) {
     let apiKey = (userApiKey && userApiKey.trim() !== "") ? userApiKey : process.env.POLLINATIONS_API_KEY;
 
     if (!apiKey) {
-      console.warn("⚠️ No API key found (User or Server). Image generation may fail or be restricted.");
-      return addCorsHeaders(NextResponse.json(
-        { error: 'No API key available. Please add your Pollinations API key in your profile settings.' },
-        { status: 401 }
-      ));
+      console.warn("⚠️ No API key found (User or Server). Will use public Pollinations endpoint.");
     }
 
     // Enhance prompt using the new style-aware logic
@@ -329,55 +325,65 @@ export async function POST(req: NextRequest) {
     }
     currentModel = rotationPool[rotationIndex];
 
-    const maxRetries = 5; // Increased retries for better stability
+    const maxRetries = 5;
+    let triedAuthFallback = false;
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
+      // Primary: Use public endpoint first (for the first 3 attempts, or if no API key is available).
+      // Fallback: If public endpoint fails after 3 attempts and we have an API key, we try the authenticated one.
+      const isPublic = attempt < 3 || !apiKey;
+
+      if (!isPublic && !triedAuthFallback) {
+        triedAuthFallback = true;
+        console.log(`🌐 Attempting authenticated Pollinations endpoint (using API key)...`);
+      }
+
       try {
-        console.log(`🎨 Attempt ${attempt + 1}/${maxRetries}: Generating image with model: ${currentModel}`);
+        const isAuthMode = !isPublic;
+        console.log(`🎨 Attempt ${attempt + 1}/${maxRetries}${isPublic ? ' (public)' : ' (authenticated)'}: Generating image with model: ${currentModel}`);
 
         // Build Pollinations API URL
-        const baseUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(enhancedPrompt)}`;
-        const params = new URLSearchParams({
-          model: currentModel,
-          width: safeWidth.toString(),
-          height: safeHeight.toString(),
-          seed: Math.floor(Math.random() * 1000000).toString(),
-          nologo: 'true',
-          enhance: 'false'
-        });
+        // Public endpoint: image.pollinations.ai (no auth)
+        // Auth endpoint: gen.pollinations.ai (requires API key)
+        const baseUrl = isPublic
+          ? `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}`
+          : `https://gen.pollinations.ai/image/${encodeURIComponent(enhancedPrompt)}`;
+
+        const params = new URLSearchParams();
+        params.set('model', currentModel);
+        params.set('width', safeWidth.toString());
+        params.set('height', safeHeight.toString());
+        params.set('seed', Math.floor(Math.random() * 1000000).toString());
+        params.set('nologo', 'true');
+        params.set('enhance', 'false');
 
         const imageUrl = `${baseUrl}?${params}`;
 
-        const response = await fetch(imageUrl, {
+        const fetchOptions: RequestInit = {
           method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Accept': 'image/jpeg, image/png'
-          },
+          headers: { 'Accept': 'image/jpeg, image/png' },
           signal: AbortSignal.timeout(60000)
-        });
+        };
+
+        // Only add auth header for the auth endpoint
+        if (isAuthMode && apiKey) {
+          (fetchOptions.headers as Record<string, string>)['Authorization'] = `Bearer ${apiKey}`;
+        }
+
+        const response = await fetch(imageUrl, fetchOptions);
 
         if (!response.ok) {
           const errorText = await response.text();
-          const isModeration = errorText.includes('moderation_blocked') || errorText.includes('safety system');
+          const isAuthError = response.status === 401 || response.status === 403;
           const is429 = response.status === 429;
-          const is402QueueFull = response.status === 402 && errorText.includes('Queue full');
-          const isRetryable = response.status >= 500 || is429 || response.status === 530 || is402QueueFull;
-          const isRotationCandidate = isRetryable || isModeration || response.status === 401 || response.status === 403 || is402QueueFull;
 
-          console.error(`❌ Pollinations API error [Model: ${currentModel}]: ${response.status} - ${errorText.substring(0, 100)}...`);
+          console.error(`❌ Pollinations API error [${isPublic ? 'public' : currentModel}]: ${response.status} - ${errorText.substring(0, 100)}...`);
 
           if (attempt < maxRetries - 1) {
-            if (isRotationCandidate) {
-              rotationIndex = (rotationIndex + 1) % rotationPool.length;
-              currentModel = rotationPool[rotationIndex];
-              console.warn(`🔄 Rotating to next model: ${currentModel} due to ${response.status}...`);
-            }
-
-            // Exponential backoff with jitter
-            const baseDelay = is429 ? 3000 : is402QueueFull ? 500 : 1000;
-            const delay = (baseDelay * Math.pow(2, attempt)) + (Math.random() * 500);
-            console.log(`⏳ Waiting ${Math.round(delay)}ms before retry...`);
+            rotationIndex = (rotationIndex + 1) % rotationPool.length;
+            currentModel = rotationPool[rotationIndex];
+            console.warn(`🔄 Rotating to next model: ${currentModel} due to ${response.status}...`);
+            const delay = 1000 * Math.pow(2, attempt) + Math.random() * 500;
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
           }
@@ -387,9 +393,9 @@ export async function POST(req: NextRequest) {
               error: `Image generation failed: ${response.status}`,
               details: errorText,
               suggestion: is429 
-                ? 'The AI provider is temporarily rate-limiting requests. We are retrying with different models, but please try again in a few moments.'
-                : response.status === 401 || response.status === 403
-                  ? (userApiKey ? 'Your API key may be invalid or restricted.' : 'Server API key error.')
+                ? 'The AI provider is temporarily rate-limiting requests. Please try again in a few moments.'
+                : isAuthError
+                  ? 'Your Pollinations API key may be invalid.'
                   : 'Moderation or capacity error. Please try a more general prompt.'
             },
             { status: response.status }
@@ -403,20 +409,20 @@ export async function POST(req: NextRequest) {
         const base64Image = buffer.toString('base64');
         const dataUrl = `data:${contentType};base64,${base64Image}`;
 
-        console.log(`✅ Image generated with model ${currentModel} (${Math.round(buffer.length / 1024)} KB)`);
+        console.log(`✅ Image generated${isPublic ? ' via public endpoint' : ` with model ${currentModel}`} (${Math.round(buffer.length / 1024)} KB)`);
 
         return addCorsHeaders(NextResponse.json({
           success: true,
           imageUrl: dataUrl,
-          model: currentModel,
-          cost: (POLLINATIONS_MODELS as any)[currentModel]?.cost || 0.04,
-          quality: (POLLINATIONS_MODELS as any)[currentModel]?.quality || 'custom',
+          model: currentModel || 'flux',
+          cost: 0,
+          quality: 'standard',
           size: { width: safeWidth, height: safeHeight },
-          usingUserKey: !!userApiKey
+          usingUserKey: isAuthMode && !!userApiKey,
+          publicFallback: isPublic
         }));
 
       } catch (error: any) {
-        const isTimeout = error.name === 'AbortError' || error.message.includes('timeout');
         console.error(`💥 Error in attempt ${attempt + 1}:`, error.message);
         
         if (attempt < maxRetries - 1) {
@@ -427,7 +433,12 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        if (attempt === maxRetries - 1) throw error;
+        if (attempt === maxRetries - 1) {
+          return addCorsHeaders(NextResponse.json(
+            { error: 'Image generation failed after all attempts.', details: error.message },
+            { status: 500 }
+          ));
+        }
       }
     }
 

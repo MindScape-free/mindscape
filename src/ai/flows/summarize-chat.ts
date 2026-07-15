@@ -14,9 +14,9 @@ const SYSTEM_GUARANTEES = `SYSTEM GUARANTEES:
 - Do NOT explain, only generate`;
 
 export async function summarizeChat(
-  input: SummarizeChatInput & { apiKey?: string; provider?: AIProvider; strict?: boolean }
+  input: SummarizeChatInput & { apiKey?: string; provider?: AIProvider; model?: string; strict?: boolean }
 ): Promise<SummarizeChatOutput> {
-  const { provider, apiKey, strict } = input;
+  const { provider, apiKey, model, strict } = input;
   const historyText = input.history.map(h => `${h.role}: ${h.content}`).join('\n');
 
   const systemPrompt = `${SYSTEM_GUARANTEES}
@@ -42,7 +42,7 @@ Return ONLY: { "topic": "Title" }`;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      return await generateContent({ provider, apiKey, systemPrompt, userPrompt, schema: SummarizeChatOutputSchema, strict });
+      return await generateContent({ provider, apiKey, model, systemPrompt, userPrompt, schema: SummarizeChatOutputSchema, strict });
     } catch (e: any) {
       console.error(`❌ Chat summarization attempt ${attempt} failed:`, e.message);
       if (attempt === 2) throw e;

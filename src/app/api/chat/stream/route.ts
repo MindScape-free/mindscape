@@ -24,6 +24,7 @@ const ChatStreamInputSchema = z.object({
   sessionId: z.string().optional(),
   apiKey: z.string().optional(),
   model: z.string().optional(),
+  provider: z.string().optional(),
   agentMode: z.boolean().optional().default(false),
   mindMapData: z.any().optional(),
 });
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
     console.log('📦 [ChatStream] Request body parsed');
     const input = ChatStreamInputSchema.parse(body);
     console.log('✅ [ChatStream] Input validated');
-    const { apiKey: effectiveApiKey, topic, persona, history, question, attachments, pdfContext, model: requestedModel, agentMode, mindMapData } = input;
+    const { apiKey: effectiveApiKey, provider, topic, persona, history, question, attachments, pdfContext, model: requestedModel, agentMode, mindMapData } = input;
 
     // Authenticate user
     let currentUserId: string | undefined;
@@ -69,37 +70,73 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Authorization header required.' }, { status: 401 });
     }
 
-    // Ensure we have at least some API key to work with (user provided or system default)
-    if (!effectiveApiKey && !process.env.POLLINATIONS_API_KEY) {
-      return NextResponse.json({ error: 'API key required' }, { status: 401 });
+    // Resolve user's stored API keys from database for provider failover
+    let apiKeys: Record<string, string> = {
+      pollinations: '',
+      openrouter: '',
+    };
+    
+    if (currentUserId) {
+      try {
+        const { getUserImageSettingsAdmin } = await import('@/lib/supabase-server');
+        const userSettings = await getUserImageSettingsAdmin(currentUserId);
+        if (userSettings) {
+          apiKeys.pollinations = userSettings.pollinationsApiKey || '';
+          apiKeys.openrouter = userSettings.openrouterApiKey || '';
+        }
+      } catch (err) {
+        console.warn('[ChatStream] Failed to fetch user API settings:', err);
+      }
     }
 
-    const searchApiKey = effectiveApiKey || process.env.POLLINATIONS_API_KEY;
+    // Parse effectiveApiKey correctly based on prefix
+    const isOpenRouterKey = effectiveApiKey?.startsWith('sk-or-');
+    if (effectiveApiKey) {
+      if (isOpenRouterKey) {
+        if (!apiKeys.openrouter) apiKeys.openrouter = effectiveApiKey;
+      } else {
+        if (!apiKeys.pollinations) apiKeys.pollinations = effectiveApiKey;
+      }
+    }
+
+    // Apply environment variable fallbacks
+    if (!apiKeys.pollinations) apiKeys.pollinations = process.env.POLLINATIONS_API_KEY || '';
+    if (!apiKeys.openrouter) apiKeys.openrouter = process.env.OPENROUTER_API_KEY || '';
+
+    const searchApiKey = apiKeys.pollinations || process.env.POLLINATIONS_API_KEY || '';
+
+    if (!searchApiKey && !apiKeys.openrouter) {
+      return NextResponse.json({ error: 'API key required' }, { status: 401 });
+    }
 
     const currentDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     let searchBlock = `📅 Current Date: ${currentDate}`;
 
-    try {
-      console.log('🔍 [ChatStream] Executing search context...');
-      const validatedSearchParams = SearchRequestSchema.parse({
-        query: question,
-        depth: 'basic',
-        maxResults: 5,
-      });
+    if (searchApiKey) {
+      try {
+        console.log('🔍 [ChatStream] Executing search context...');
+        const validatedSearchParams = SearchRequestSchema.parse({
+          query: question,
+          depth: 'basic',
+          maxResults: 5,
+        });
 
-      const rawResults = await executeGoogleSearch({
-        ...validatedSearchParams,
-        apiKey: searchApiKey as string,
-      });
+        const rawResults = await executeGoogleSearch({
+          ...validatedSearchParams,
+          apiKey: searchApiKey as string,
+        });
 
-      const searchContext = normalizeSearchResults(rawResults, validatedSearchParams.query);
-      if (searchContext.sources.length > 0) {
-        const filteredSources = filterAuthoritativeSources(searchContext.sources);
-        searchBlock += `\n\n🌐 Real-Time Web Info:\n${searchContext.summary}\nUse this to ground your response. Prefer search facts over training data.`;
-        console.log(`✅ [ChatStream] Search context found: ${filteredSources.length} sources`);
+        const searchContext = normalizeSearchResults(rawResults, validatedSearchParams.query);
+        if (searchContext.sources.length > 0) {
+          const filteredSources = filterAuthoritativeSources(searchContext.sources);
+          searchBlock += `\n\n🌐 Real-Time Web Info:\n${searchContext.summary}\nUse this to ground your response. Prefer search facts over training data.`;
+          console.log(`✅ [ChatStream] Search context found: ${filteredSources.length} sources`);
+        }
+      } catch (err) {
+        console.warn('[ChatStream] Search context failed (skipping):', err);
       }
-    } catch (err) {
-      console.warn('[ChatStream] Search context failed (skipping):', err);
+    } else {
+      console.log('🔍 [ChatStream] Skipping search context (no Pollinations search key available)');
     }
 
     const historyText = history?.map(h => `${h.role}: ${h.content}`).join('\n') || '';
@@ -256,6 +293,7 @@ Provide your response as plain text (no JSON wrapper). Stream the response word 
               apiKey: effectiveApiKey,
               stream: true,
               timeout: aiProviderTimeout,
+              userId: currentUserId,
             },
             (chunk) => {
               if (chunk.reasoning) {
@@ -270,7 +308,7 @@ Provide your response as plain text (no JSON wrapper). Stream the response word 
                 return;
               }
             },
-            { taskType: 'chat-stream' }
+            { taskType: 'chat-stream', apiKeys, providerOverride: provider || undefined }
           );
 
           // Ensure stream is closed if orchestrateStream resolves without emitting done

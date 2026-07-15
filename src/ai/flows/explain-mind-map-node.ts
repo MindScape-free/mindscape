@@ -36,9 +36,9 @@ PRIORITY ORDER:
 CONFLICT RESOLVER: If instructions conflict → schema > brevity > ignore style`;
 
 export async function explainMindMapNode(
-  input: ExplainMindMapNodeInput & { apiKey?: string; provider?: AIProvider; strict?: boolean; pdfContext?: string }
+  input: ExplainMindMapNodeInput & { apiKey?: string; provider?: AIProvider; model?: string; strict?: boolean; pdfContext?: string }
 ): Promise<ExplainMindMapNodeOutput> {
-  const { provider, apiKey, mainTopic, subCategoryName, subCategoryDescription, explanationMode, strict, pdfContext } = input;
+  const { provider, apiKey, model, mainTopic, subCategoryName, subCategoryDescription, explanationMode, strict, pdfContext } = input;
   const isUserGuideMode = mainTopic.toLowerCase() === 'mindscape';
 
   const systemPrompt = isUserGuideMode
@@ -89,7 +89,7 @@ Provide 3–7 points. No extra text, no markdown outside JSON.`;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const result = await generateContent({ provider, apiKey, systemPrompt, userPrompt, schema: ExplainMindMapNodeOutputSchema, strict });
+      const result = await generateContent({ provider, apiKey, model, systemPrompt, userPrompt, schema: ExplainMindMapNodeOutputSchema, strict });
       if (result && Array.isArray(result.explanationPoints)) {
         result.explanationPoints = result.explanationPoints
           .map((p: string) => p.replace(/<\|[\s\S]*?\|>/g, '').replace(/\} \}/g, '').replace(/"\] }/g, '').trim())

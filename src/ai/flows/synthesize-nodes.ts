@@ -27,9 +27,9 @@ const SynthesizeNodesOutputSchema = z.object({
 export type SynthesizeNodesOutput = z.infer<typeof SynthesizeNodesOutputSchema>;
 
 export async function synthesizeNodes(
-  input: SynthesizeNodesInput & { apiKey?: string; provider?: AIProvider }
+  input: SynthesizeNodesInput & { apiKey?: string; provider?: AIProvider; model?: string }
 ): Promise<SynthesizeNodesOutput> {
-  const { nodeA, nodeB, topic, apiKey, provider } = input;
+  const { nodeA, nodeB, topic, apiKey, provider, model } = input;
 
   const systemPrompt = `You are a **Knowledge Alchemist** ⚗️.
 Your task is to perform "Synthesis" between two distinct concepts within the context of "${topic}".
@@ -72,6 +72,7 @@ Return ONLY this JSON:
   return await generateContent({
     provider,
     apiKey,
+    model,
     systemPrompt,
     userPrompt,
     schema: SynthesizeNodesOutputSchema,

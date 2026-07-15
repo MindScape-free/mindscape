@@ -16,11 +16,12 @@ import { orchestrate } from './providers/orchestrator';
 import { StructuredOutputError } from './providers/post-processor';
 
 export { StructuredOutputError };
-export type AIProvider = 'pollinations';
+export type AIProvider = 'pollinations' | 'openrouter' | 'nvidia';
 
 interface GenerateContentOptions {
   provider?: AIProvider;
   apiKey?: string;
+  apiKeys?: Record<string, string>;
   systemPrompt: string;
   userPrompt: string;
   images?: { inlineData: { mimeType: string; data: string } }[];
@@ -48,7 +49,9 @@ interface GenerateContentOptions {
  */
 export async function generateContent(options: GenerateContentOptions): Promise<any> {
   const {
+    provider,
     apiKey,
+    apiKeys,
     systemPrompt,
     userPrompt,
     images,
@@ -83,6 +86,7 @@ export async function generateContent(options: GenerateContentOptions): Promise<
     {
       providerOverride: options.provider || undefined,
       taskType: options.taskType || options.options?.taskType || undefined,
+      apiKeys: options.apiKeys,
     }
   );
 

@@ -27,9 +27,9 @@ PRIORITY ORDER:
 CONFLICT RESOLVER: If instructions conflict → schema > brevity > ignore style`;
 
 export async function translateMindMap(
-  input: TranslateMindMapInput & { apiKey?: string; provider?: AIProvider; strict?: boolean }
+  input: TranslateMindMapInput & { apiKey?: string; provider?: AIProvider; model?: string; strict?: boolean }
 ): Promise<TranslateMindMapOutput> {
-  const { provider, apiKey, mindMapData, targetLang, strict } = input;
+  const { provider, apiKey, model, mindMapData, targetLang, strict } = input;
 
   const systemPrompt = `${SYSTEM_GUARANTEES}
 
@@ -50,5 +50,5 @@ Return ONLY the translated JSON object with identical structure.`;
 
   const userPrompt = `Translate the JSON to ${targetLang}.`;
 
-  return await generateContent({ provider, apiKey, systemPrompt, userPrompt, schema: MindMapSchema, strict });
+  return await generateContent({ provider, apiKey, model, systemPrompt, userPrompt, schema: MindMapSchema, strict });
 }

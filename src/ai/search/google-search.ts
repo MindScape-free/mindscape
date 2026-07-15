@@ -14,11 +14,20 @@ export async function executeGoogleSearch(params: SearchRequest & { apiKey?: str
     console.log(`🔍 Executing Google Search: "${query}" (depth: ${depth}, maxResults: ${maxResults})`);
 
     // Robust API Key selection
-    const effectiveApiKey = (apiKey && apiKey.trim() !== "") ? apiKey : undefined;
+    let effectiveApiKey = (apiKey && apiKey.trim() !== "") ? apiKey : undefined;
+    
+    // An OpenRouter key cannot be used with Pollinations Search
+    if (effectiveApiKey && effectiveApiKey.startsWith('sk-or-')) {
+        effectiveApiKey = undefined;
+    }
 
     if (!effectiveApiKey) {
-        console.error(`❌ Pollinations Error: No API key provided for Search (Client-only policy enforced)`);
-        throw new Error(`Authentication failed: No API key available. Please add your Pollinations API key in settings.`);
+        effectiveApiKey = process.env.POLLINATIONS_API_KEY || undefined;
+    }
+
+    if (!effectiveApiKey) {
+        console.warn(`⚠️ Google Search: No Pollinations API key available. Skipping search.`);
+        return { choices: [] };
     }
 
     try {

@@ -41,16 +41,18 @@ export function OnboardingWizard() {
     const [step, setStep] = useState(1);
     const [isDismissed, setIsDismissed] = useState(false);
 
-    // Block show on signup page only (/login page does not exist — login is a dialog)
-    const isAuthPage = pathname === '/signup';
+    const hasValidKey = !!(config.pollinationsApiKey || config.openrouterApiKey || config.nvidiaApiKey);
+
+    // Exclude auth, profile, and admin pages from auto-showing onboarding
+    const isExcludedPage = pathname === '/signup' || pathname === '/profile' || pathname?.startsWith('/admin');
 
     const checkAndShow = useCallback((isManual = false) => {
-        if (isUserLoading || isAuthPage) return;
+        if (isUserLoading || isExcludedPage) return;
 
         // Determine correct step based on state
         // If logged in but no key -> Step 3
         // If not logged in -> Step 1 (or 2)
-        if (user && !config.pollinationsApiKey) {
+        if (user && !hasValidKey) {
             setStep(3);
         } else if (!user) {
             setStep(1);
@@ -64,18 +66,18 @@ export function OnboardingWizard() {
             return;
         }
 
-        if (dismissed === 'true' && user && config.pollinationsApiKey) {
+        if (dismissed === 'true' && user && hasValidKey) {
             setIsDismissed(true);
             return;
         }
 
         // Auto-show logic
-        if (!user || !config.pollinationsApiKey) {
+        if (!user || !hasValidKey) {
             if (dismissed !== 'true') {
                 setIsOpen(true);
             }
         }
-    }, [user, isUserLoading, config.pollinationsApiKey, isAuthPage]);
+    }, [user, isUserLoading, hasValidKey, isExcludedPage]);
 
     useEffect(() => {
         // Show on mount with microtask deferral to avoid cascading render
@@ -95,7 +97,7 @@ export function OnboardingWizard() {
     const handleDismiss = () => {
         setIsOpen(false);
         localStorage.setItem('mindscape-onboarding-dismissed', 'true');
-        if (user && config.pollinationsApiKey) {
+        if (user && hasValidKey) {
             setIsDismissed(true);
         }
     };
@@ -110,7 +112,8 @@ export function OnboardingWizard() {
     };
 
     const handleConnectPollinations = () => {
-        const redirectUrl = encodeURIComponent(window.location.origin + '/');
+        localStorage.setItem('mindscape-onboarding-dismissed', 'true');
+        const redirectUrl = encodeURIComponent(window.location.origin + '/profile');
         // Standardized BYOP URL with profile, balance, usage and our core rotating models
         const authUrl = `https://enter.pollinations.ai/authorize?redirect_url=${redirectUrl}&permissions=profile,balance,usage,keys,models&scope=profile,balance,usage,keys,models&budget=1000`;
         window.location.href = authUrl;
@@ -120,8 +123,16 @@ export function OnboardingWizard() {
         <Dialog open={isOpen} onOpenChange={(open) => {
             if (!open) handleDismiss();
         }}>
-            <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden bg-zinc-950 border-white/5 rounded-[2.5rem] shadow-2xl ring-1 ring-white/10">
+            <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden bg-zinc-950 border-white/5 rounded-[2.5rem] shadow-2xl ring-1 ring-white/10 [&>button]:hidden">
                 <div className="relative">
+                    {/* Custom Close Button */}
+                    <button 
+                        type="button"
+                        onClick={handleDismiss}
+                        className="absolute right-6 top-6 z-50 rounded-full p-2 text-zinc-500 hover:text-white hover:bg-white/5 transition-all outline-none"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
                     {/* Animated Background Gradients */}
                     <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-20">
                         <div className="absolute -top-[20%] -left-[10%] w-[60%] h-[60%] bg-primary/40 blur-[100px] rounded-full" />
@@ -252,41 +263,73 @@ export function OnboardingWizard() {
                                         </div>
                                         <div className="space-y-2">
                                             <DialogTitle className="text-3xl font-black text-white tracking-tight">Unlimited High-Fidelity</DialogTitle>
-                                            <DialogDescription className="text-zinc-400 text-sm leading-relaxed max-w-[320px] mx-auto">
-                                                Connect <span className="text-purple-400 font-bold">Pollinations.ai</span> to unlock unlimited high-quality <span className="text-primary font-bold">Images & Maps</span> (Flux, Qwen) for <span className="text-emerald-400 font-bold">FREE</span>.
+                                            <DialogDescription className="text-zinc-400 text-sm leading-relaxed max-w-[340px] mx-auto">
+                                                Connect <span className="text-purple-400 font-bold">Pollinations.ai</span>, <span className="text-blue-400 font-bold">OpenRouter</span>, or <span className="text-lime-400 font-bold">NVIDIA NIM</span> to unlock unlimited high-quality <span className="text-primary font-bold">Images & Maps</span> (Flux, Llama, Qwen, Nemotron) for <span className="text-emerald-400 font-bold">FREE</span>.
                                             </DialogDescription>
                                         </div>
                                     </div>
 
-                                    {config.pollinationsApiKey ? (
-                                        <div className="flex flex-col items-center justify-center p-8 rounded-3xl bg-emerald-500/5 border border-emerald-500/10 gap-4">
-                                            <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                                                <ShieldCheck className="w-7 h-7 text-emerald-500" />
+                                    <div className="space-y-4">
+                                        <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 space-y-3">
+                                            <div className="flex items-center gap-3 text-[10px] text-zinc-400 uppercase tracking-widest font-bold">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                                                BRING YOUR OWN API KEY
                                             </div>
-                                            <div className="text-center">
-                                                <span className="text-lg font-bold text-emerald-500 block">System Armed</span>
-                                                <span className="text-xs text-zinc-500">Unlimited high-fidelity mode active</span>
-                                            </div>
+                                            <p className="text-[11px] text-zinc-500 leading-relaxed italic">
+                                                &ldquo;Connect your personal API key to avoid rate limits and use the world&apos;s best open-source models at no platform cost.&rdquo;
+                                            </p>
                                         </div>
-                                    ) : (
-                                        <div className="space-y-4">
-                                            <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 space-y-3">
-                                                <div className="flex items-center gap-3 text-[10px] text-zinc-400 uppercase tracking-widest font-bold">
-                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                                                    BYOP: Bring Your Own Pollen
+                                        <div className="flex flex-col gap-3">
+                                            {config.pollinationsApiKey ? (
+                                                <div className="w-full h-14 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl font-bold text-sm flex items-center justify-center">
+                                                    <ShieldCheck className="mr-2 w-5 h-5" /> Pollinations Connected
                                                 </div>
-                                                <p className="text-[11px] text-zinc-500 leading-relaxed italic">
-                                                    &ldquo;Connect your personal API key to avoid rate limits and use the world&apos;s best open-source models at no platform cost.&rdquo;
-                                                </p>
-                                            </div>
-                                            <Button
-                                                onClick={handleConnectPollinations}
-                                                className="w-full h-16 bg-gradient-to-r from-violet-600 via-purple-600 to-accent hover:brightness-110 text-white rounded-2xl font-black text-lg transition-all shadow-[0_0_20px_rgba(139,92,246,0.3)] group active:scale-[0.98]"
-                                            >
-                                                Connect Personal Key <Zap className="ml-2 w-4 h-4 text-amber-300 animate-pulse" />
-                                            </Button>
+                                            ) : (
+                                                <Button
+                                                    onClick={handleConnectPollinations}
+                                                    className="w-full h-14 bg-gradient-to-r from-violet-600 via-purple-600 to-accent hover:brightness-110 text-white rounded-2xl font-black text-sm transition-all shadow-[0_0_20px_rgba(139,92,246,0.3)] group active:scale-[0.98]"
+                                                >
+                                                    Connect Pollinations <Zap className="ml-2 w-4 h-4 text-amber-300 animate-pulse" />
+                                                </Button>
+                                            )}
+                                            
+                                            {config.openrouterApiKey ? (
+                                                <div className="w-full h-14 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl font-bold text-sm flex items-center justify-center">
+                                                    <ShieldCheck className="mr-2 w-5 h-5" /> OpenRouter Connected
+                                                </div>
+                                            ) : (
+                                                <Button
+                                                    onClick={() => {
+                                                        setIsOpen(false);
+                                                        window.open('https://openrouter.ai/keys', '_blank');
+                                                        router.push('/profile?tab=lab');
+                                                    }}
+                                                    variant="outline"
+                                                    className="w-full h-14 border-white/10 hover:bg-white/5 text-zinc-300 rounded-2xl font-bold text-sm transition-all active:scale-[0.98]"
+                                                >
+                                                    Connect OpenRouter (Profile Settings)
+                                                </Button>
+                                            )}
+
+                                            {config.nvidiaApiKey ? (
+                                                <div className="w-full h-14 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl font-bold text-sm flex items-center justify-center">
+                                                    <ShieldCheck className="mr-2 w-5 h-5" /> NVIDIA NIM Connected
+                                                </div>
+                                            ) : (
+                                                <Button
+                                                    onClick={() => {
+                                                        setIsOpen(false);
+                                                        window.open('https://build.nvidia.com/settings/api-keys', '_blank');
+                                                        router.push('/profile?tab=lab');
+                                                    }}
+                                                    variant="outline"
+                                                    className="w-full h-14 border-white/10 hover:bg-white/5 text-zinc-300 rounded-2xl font-bold text-sm transition-all active:scale-[0.98]"
+                                                >
+                                                    Connect NVIDIA NIM (Profile Settings)
+                                                </Button>
+                                            )}
                                         </div>
-                                    )}
+                                    </div>
 
                                     <div className="flex gap-4">
                                         <Button onClick={handleBack} variant="ghost" className="flex-1 h-12 text-zinc-500 hover:text-white rounded-xl">

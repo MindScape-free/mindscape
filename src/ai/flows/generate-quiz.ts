@@ -123,6 +123,7 @@ Return JSON with "topic", "difficulty", and "questions" at root level.`;
     const output = await generateContent({
         provider: (input as any).provider || 'pollinations',
         apiKey: (input as any).apiKey,
+        model: (input as any).model,
         systemPrompt,
         userPrompt,
         schema: QuizSchema,

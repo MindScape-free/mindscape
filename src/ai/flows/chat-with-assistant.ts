@@ -50,9 +50,9 @@ CONFLICT RESOLVER: If instructions conflict → schema > brevity > ignore style
  - **Active Recall**: Occasionally (once every 5-6 messages), instead of a full answer, challenge the user to explain a connection between two nodes on their map. Format this as an "Active Recall Challenge" in your answer using a specific block.`;
 
 export async function chatWithAssistant(
-  input: ChatWithAssistantInput & { apiKey?: string; provider?: AIProvider }
+  input: ChatWithAssistantInput & { apiKey?: string; provider?: AIProvider; model?: string }
 ): Promise<ChatWithAssistantOutput> {
-  const { provider, apiKey, topic, persona, history, question, attachments, pdfContext } = input;
+  const { provider, apiKey, model, topic, persona, history, question, attachments, pdfContext } = input;
 
   const currentDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   let searchBlock = `📅 Current Date: ${currentDate}`;
@@ -188,7 +188,7 @@ Return ONLY this JSON:
       });
 
       return await generateContent({
-        provider, apiKey, systemPrompt, userPrompt,
+        provider, apiKey, model, systemPrompt, userPrompt,
         images: images && images.length > 0 ? images : undefined,
         schema: ChatWithAssistantOutputSchema,
       });

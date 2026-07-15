@@ -67,7 +67,13 @@ function buildPersona(persona: string, note: string): string {
 }
 
 export async function generateMindMap(
-  input: GenerateMindMapInput & { apiKey?: string; provider?: AIProvider; searchContext?: SearchContext | null; model?: string }
+  input: GenerateMindMapInput & { 
+    apiKey?: string; 
+    provider?: AIProvider; 
+    searchContext?: SearchContext | null; 
+    model?: string;
+    apiKeys?: Record<string, string>;
+  }
 ): Promise<GenerateMindMapOutput> {
   const { topic, parentTopic, targetLang, persona, depth: rawDepth = 'quick', provider, apiKey, searchContext, model, context } = input;
 
@@ -200,6 +206,7 @@ ${hasContext ? '- Capture context details AND expand with related knowledge.' : 
       systemPrompt: `You are a mind map generator. Output MUST be strictly valid JSON. DO NOT echo the template — generate REAL content about "${topic}".`,
       userPrompt: prompt,
       schema: AIGeneratedMindMapSchema,
+      apiKeys: input.apiKeys,
       taskType: 'generate-mind-map',
       options: { model: attempt === 0 ? model : undefined, capability },
     });

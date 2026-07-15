@@ -23,9 +23,9 @@ PRIORITY ORDER:
 CONFLICT RESOLVER: If instructions conflict → schema > brevity > ignore style`;
 
 export async function analyzeImageContent(
-  input: AnalyzeImageContentInput & { apiKey?: string; provider?: AIProvider; strict?: boolean }
+  input: AnalyzeImageContentInput & { apiKey?: string; provider?: AIProvider; model?: string; strict?: boolean }
 ): Promise<AnalyzeImageContentOutput> {
-  const { provider, apiKey, imageDataUri, strict } = input;
+  const { provider, apiKey, model, imageDataUri, strict } = input;
 
   const systemPrompt = `${SYSTEM_GUARANTEES}
 
@@ -65,7 +65,7 @@ RULES:
   if (!matches) throw new Error('Invalid image data URI format');
   const images = [{ inlineData: { mimeType: matches[1], data: matches[2] } }];
 
-  const result = await generateContent({ provider, apiKey, systemPrompt, userPrompt, images, schema: AnalyzeImageContentOutputSchema, strict });
+  const result = await generateContent({ provider, apiKey, model, systemPrompt, userPrompt, images, schema: AnalyzeImageContentOutputSchema, strict });
 
   if (!result.content) {
     const parts = [

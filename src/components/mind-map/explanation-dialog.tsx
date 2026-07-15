@@ -740,6 +740,29 @@ export function ExplanationDialog({
         quiz: false,
         confidence: false,
     });
+
+    // Auto-open all enrichment sections when enrichment data first arrives
+    const hasEnrichment = !!(enrichment?.relatedNodes?.length || enrichment?.timeline?.length || enrichment?.microQuiz || enrichment?.learningPath);
+    const prevHasEnrichmentRef = React.useRef(false);
+    if (hasEnrichment && !prevHasEnrichmentRef.current) {
+        prevHasEnrichmentRef.current = true;
+        // Reactively open all sections when enrichment finishes loading
+        setTimeout(() => {
+            setOpenSections(prev => ({
+                ...prev,
+                learningPath: true,
+                related: true,
+                applications: true,
+                timeline: true,
+                myths: true,
+                quiz: true,
+                confidence: false,
+            }));
+        }, 200);
+    }
+    if (!hasEnrichment) {
+        prevHasEnrichmentRef.current = false;
+    }
     const toggleSection = (key: string) => setOpenSections(prev => {
         const isCurrentlyOpen = prev[key];
         // Close all, then open the clicked one (unless it was already open)
@@ -946,85 +969,124 @@ export function ExplanationDialog({
                                 )}
 
                                 {/* Spacer between explanation cards and enrichment sections */}
-                                {content.length > 0 && (enrichment?.learningPath || enrichment?.relatedNodes?.length || enrichment?.realWorldRadar?.length || enrichment?.timeline?.length || enrichment?.misconceptions?.length || enrichment?.microQuiz) && (
+                                {content.length > 0 && (isEnrichmentLoading || enrichment?.learningPath || enrichment?.relatedNodes?.length || enrichment?.realWorldRadar?.length || enrichment?.timeline?.length || enrichment?.misconceptions?.length || enrichment?.microQuiz) && (
                                     <div className="relative my-2">
                                         <div className="absolute inset-0 flex items-center">
                                             <div className="w-full border-t border-white/[0.04]" />
                                         </div>
                                         <div className="relative flex justify-center">
                                             <span className="bg-zinc-950 px-4 text-[10px] uppercase tracking-[0.2em] font-medium text-zinc-600">
-                                                Deep Dive
+                                                {isEnrichmentLoading ? 'Loading enrichment...' : 'Deep Dive'}
                                             </span>
                                         </div>
                                     </div>
                                 )}
 
-                                {enrichment?.learningPath && (
+                                {(isEnrichmentLoading || enrichment?.learningPath) && (
                                     <>
                                         <SectionDivider icon={Compass} title="Learning Path" isOpen={openSections.learningPath} onToggle={() => toggleSection('learningPath')} />
                                         <AnimatePresence>                        {openSections.learningPath && (
                             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-y-hidden">
-                                <C_LearningPath learningPath={enrichment.learningPath} currentName={title} onExplainInChat={onExplainInChat} />
+                                {isEnrichmentLoading ? (
+                                    <SkeletonCard lines={3} />
+                                ) : (
+                                    <C_LearningPath learningPath={enrichment!.learningPath} currentName={title} onExplainInChat={onExplainInChat} />
+                                )}
                             </motion.div>
                                         )}
                                         </AnimatePresence>
                                     </>
                                 )}
 
-                                {enrichment?.relatedNodes && enrichment.relatedNodes.length > 0 && (
+                                {(isEnrichmentLoading || (enrichment?.relatedNodes && enrichment.relatedNodes.length > 0)) && (
                                     <>
                                         <SectionDivider icon={Globe} title="Related" isOpen={openSections.related} onToggle={() => toggleSection('related')} />
                                         <AnimatePresence>                        {openSections.related && (
                             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-y-hidden">
-                                <A_RelatedConcepts relatedNodes={enrichment.relatedNodes} onExplainInChat={onExplainInChat} onGenerateSubMap={onGenerateSubMap} />
+                                {isEnrichmentLoading ? (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <SkeletonCard lines={3} />
+                                        <SkeletonCard lines={3} />
+                                        <SkeletonCard lines={3} />
+                                        <SkeletonCard lines={3} />
+                                    </div>
+                                ) : (
+                                    <A_RelatedConcepts relatedNodes={enrichment!.relatedNodes} onExplainInChat={onExplainInChat} onGenerateSubMap={onGenerateSubMap} />
+                                )}
                             </motion.div>
                                         )}
                                         </AnimatePresence>
                                     </>
                                 )}
 
-                                {enrichment?.realWorldRadar && enrichment.realWorldRadar.length > 0 && (
+                                {(isEnrichmentLoading || (enrichment?.realWorldRadar && enrichment.realWorldRadar.length > 0)) && (
                                     <>
                                         <SectionDivider icon={Zap} title="Applications" isOpen={openSections.applications} onToggle={() => toggleSection('applications')} />
                                         <AnimatePresence>                        {openSections.applications && (
                             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-y-hidden">
-                                <I_RealWorldRadar radar={enrichment.realWorldRadar} />
+                                {isEnrichmentLoading ? (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <SkeletonCard lines={2} />
+                                        <SkeletonCard lines={2} />
+                                    </div>
+                                ) : (
+                                    <I_RealWorldRadar radar={enrichment!.realWorldRadar} />
+                                )}
                             </motion.div>
                                         )}
                                         </AnimatePresence>
                                     </>
                                 )}
 
-                                {enrichment?.timeline && enrichment.timeline.length > 0 && (
+                                {(isEnrichmentLoading || (enrichment?.timeline && enrichment.timeline.length > 0)) && (
                                     <>
                                         <SectionDivider icon={Clock} title="Timeline" isOpen={openSections.timeline} onToggle={() => toggleSection('timeline')} />
                                         <AnimatePresence>                        {openSections.timeline && (
                             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-y-hidden">
-                                <G_ConceptTimeline timeline={enrichment.timeline} />
+                                {isEnrichmentLoading ? (
+                                    <div className="flex gap-4 overflow-x-auto pb-2">
+                                        <SkeletonCard lines={2} />
+                                        <SkeletonCard lines={2} />
+                                        <SkeletonCard lines={2} />
+                                    </div>
+                                ) : (
+                                    <G_ConceptTimeline timeline={enrichment!.timeline} />
+                                )}
                             </motion.div>
                                         )}
                                         </AnimatePresence>
                                     </>
                                 )}
 
-                                {enrichment?.misconceptions && enrichment.misconceptions.length > 0 && (
+                                {(isEnrichmentLoading || (enrichment?.misconceptions && enrichment.misconceptions.length > 0)) && (
                                     <>
                                         <SectionDivider icon={AlertTriangle} title="Myths" isOpen={openSections.myths} onToggle={() => toggleSection('myths')} />
                                         <AnimatePresence>                        {openSections.myths && (
                             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-y-hidden">
-                                <H_MisconceptionBuster misconceptions={enrichment.misconceptions} />
+                                {isEnrichmentLoading ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <SkeletonCard lines={3} />
+                                        <SkeletonCard lines={3} />
+                                    </div>
+                                ) : (
+                                    <H_MisconceptionBuster misconceptions={enrichment!.misconceptions} />
+                                )}
                             </motion.div>
                                         )}
                                         </AnimatePresence>
                                     </>
                                 )}
 
-                                {enrichment?.microQuiz && (
+                                {(isEnrichmentLoading || enrichment?.microQuiz) && (
                                     <>
                                         <SectionDivider icon={Brain} title="Quiz" isOpen={openSections.quiz} onToggle={() => toggleSection('quiz')} />
                                         <AnimatePresence>                        {openSections.quiz && (
                             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-y-hidden">
-                                <E_MicroQuiz quiz={enrichment.microQuiz} initialAnswer={quizAnswer} onAnswer={onQuizAnswer} onRegenerateQuiz={onRegenerateQuiz} nodeName={title} mainTopic={title} />
+                                {isEnrichmentLoading ? (
+                                    <SkeletonCard lines={4} />
+                                ) : (
+                                    <E_MicroQuiz quiz={enrichment!.microQuiz} initialAnswer={quizAnswer} onAnswer={onQuizAnswer} onRegenerateQuiz={onRegenerateQuiz} nodeName={title} mainTopic={title} />
+                                )}
                             </motion.div>
                                         )}
                                         </AnimatePresence>

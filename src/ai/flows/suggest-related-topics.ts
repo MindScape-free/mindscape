@@ -12,9 +12,9 @@ const SYSTEM_GUARANTEES = `SYSTEM GUARANTEES:
 - Do NOT explain, only generate`;
 
 export async function suggestRelatedTopics(
-    input: { topic: string; summary?: string; provider?: AIProvider; apiKey?: string }
+    input: { topic: string; summary?: string; provider?: AIProvider; apiKey?: string; model?: string }
 ): Promise<{ topics: string[] }> {
-    const { topic, summary, apiKey } = input;
+    const { topic, summary, apiKey, model } = input;
 
     const systemPrompt = `${SYSTEM_GUARANTEES}
 
@@ -44,7 +44,7 @@ Brainstorm 4 unique directions that would fascinate someone already knowledgeabl
 Each suggestion: self-contained, intriguing, 5–10 words.`;
 
     try {
-        const result = await generateContent({ provider: 'pollinations', capability: 'creative', apiKey, systemPrompt, userPrompt, schema: RelatedTopicsSchema });
+        const result = await generateContent({ provider: 'pollinations', capability: 'creative', apiKey, model, systemPrompt, userPrompt, schema: RelatedTopicsSchema });
 
         let topics: string[] = result.topics || result.related_topics || result.suggestions || [];
         if (!topics.length && typeof result === 'object') {
