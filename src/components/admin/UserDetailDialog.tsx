@@ -5,6 +5,8 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/auth-context';
 import { logAdminActivity } from '@/lib/tracker';
 import { mapMindMapRows } from '@/lib/map-mappers';
+import { useToast } from '@/hooks/use-toast';
+import { adminDeleteUserAction } from '@/app/actions';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -47,7 +49,7 @@ interface UserDetailDialogProps {
 
 export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted, rank }: UserDetailDialogProps) {
   const { supabase, isAdmin, user: adminUser, session } = useAuth();
-  // logAdminActivity imported directly from @/lib/tracker
+  const { toast } = useToast();
   const [chatCount, setChatCount] = useState<number | null>(null);
   const [userMaps, setUserMaps] = useState<MindMapData[]>([]);
   const [isLoadingMaps, setIsLoadingMaps] = useState(false);
@@ -58,30 +60,26 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
   const [analyticsView, setAnalyticsView] = useState<'current' | 'allTime'>('current');
 
   const handleDeleteUser = useCallback(async () => {
-    if (!supabase || !user || !isAdmin) return;
+    if (!user || !isAdmin) return;
     setIsDeleting(true);
     try {
-      const userEmail = user.email || user.id;
-      // Use Supabase delete
-      const { error } = await supabase.from('users').delete().eq('id', user.id);
-      if (error) throw error;
+      const result = await adminDeleteUserAction(user.id);
+      if (!result.success) {
+        toast({ variant: 'destructive', title: 'Delete failed', description: result.error || 'Could not delete user.' });
+        return;
+      }
 
-      await logAdminActivity({
-        type: 'USER_DELETED',
-        targetId: user.id,
-        targetType: 'user',
-        details: `User deleted: ${userEmail}`,
-        performedBy: adminUser?.id,
-      });
+      toast({ title: 'User deleted', description: 'The user has been permanently removed.' });
       onUserDeleted?.();
       onClose();
     } catch (error) {
       console.error('Error deleting user:', error);
+      toast({ variant: 'destructive', title: 'Delete failed', description: 'Unexpected error occurred.' });
     } finally {
       setIsDeleting(false);
       setShowDeleteConfirm(false);
     }
-  }, [supabase, user, adminUser, isAdmin, onClose, onUserDeleted]);
+  }, [user, isAdmin, onClose, onUserDeleted, toast]);
   // `logAdminActivity` is intentionally excluded: it is a stable top-level import,
   // so adding it would be unnecessary noise in the dep array.
 
@@ -185,9 +183,9 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
         onCancelDelete={() => setShowDeleteConfirm(false)}
         onClose={onClose}
       />
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-8 relative z-10">
-          {/* Stats Grid - Premium Refinement */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-5 sm:p-6 space-y-6 relative z-10">
+          {/* Stats Grid - Premium Compact Refinement */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
             {[
               { label: 'Total Created', value: stats.totalMapsCreated || 0, icon: MapIcon, color: 'violet', trend: '+12%' },
               { label: 'Active Maps', value: userMaps.length, icon: Brain, color: 'indigo', isLoading: isLoadingMaps },
@@ -209,28 +207,28 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.03 }}
-                  className="relative overflow-hidden p-4 rounded-[1.75rem] bg-white/[0.03] border border-white/5 hover:border-white/20 transition-all group shadow-[inset_0_0_20px_rgba(255,255,255,0.02)] hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
+                  className="relative overflow-hidden p-3.5 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/20 transition-all group shadow-[inset_0_0_15px_rgba(255,255,255,0.02)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.4)]"
                 >
-                  <div className={`absolute top-0 right-0 w-20 h-20 ${theme.glow} rounded-full blur-2xl group-hover:bg-opacity-20 transition-all duration-500 pointer-events-none`} />
-                  <div className="relative flex flex-col gap-3">
+                  <div className={`absolute top-0 right-0 w-16 h-16 ${theme.glow} rounded-full blur-xl group-hover:bg-opacity-20 transition-all duration-500 pointer-events-none`} />
+                  <div className="relative flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className={`p-2 rounded-xl ${theme.bg} border ${theme.border} group-hover:scale-110 ${theme.bgHover} transition-all duration-500`}>
-                          <stat.icon className={`h-4 w-4 ${theme.text}`} />
+                      <div className="flex items-center gap-2">
+                        <div className={`p-1.5 rounded-lg ${theme.bg} border ${theme.border} group-hover:scale-110 ${theme.bgHover} transition-all duration-500`}>
+                          <stat.icon className={`h-3.5 w-3.5 ${theme.text}`} />
                         </div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-500 group-hover:text-zinc-400 transition-colors">{stat.label}</p>
+                        <p className="text-[9px] font-black uppercase tracking-[0.12em] text-zinc-500 group-hover:text-zinc-400 transition-colors truncate">{stat.label}</p>
                       </div>
                     </div>
-                    <div className="flex items-end justify-between gap-2">
+                    <div className="flex items-end justify-between gap-1.5">
                       {stat.isLoading ? (
-                        <div className="h-6 w-16 bg-white/10 rounded-md animate-pulse" />
+                        <div className="h-5 w-14 bg-white/10 rounded-md animate-pulse" />
                       ) : (
-                        <p className="text-2xl font-black text-white tracking-tighter leading-none group-hover:scale-[1.02] origin-left transition-transform">
+                        <p className="text-xl font-black text-white tracking-tighter leading-none group-hover:scale-[1.02] origin-left transition-transform">
                           {stat.value}
                         </p>
                       )}
                       {stat.trend && (
-                        <span className="text-[8px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 mb-0.5">
+                        <span className="text-[8px] font-black text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-md border border-emerald-500/20">
                           {stat.trend}
                         </span>
                       )}
@@ -243,45 +241,45 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
 
           {/* Activity Insight */}
           {user.activity && Object.keys(user.activity).length > 0 && (
-            <div className="relative overflow-hidden rounded-[2.5rem] bg-white/[0.02] border border-white/10 p-8 transition-all hover:border-white/20 hover:bg-white/[0.04] shadow-[inset_0_0_40px_rgba(255,255,255,0.01)] group/insight">
-              <div className="absolute top-0 right-0 w-96 h-96 bg-violet-600/[0.03] rounded-full blur-[120px] pointer-events-none group-hover/insight:bg-violet-600/[0.06] transition-all duration-700" />
-              <div className="flex items-center justify-between mb-6 relative z-10">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-violet-500/10 rounded-xl border border-violet-500/20">
-                    <Activity className="h-5 w-5 text-violet-400" />
+            <div className="relative overflow-hidden rounded-2xl bg-white/[0.02] border border-white/10 p-5 sm:p-6 transition-all hover:border-white/20 hover:bg-white/[0.04] shadow-[inset_0_0_30px_rgba(255,255,255,0.01)] group/insight">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-violet-600/[0.03] rounded-full blur-[90px] pointer-events-none group-hover/insight:bg-violet-600/[0.06] transition-all duration-700" />
+              <div className="flex items-center justify-between mb-5 relative z-10">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2.5 bg-violet-500/10 rounded-xl border border-violet-500/20">
+                    <Activity className="h-4 w-4 text-violet-400" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-black text-white tracking-tighter">Daily Activity</h3>
+                    <h3 className="text-lg font-black text-white tracking-tighter">Daily Activity</h3>
                     <p className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500 mt-0.5">Engagement metrics</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 bg-white/5 p-1.5 rounded-2xl border border-white/10 backdrop-blur-2xl">
+                <div className="flex items-center gap-3 bg-white/5 p-1 rounded-xl border border-white/10 backdrop-blur-2xl">
                   <button
                     onClick={() => setUserHeatmapMonth(new Date(userHeatmapMonth.getFullYear(), userHeatmapMonth.getMonth() - 1, 1))}
-                    className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all group"
+                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all group"
                   >
-                    <ChevronLeft className="h-5 w-5 group-hover:-translate-x-0.5 transition-transform" />
+                    <ChevronLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
                   </button>
-                  <div className="w-32 text-center">
+                  <div className="w-28 text-center">
                     <span className="text-xs font-black text-white block uppercase tracking-widest pb-0.5">
                       {format(userHeatmapMonth, 'MMMM')}
                     </span>
-                    <span className="text-[10px] font-black text-zinc-600 uppercase tracking-tighter">{format(userHeatmapMonth, 'yyyy')}</span>
+                    <span className="text-[9px] font-black text-zinc-600 uppercase tracking-tighter">{format(userHeatmapMonth, 'yyyy')}</span>
                   </div>
                   <button
                     onClick={() => setUserHeatmapMonth(new Date(userHeatmapMonth.getFullYear(), userHeatmapMonth.getMonth() + 1, 1))}
                     disabled={new Date(userHeatmapMonth.getFullYear(), userHeatmapMonth.getMonth() + 1, 1) > new Date()}
-                    className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all group disabled:opacity-20"
+                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all group disabled:opacity-20"
                   >
-                    <ChevronRight className="h-5 w-5 group-hover:translate-x-0.5 transition-transform" />
+                    <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
                   </button>
                 </div>
               </div>
               
               <div className="relative z-10">
                 <TooltipProvider delayDuration={0}>
-                  <div className="grid grid-cols-[repeat(31,minmax(0,1fr))] gap-2">
+                  <div className="grid grid-cols-[repeat(31,minmax(0,1fr))] gap-1.5">
                     <UserActivityHeatmap 
                       userActivity={user.activity} 
                       userHeatmapMonth={userHeatmapMonth} 
@@ -289,10 +287,10 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
                   </div>
                 </TooltipProvider>
                 
-                <div className="flex items-center justify-end mt-6 gap-3">
-                  <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mr-2">Intensity Spectrum:</span>
+                <div className="flex items-center justify-end mt-4 gap-2.5">
+                  <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mr-1">Intensity:</span>
                   {['bg-zinc-800', 'bg-violet-900/60', 'bg-violet-700/70', 'bg-violet-500', 'bg-violet-400'].map((c, i) => (
-                    <div key={i} className={`h-3 w-3 rounded-md ${c} shadow-sm border border-white/5`} />
+                    <div key={i} className={`h-2.5 w-2.5 rounded-sm ${c} shadow-sm border border-white/5`} />
                   ))}
                 </div>
               </div>
@@ -301,14 +299,14 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
 
           {/* Achieving Milestones */}
           {user.unlockedAchievements && user.unlockedAchievements.length > 0 && (
-            <div className="p-8 rounded-[2rem] bg-white/5 border border-white/10">
-              <div className="flex items-center gap-3 mb-6">
+            <div className="p-5 sm:p-6 rounded-2xl bg-white/5 border border-white/10">
+              <div className="flex items-center gap-2.5 mb-4">
                 <Trophy className="h-4 w-4 text-amber-400" />
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Unlocked Milestones ({user.unlockedAchievements.length})</p>
               </div>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-2.5">
                 {user.unlockedAchievements.map((a: string) => (
-                  <Badge key={a} className="px-4 py-2 rounded-xl bg-amber-500/5 border border-amber-500/20 text-[10px] font-black text-amber-400 uppercase tracking-widest hover:bg-amber-500/10 transition-colors">
+                  <Badge key={a} className="px-3 py-1.5 rounded-lg bg-amber-500/5 border border-amber-500/20 text-[9px] font-black text-amber-400 uppercase tracking-widest hover:bg-amber-500/10 transition-colors">
                     {a.replace(/_/g, ' ')}
                   </Badge>
                 ))}
@@ -320,7 +318,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
 
           {/* Map Analytics Card */}
           {(isLoadingMaps || userMaps.length > 0) && (
-            <div className="space-y-6 border border-violet-500/20 rounded-[2.5rem] p-8 bg-violet-500/[0.02] hover:bg-violet-500/[0.04] hover:border-violet-500/40 transition-all shadow-[inset_0_0_40px_rgba(139,92,246,0.02)] group/analytics">
+            <div className="space-y-5 border border-violet-500/20 rounded-2xl p-5 sm:p-6 bg-violet-500/[0.02] hover:bg-violet-500/[0.04] hover:border-violet-500/40 transition-all shadow-[inset_0_0_30px_rgba(139,92,246,0.02)] group/analytics">
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-3">
                   <div className="p-3 bg-gradient-to-br from-violet-500/20 to-indigo-500/20 rounded-2xl border border-violet-500/30 shadow-lg shadow-violet-500/10">
@@ -368,7 +366,7 @@ export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted,
                 <div className="space-y-6">
                   {/* Row 1: Mode & Depth */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Cognitive Modes Skeleton */}
+                    {/* Map Generation Modes Skeleton */}
                     <div className="relative overflow-hidden rounded-[2rem] bg-white/5 border border-white/10 p-8 shadow-xl animate-pulse">
                       <div className="flex items-center gap-3 mb-6">
                         <div className="h-10 w-10 bg-white/5 rounded-xl" />

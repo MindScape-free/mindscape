@@ -125,13 +125,6 @@ export function ModelSelector({
       ? availableModels.filter(m => m.isFree) 
       : availableModels;
     
-    // If loading or no models, show placeholder
-    if (isLoading && models.length === 0) {
-        return (
-            <div className={cn("h-11 bg-black/20 animate-pulse rounded-xl border border-white/5", className)} />
-        );
-    }
-
     const selectedModel = models.find(m => m.value === value) || models[0];
 
     // Auto-update parent state if the current value is invalid for the new provider
@@ -140,6 +133,13 @@ export function ModelSelector({
             onChange(selectedModel.value);
         }
     }, [isLoading, models, selectedModel, value, onChange]);
+
+    // If loading or no models, show placeholder (ONLY AFTER all hooks are called)
+    if (isLoading && models.length === 0) {
+        return (
+            <div className={cn("h-11 bg-black/20 animate-pulse rounded-xl border border-white/5", className)} />
+        );
+    }
 
     if (!selectedModel) return null;
 

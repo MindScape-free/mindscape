@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import { QuizSchema } from '../schemas/quiz-schema';
 import { generateContent, AIProvider } from '../client-dispatcher';
+import { shuffleQuiz } from '@/lib/quiz-shuffler';
 
 export const GenerateQuizInputSchema = z.object({
     topic: z.string(),
@@ -76,6 +77,7 @@ ${isCompareMode ? `COMPARE MODE: Questions MUST focus on sharp differences, trad
 
 QUALITY RULES:
 - Wrong options must be plausible (not obviously incorrect).
+- RANDOMIZE the position of the correct answer across options A, B, C, D evenly. Do NOT put the correct answer in Option A by default.
 - No duplicate questions.
 - No conceptTag repeated more than twice across all questions.
 - Ensure even coverage across different aspects of the topic.
@@ -100,7 +102,7 @@ SCHEMA (return ONLY this JSON):
         {"id": "C", "text": "Plausible option"},
         {"id": "D", "text": "Plausible option"}
       ],
-      "correctOptionId": "A",
+      "correctOptionId": "C",
       "conceptTag": "matching-category-name",
       "explanation": "Why this answer is correct."
     }
@@ -110,6 +112,7 @@ SCHEMA (return ONLY this JSON):
 RULES:
 - Generate EXACTLY ${questionCount} questions.
 - Each question has exactly 4 options (A, B, C, D).
+- Vary correctOptionId randomly among A, B, C, and D across questions.
 - Difficulty "${difficulty}" strictly enforced.
 - Return ONLY the JSON object.
 ${pdfContext ? `\nSOURCE FILE CONTEXT (prioritize for questions):\n${pdfContext.substring(0, 7000)}` : ''}`;
@@ -131,9 +134,10 @@ Return JSON with "topic", "difficulty", and "questions" at root level.`;
 
     if (!output) throw new Error('AI failed to generate a valid quiz.');
 
+    let rawQuiz = output;
     if (output.quiz && Array.isArray(output.quiz) && !output.questions) {
         const firstQuestion = output.quiz[0];
-        return {
+        rawQuiz = {
             topic,
             difficulty: firstQuestion?.difficulty || difficulty,
             questions: output.quiz.map((q: any, i: number) => ({
@@ -149,5 +153,5 @@ Return JSON with "topic", "difficulty", and "questions" at root level.`;
         };
     }
 
-    return output;
+    return shuffleQuiz(rawQuiz);
 }

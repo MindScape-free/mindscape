@@ -421,8 +421,10 @@ const DashboardTabInner: React.FC<DashboardTabProps> = ({
                   <div className="p-2 bg-white/5 rounded-xl border border-white/10">
                     <MapIcon className="h-4 w-4 text-violet-400" />
                   </div>
-                  <p className="text-base font-black text-white tracking-tight">Map Styles</p>
-                  <p className="text-[9px] text-zinc-500 font-black uppercase tracking-[0.1em] mt-0.5">Single vs Multiple topics</p>
+                  <div className="flex flex-col">
+                    <p className="text-base font-black text-white tracking-tight">Map Styles</p>
+                    <p className="text-[9px] text-zinc-500 font-black uppercase tracking-[0.1em] mt-0.5">Single vs Multiple topics</p>
+                  </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   {([
@@ -456,8 +458,10 @@ const DashboardTabInner: React.FC<DashboardTabProps> = ({
                   <div className="p-2 bg-white/5 rounded-xl border border-white/10">
                     <Zap className="h-4 w-4 text-rose-400" />
                   </div>
-                  <p className="text-base font-black text-white tracking-tight">Map Complexity</p>
-                  <p className="text-[9px] text-zinc-500 font-black uppercase tracking-[0.1em] mt-0.5">Quick vs Detailed notes</p>
+                  <div className="flex flex-col">
+                    <p className="text-base font-black text-white tracking-tight">Map Complexity</p>
+                    <p className="text-[9px] text-zinc-500 font-black uppercase tracking-[0.1em] mt-0.5">Quick vs Detailed notes</p>
+                  </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   {([

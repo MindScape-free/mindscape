@@ -15,6 +15,8 @@ import { useAuth } from '@/lib/auth-context';import {
   ChevronUp,
   BarChart3,
   ChevronDown,
+  Clock,
+  CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -44,7 +46,6 @@ import { normalizeTimestamp, sortByTimestamp } from '@/lib/timestamp-utils';
 const DashboardTab = lazy(() => import('@/components/admin/DashboardTab').then(m => ({ default: m.DashboardTab })));
 const UsersTab = lazy(() => import('@/components/admin/UsersTab').then(m => ({ default: m.UsersTab })));
 const LogsTab = lazy(() => import('@/components/admin/LogsTab').then(m => ({ default: m.LogsTab })));
-const AITelemetryTab = lazy(() => import('@/components/admin/AITelemetryTab').then(m => ({ default: m.AITelemetryTab })));
 const UserDetailDialog = lazy(() => import('@/components/admin/UserDetailDialog'));
 
 import { FeedbackCards } from '@/components/feedback/FeedbackCards';
@@ -371,7 +372,6 @@ export default function AdminDashboard() {
     { id: 'dashboard' as AdminTab, label: 'Overview', icon: Brain, desc: 'System overview and metrics' },
     { id: 'users' as AdminTab, label: 'Users', icon: Users, desc: 'Manage user accounts' },
     { id: 'logs' as AdminTab, label: 'Activity', icon: Activity, desc: 'Live event stream' },
-    { id: 'ai_telemetry' as AdminTab, label: 'Telemetry', icon: BarChart3, desc: 'AI Performance & Usage' },
     { id: 'feedback' as AdminTab, label: 'Feedback', icon: MessageSquare, desc: 'User reports' },
   ];
 
@@ -457,25 +457,25 @@ export default function AdminDashboard() {
           </div>
 
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-4 bg-white/5 px-6 py-2.5 rounded-2xl border border-white/10 backdrop-blur-3xl shadow-xl">
+            <div className="flex items-center gap-4 bg-white/5 px-5 py-2.5 rounded-2xl border border-white/10 backdrop-blur-3xl shadow-xl">
               <div className="flex flex-col items-end">
                 <span className="text-[8px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1">Central Sync</span>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <div className={cn(
-                      "h-2 w-2 rounded-full transition-all duration-700",
-                      isDashboardLoading || isSyncing ? "bg-violet-500 animate-pulse shadow-[0_0_10px_rgba(139,92,246,0.5)] scale-110" : "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
-                    )} />
-                    <span className="text-[10px] font-black text-white uppercase tracking-widest">
-                      {isDashboardLoading || isSyncing ? 'Syncing...' : 'Live'}
-                    </span>
-                  </div>
-                  <div className="w-px h-3 bg-white/10" />
-                  <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-tighter">
-                    {lastSyncedAt 
-                      ? `Updated ${formatDistanceToNow(new Date(lastSyncedAt), { addSuffix: true })}` 
-                      : 'Syncing...'}
-                  </span>
+                <div className="flex items-center gap-2">
+                  {isDashboardLoading || isSyncing ? (
+                    <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span className="text-[9px] font-black uppercase tracking-widest">SYNCING...</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-zinc-400">
+                      <Clock className="h-3 w-3 text-zinc-500" />
+                      <span className="text-[9px] font-bold uppercase tracking-tighter text-zinc-400">
+                        {lastSyncedAt 
+                          ? `Updated ${formatDistanceToNow(new Date(lastSyncedAt), { addSuffix: true })}` 
+                          : 'Synced'}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -589,9 +589,6 @@ export default function AdminDashboard() {
               )}
               {activeTab === 'feedback' && (
                 <FeedbackCards data={feedbackData} adminUserId={user?.id || ''} onRefresh={refreshBundle} isLoading={isDashboardLoading && feedbackData.length === 0} />
-              )}
-              {activeTab === 'ai_telemetry' && (
-                <AITelemetryTab aiCalls={bundle.aiCalls} isLoading={isDashboardLoading} />
               )}
           </motion.div>
         </AnimatePresence>

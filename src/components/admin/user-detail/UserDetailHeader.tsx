@@ -42,7 +42,7 @@ export default function UserDetailHeader({
   onClose,
 }: UserDetailHeaderProps) {
   return (
-    <div className="relative flex flex-col sm:flex-row sm:items-center justify-between p-8 border-b border-white/5 gap-6 shrink-0 z-10">
+    <div className="relative flex flex-col sm:flex-row sm:items-center justify-between p-5 sm:px-6 border-b border-white/5 gap-4 shrink-0 z-10">
       <div className="flex items-center gap-6">
         <div className="relative group/avatar">
           <motion.div

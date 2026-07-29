@@ -7,11 +7,16 @@ import {
   Clock, 
   ChevronRight,
   Loader2,
+  Shield,
+  Sparkles,
+  Layers,
+  Image as ImageIcon,
+  Flame,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
 import { UsersTabSkeleton } from './AdminSkeletons';
 
@@ -29,7 +34,7 @@ interface UsersTabProps {
 }
 
 const VIRTUALIZATION_THRESHOLD = 50;
-const CARD_HEIGHT = 150;
+const CARD_HEIGHT = 175;
 const BUFFER_CARDS = 3;
 
 const UsersTabInner: React.FC<UsersTabProps> = ({
@@ -156,7 +161,7 @@ const UsersTabInner: React.FC<UsersTabProps> = ({
         <div className="space-y-4">
           <div 
             ref={containerRef}
-            className="grid grid-cols-1 xl:grid-cols-2 gap-4 overflow-y-auto px-1 custom-scrollbar"
+            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 overflow-y-auto px-1 custom-scrollbar"
             style={{ 
               maxHeight: 'calc(100vh - 400px)',
               contain: 'content',
@@ -244,72 +249,133 @@ interface UserCardProps {
   onSelect: () => void;
 }
 
-const UserCardInner = ({ user: u, onSelect }: UserCardProps) => (
-  <motion.button
-    whileHover={{ y: -3, scale: 1.01 }}
-    whileTap={{ scale: 0.99 }}
-    onClick={onSelect}
-    className="w-full relative overflow-hidden rounded-[1.25rem] p-4 bg-white/5 border border-white/10 hover:border-violet-500/30 transition-all duration-500 text-left backdrop-blur-3xl shadow-xl group"
-  >
-    <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-    <div className="flex items-center gap-4 relative z-10">
-      <div className="relative">
-        <Avatar className="h-12 w-12 rounded-xl border border-white/10 shrink-0 group-hover:scale-105 transition-transform duration-500">
-          <AvatarImage src={u.photoURL} className="object-cover" />
-          <AvatarFallback className="bg-zinc-800 text-xs font-black text-violet-400">
-            {u.displayName?.substring(0, 2).toUpperCase() || (u.email ? u.email.substring(0,2).toUpperCase() : '??')}
-          </AvatarFallback>
-        </Avatar>
-        <div className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full bg-zinc-950 flex items-center justify-center border border-white/10">
-           <div className={`h-2 w-2 rounded-full ${u.statistics?.lastActiveDate ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]' : 'bg-zinc-700'}`} />
+const UserCardInner = ({ user: u, onSelect }: UserCardProps) => {
+  const isAdmin = Boolean(
+    u.isAdmin === true || 
+    u.is_admin === true || 
+    u.role === 'admin' || 
+    (u.email && u.email.toLowerCase().trim() === 'mindscape.free@gmail.com')
+  );
+
+  const maps = u.statistics?.totalMapsCreated || 0;
+  const nodes = u.statistics?.totalNodes || 0;
+  const images = u.statistics?.totalImagesGenerated || 0;
+  const streak = u.statistics?.currentStreak || 0;
+  const studyMins = u.statistics?.totalStudyTimeMinutes || 0;
+  const lastActiveStr = u.statistics?.lastActiveDate || u.lastActive;
+  
+  const lastActiveDate = lastActiveStr ? new Date(lastActiveStr) : null;
+  const isLastActiveValid = lastActiveDate && !isNaN(lastActiveDate.getTime());
+  const isActiveRecent = isLastActiveValid && (Date.now() - lastActiveDate.getTime() < 7 * 24 * 60 * 60 * 1000);
+
+  const createdDate = u.createdAt ? new Date(u.createdAt) : null;
+  const isCreatedValid = createdDate && !isNaN(createdDate.getTime());
+
+  return (
+    <motion.button
+      whileHover={{ y: -2, scale: 1.005 }}
+      whileTap={{ scale: 0.99 }}
+      onClick={onSelect}
+      className="w-full relative overflow-hidden rounded-2xl p-4 bg-gradient-to-b from-white/[0.06] to-white/[0.02] border border-white/10 hover:border-violet-500/30 hover:shadow-[0_0_25px_rgba(139,92,246,0.12)] transition-all duration-300 text-left backdrop-blur-2xl shadow-xl group/card"
+    >
+      {/* Dynamic Left Accent Bar */}
+      <div 
+        className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full transition-colors duration-300 ${
+          isAdmin 
+            ? 'bg-gradient-to-b from-amber-400 to-amber-600 shadow-[0_0_8px_rgba(245,158,11,0.5)]' 
+            : isActiveRecent 
+            ? 'bg-gradient-to-b from-emerald-400 to-teal-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' 
+            : 'bg-gradient-to-b from-violet-500/40 to-purple-600/20'
+        }`} 
+      />
+
+      {/* Top Hover Ambient Lighting */}
+      <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-violet-400/30 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-500" />
+
+      {/* Header Row: Avatar + Name/Email + Role/Joined Badge */}
+      <div className="flex items-center gap-3 mb-3.5 pl-1">
+        <div className="relative shrink-0">
+          <Avatar className="h-10 w-10 rounded-xl border border-white/15 shadow-md group-hover/card:scale-105 group-hover/card:border-violet-400/40 transition-all duration-300">
+            <AvatarImage src={u.photoURL} className="object-cover" />
+            <AvatarFallback className="bg-gradient-to-br from-zinc-800 to-zinc-900 text-xs font-black text-violet-300">
+              {u.displayName?.substring(0, 2).toUpperCase() || (u.email ? u.email.substring(0, 2).toUpperCase() : '??')}
+            </AvatarFallback>
+          </Avatar>
+          <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-zinc-950 flex items-center justify-center border border-white/20">
+            <div className={`h-1.5 w-1.5 rounded-full ${isActiveRecent ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse' : 'bg-zinc-600'}`} />
+          </div>
         </div>
-      </div>
-      
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-sm font-black text-white group-hover:text-violet-400 transition-colors truncate tracking-tight">
-            {u.displayName || u.email?.split('@')[0] || 'Unknown Explorer'}
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-bold text-white group-hover/card:text-violet-300 transition-colors truncate tracking-tight">
+              {u.displayName || u.email?.split('@')[0] || 'Unknown Explorer'}
+            </p>
+          </div>
+          <p className="text-[11px] font-mono text-zinc-400 lowercase truncate mt-0.5">
+            {u.email || 'no_email@explorer'}
           </p>
-          <Badge className="bg-white/5 border-white/10 text-zinc-600 text-[7px] font-black uppercase px-1.5 py-0 rounded-full group-hover:border-violet-500/30 group-hover:text-violet-400 transition-all">
-            Identity Verified
-          </Badge>
         </div>
-        <p className="text-[10px] text-zinc-500 truncate mb-3 font-bold border-b border-white/5 pb-1 group-hover:border-violet-500/10 transition-colors">{u.email || '@digital_citizen'}</p>
-        
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <div className="p-1 bg-violet-500/10 rounded-lg">
-                <MapIcon className="h-3 w-3 text-violet-400" />
-              </div>
-              <span className="text-[11px] font-black text-white tracking-tighter">{u.statistics?.totalMapsCreated || 0}</span>
-              <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-tighter">Maps</span>
+
+        {/* Right Badge: Admin Badge or Joined Relative Tag */}
+        <div className="shrink-0 text-right">
+          {isAdmin ? (
+            <Badge className="bg-amber-500/10 border-amber-500/30 text-amber-400 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-[0_0_10px_rgba(245,158,11,0.15)]">
+              <Shield className="w-2.5 h-2.5" /> Admin
+            </Badge>
+          ) : isCreatedValid ? (
+            <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-tight">
+              {formatDistanceToNow(createdDate, { addSuffix: true }).replace('about ', '')}
+            </span>
+          ) : (
+            <Badge className="bg-white/5 border-white/10 text-zinc-400 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg">
+              Explorer
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      {/* Middle Grid: 4 Clean Metric Cards */}
+      <div className="grid grid-cols-4 gap-2 mb-3.5 pl-1">
+        {[
+          { icon: MapIcon, value: maps, label: 'Maps', color: 'text-violet-400' },
+          { icon: Layers, value: nodes > 999 ? `${(nodes / 1000).toFixed(1)}k` : nodes, label: 'Nodes', color: 'text-sky-400' },
+          { icon: ImageIcon, value: images, label: 'Images', color: 'text-purple-400' },
+          { icon: Flame, value: streak > 0 ? `${streak}d` : '—', label: 'Streak', color: 'text-amber-400' },
+        ].map(({ icon: Icon, value, label, color }) => (
+          <div key={label} className="rounded-xl bg-white/[0.03] border border-white/5 p-2 text-center group-hover/card:bg-white/[0.05] transition-colors">
+            <div className="flex items-center justify-center gap-1 mb-0.5">
+              <Icon className={`h-3 w-3 ${color}`} />
+              <span className="text-xs font-black text-white">{value}</span>
             </div>
-            
-            <div className="flex items-center gap-2">
-              <div className="p-1 bg-white/5 rounded-lg">
-                <Clock className="h-3 w-3 text-zinc-500" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[8px] text-zinc-600 font-black uppercase tracking-tighter">Last Seen</span>
-                <span className="text-[9px] font-black text-zinc-400">
-                    {(() => {
-                      if (!u.statistics?.lastActiveDate) return 'System Origin';
-                      const date = new Date(u.statistics.lastActiveDate);
-                      return isNaN(date.getTime()) ? 'System Origin' : format(date, 'dd MMM yyyy');
-                    })()}
-                </span>
-              </div>
-            </div>
+            <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-wider">{label}</span>
           </div>
-          
-          <div className="h-8 w-8 rounded-xl bg-white/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 group-hover:bg-violet-500 shadow-lg group-hover:translate-x-0 translate-x-2">
-             <ChevronRight className="h-4 w-4 text-white" />
+        ))}
+      </div>
+
+      {/* Bottom Footer: Study Time & Last Active Status */}
+      <div className="flex items-center justify-between pt-2.5 border-t border-white/5 pl-1">
+        <div className="flex items-center gap-1.5">
+          <Clock className="h-3 w-3 text-emerald-400/70" />
+          <span className="text-[10px] font-bold text-zinc-400">
+            {studyMins >= 60 ? `${(studyMins / 60).toFixed(1)}h studied` : `${studyMins}m studied`}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] font-bold text-zinc-500">
+            {isLastActiveValid 
+              ? `Active ${formatDistanceToNow(lastActiveDate, { addSuffix: true }).replace('about ', '')}`
+              : 'System Origin'}
+          </span>
+
+          <div className="h-6 w-6 rounded-lg bg-white/5 flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-all duration-300 group-hover/card:bg-violet-600 group-hover/card:text-white text-zinc-400 shrink-0">
+            <ChevronRight className="h-3.5 w-3.5" />
           </div>
         </div>
       </div>
-    </div>
-  </motion.button>
-);
+    </motion.button>
+  );
+};
 
 const UserCard = memo(UserCardInner);

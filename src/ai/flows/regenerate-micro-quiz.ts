@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { generateContent } from '@/ai/client-dispatcher';
+import { shuffleQuestionOptions } from '@/lib/quiz-shuffler';
 
 const MicroQuizOptionSchema = z.object({
     id: z.enum(['A', 'B', 'C', 'D']),
@@ -29,15 +30,15 @@ Generate ONE multiple choice question about "${nodeName}" in the context of "${m
 Rules:
 - question: a clear, specific question, not trivially obvious
 - options: exactly 4 options with ids A, B, C, D
-- correctId: the id of the correct option
+- correctId: the id of the correct option (randomize correct option placement across A, B, C, D evenly)
 - explanation: 1-2 sentences explaining why the correct answer is right
 - Make the question challenging but fair
 
 Return ONLY this JSON:
 {
   "question": "...",
-  "options": [{"id": "A", "text": "..."}, ...],
-  "correctId": "A",
+  "options": [{"id": "A", "text": "..."}, {"id": "B", "text": "..."}, {"id": "C", "text": "..."}, {"id": "D", "text": "..."}],
+  "correctId": "C",
   "explanation": "..."
 }`;
 
@@ -53,7 +54,7 @@ Return ONLY this JSON:
                 schema: MicroQuizSchema,
                 options: { capability: 'fast' },
             });
-            return result as MicroQuizOutput;
+            return shuffleQuestionOptions(result as MicroQuizOutput);
         } catch (e: any) {
             console.error(`Quiz regeneration attempt ${attempt} failed:`, e.message);
             if (attempt === 2) throw e;

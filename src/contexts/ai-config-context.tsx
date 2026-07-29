@@ -213,6 +213,12 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
         isSyncingFromSupabase.current = false;
     }, [storedConfig]);
 
+    // Keep stable refs to avoid tearing down the realtime subscription on every render
+    const setStoredConfigRef = React.useRef(setStoredConfig);
+    setStoredConfigRef.current = setStoredConfig;
+    const refreshBalanceRef = React.useRef(refreshBalance);
+    refreshBalanceRef.current = refreshBalance;
+
     // Sync with Supabase on user login - REAL-TIME LISTENER
     useEffect(() => {
         if (!user) return;
@@ -252,12 +258,12 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
                 lastStoredConfigRef.current = newConfigStr;
                 isSyncingFromSupabase.current = true;
                 setConfig(merged);
-                setStoredConfig(merged);
+                setStoredConfigRef.current(merged);
                 console.log('✅ AI Config synced from Supabase');
             }
             // Always fetch balance after sync if key is present
             if (merged.pollinationsApiKey) {
-                refreshBalance(merged.pollinationsApiKey);
+                refreshBalanceRef.current(merged.pollinationsApiKey);
             }
         };
 
@@ -318,7 +324,7 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
             console.log('🔄 Cleaning up AI config listener');
             supabase.removeChannel(channel);
         };
-    }, [user, setStoredConfig, refreshBalance]);
+    }, [user]);
 
     return (
         <AIConfigContext.Provider value={{ config, updateConfig, resetConfig, pollenBalance, isBalanceLoading, refreshBalance }}>

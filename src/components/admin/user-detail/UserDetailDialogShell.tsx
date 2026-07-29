@@ -20,7 +20,7 @@ export default function UserDetailDialogShell({ children, onClose }: UserDetailD
       <motion.div
         initial={{ scale: 0.9, opacity: 0, y: 30 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
-        className="relative bg-[#09090b]/90 max-w-6xl w-full h-[85vh] rounded-[2.5rem] overflow-hidden text-white flex flex-col shadow-[0_0_100px_rgba(0,0,0,0.6)] border border-white/10 backdrop-blur-3xl"
+        className="relative bg-[#09090b]/90 max-w-6xl w-full h-[85vh] rounded-[2rem] overflow-hidden text-white flex flex-col shadow-[0_0_100px_rgba(0,0,0,0.6)] border border-white/10 backdrop-blur-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-violet-600/10 rounded-full blur-[120px] -mr-64 -mt-64 pointer-events-none" />

@@ -82,6 +82,8 @@ import { resolveDepthWithConfidence, analyzeTopicComplexity } from '@/lib/depth-
 import { trackGenerationStart, trackGenerationComplete, trackGenerationFailed, type AIGenerationMeta } from '@/lib/tracker';
 import { useMapTracking } from '@/hooks/use-tracking';
 
+const EMPTY_ARRAY: any[] = [];
+
 function MindMapPageContent() {
   const { params, navigateToMap, changeLanguage, clearRegenFlag, getParamKey, router } = useMindMapRouter();
   const { toast } = useToast();
@@ -266,7 +268,7 @@ function MindMapPageContent() {
     if (!mindMap?.id || hookStatus !== 'idle') return;
     const unsubscribe = subscribeToMap(mindMap.id, mindMap, hookStatus === 'idle');
     return () => unsubscribe();
-  }, [mindMap?.id, hookStatus, subscribeToMap, mindMap]);
+  }, [mindMap?.id, hookStatus, subscribeToMap]);
 
   // Sync to Global Activity Context
   useEffect(() => {
@@ -292,22 +294,26 @@ function MindMapPageContent() {
 
   /* Safe auto-save with race condition lock */
   const lastFetchedParamsRef = useRef<string>('');
+  const isGeneratingRef = useRef(false);
 
   // Refs to avoid effect dependencies
   const mindMapsRef = useRef(mindMaps);
   useEffect(() => { mindMapsRef.current = mindMaps; }, [mindMaps]);
 
+  const normalizeTopic = (t: string) => t.trim().toLowerCase().replace(/[-_]+/g, ' ');
+
   useEffect(() => {
     const fetchMindMapData = async () => {
       if (isUserLoading) return;
+      if (isGeneratingRef.current) return;
 
       const currentParamsKey = getParamKey();
 
       // If we already have this map in our state, just switch to it
       const existingMapIndex = mindMaps.findIndex((m: any) => {
         if (params.mapId && m.id === params.mapId) return true;
-        if (params.topic && m.topic?.toLowerCase() === params.topic.toLowerCase()) return true;
-        if (params.isSelfReference && m.topic?.toLowerCase() === 'mindscape core architecture') return true;
+        if (params.topic && m.topic && normalizeTopic(m.topic) === normalizeTopic(params.topic)) return true;
+        if (params.isSelfReference && normalizeTopic(m.topic) === 'mindscape core architecture') return true;
         return false;
       });
 
@@ -362,6 +368,7 @@ function MindMapPageContent() {
 
       let sessionContent: any = null;
 
+      isGeneratingRef.current = true;
       try {
         if (params.isSelfReference) {
           currentMode = 'self-reference';
@@ -761,9 +768,9 @@ function MindMapPageContent() {
               }
             }
 
-            const exists = prevMaps.some(m => m.topic?.toLowerCase() === result.data!.topic?.toLowerCase());
+            const exists = prevMaps.some(m => m.topic && normalizeTopic(m.topic) === normalizeTopic(result.data!.topic!));
             if (exists) {
-              const newIndex = prevMaps.findIndex(m => m.topic?.toLowerCase() === result.data!.topic?.toLowerCase());
+              const newIndex = prevMaps.findIndex(m => m.topic && normalizeTopic(m.topic) === normalizeTopic(result.data!.topic!));
               if (newIndex !== -1) setActiveMindMapIndex(newIndex);
               return prevMaps;
             }
@@ -800,15 +807,19 @@ function MindMapPageContent() {
               isSubMap: !!(params as Record<string, unknown>).parentMapId,
             } as unknown as MindMapData;
 
-            const existingMapWithId = mindMapsRef.current.find(m => m.topic?.toLowerCase() === result.data!.topic?.toLowerCase() && m.id);
+            const existingMapWithId = mindMapsRef.current.find(m => m.topic && normalizeTopic(m.topic) === normalizeTopic(result.data!.topic!) && m.id);
             handleSaveMap(dataToSave, existingMapWithId?.id).then((savedId: any) => {
+              if (savedId) {
+                if (result.data) result.data.id = savedId;
+                dataToSave.id = savedId;
+              }
               if (savedId && !existingMapWithId?.id) {
                 setMindMaps((prev: any[]) => prev.map(m =>
-                  m.topic === (result.data!.topic || params.topic) ? { ...m, id: savedId } : m
+                  m.topic && normalizeTopic(m.topic) === normalizeTopic(result.data!.topic || params.topic || '') ? { ...m, id: savedId } : m
                 ));
                 handleUpdateCurrentMap({ id: savedId });
                 currentMapIdRef.current = savedId;
-                navigateToMap(savedId!);
+                navigateToMap(savedId!, result.data!.topic || params.topic || undefined);
 
                 // Award points for creating a new map
                 const topicName = result.data!.topic;
@@ -833,6 +844,7 @@ function MindMapPageContent() {
         setError(e.message || 'An unknown error occurred.');
         setIsLoading(false);
       } finally {
+        isGeneratingRef.current = false;
         setGeneratingNodeId(null);
         clearRegenFlag();
       }
@@ -843,7 +855,7 @@ function MindMapPageContent() {
     // cause infinite re-render loops. The effect uses getParamKey as the primary
     // trigger and reads stable refs/closures for the rest.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getParamKey, user, isUserLoading, handleSaveMap, toast, params, config, aiPersona, setMindMaps, setActiveMindMapIndexState, activeMindMapIndex, navigateToMap, isLoading, handleUpdateCurrentMap, setActiveMindMapIndex]);
+  }, [getParamKey, user, isUserLoading, handleSaveMap, toast, params, config, aiPersona, setMindMaps, setActiveMindMapIndexState, activeMindMapIndex, navigateToMap, handleUpdateCurrentMap, setActiveMindMapIndex]);
 
 
   // Track views for community maps
@@ -1013,7 +1025,7 @@ function MindMapPageContent() {
     if (mindMap?.id) {
       fetchMapHierarchy(mindMap);
     }
-  }, [mindMap, fetchMapHierarchy]);
+  }, [mindMap?.id, fetchMapHierarchy]);
 
   // Reset generated FAQs when mind map topic changes
   useEffect(() => {
@@ -1026,7 +1038,7 @@ function MindMapPageContent() {
     if (mindMap?.pdfContext || mindMap?.sourceFileContent) {
       setUseFileAwareContext(true);
     }
-  }, [mindMap]);
+  }, [mindMap?.id, mindMap?.pdfContext, mindMap?.sourceFileContent]);
 
   // Bug #39: stable ref so awardXP changes never recreate the interval
   const awardXPRef = useRef(awardXP);
@@ -1061,7 +1073,15 @@ function MindMapPageContent() {
 
     let hasActualChanges = false;
     for (const key in resolved) {
-      if (resolved !== currentMap && JSON.stringify((resolved as unknown as Record<string, unknown>)[key]) !== JSON.stringify((currentMap as unknown as Record<string, unknown>)[key])) {
+      const newVal = (resolved as unknown as Record<string, unknown>)[key];
+      const oldVal = (currentMap as unknown as Record<string, unknown>)[key];
+      if (newVal === undefined && oldVal === undefined) continue;
+
+      const normalizeEmpty = (v: any) => (v ?? (Array.isArray(v) ? [] : (typeof v === 'object' && v !== null ? {} : undefined)));
+      const newStr = JSON.stringify(normalizeEmpty(newVal));
+      const oldStr = JSON.stringify(normalizeEmpty(oldVal));
+
+      if (newStr !== oldStr) {
         hasActualChanges = true;
         break;
       }
@@ -1480,7 +1500,7 @@ function MindMapPageContent() {
             onRegenerate={handleRegenerateClick}
             isRegenerating={isLoading}
             canRegenerate={mode !== 'self-reference'}
-            nestedExpansions={mindMap?.nestedExpansions || []}
+            nestedExpansions={mindMap?.nestedExpansions || EMPTY_ARRAY}
             mindMapStack={mindMaps}
             activeStackIndex={activeMindMapIndex}
             onStackSelect={handleBreadcrumbSelect}

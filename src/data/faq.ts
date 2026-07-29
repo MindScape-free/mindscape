@@ -398,7 +398,7 @@ export const FEEDBACK_FAQS: FAQItem[] = [
 export const ADMIN_FAQS: FAQItem[] = [
   {
     question: 'What tabs are on the admin page?',
-    answer: 'Five tabs: Overview (platform metrics, health score, growth charts), Users (search, manage accounts), Activity (live event stream), Telemetry (AI call logs and performance), and Feedback (user reports).'
+    answer: 'Four tabs: Overview (platform metrics, health score, growth charts), Users (search, manage accounts), Activity (live event stream), and Feedback (user reports).'
   },
   {
     question: 'What metrics are shown in Overview?',
@@ -411,9 +411,5 @@ export const ADMIN_FAQS: FAQItem[] = [
   {
     question: 'How do I sync or recompute platform stats?',
     answer: 'Click "Full refresh: recompute + sync source tables" on the Overview tab. Or use the dropdown for "Rebuild stats from raw events" only. Stats also auto-recompute via cron every 5 minutes.'
-  },
-  {
-    question: 'What AI telemetry is available?',
-    answer: 'The Telemetry tab shows AI usage stats: total calls, success/failure rates, provider distribution, model usage, and performance metrics to monitor AI provider health.'
   },
 ];

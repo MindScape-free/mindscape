@@ -19,6 +19,7 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
   const { toast } = useToast();
   const isSavingRef = useRef(false);
   const saveQueueRef = useRef<{ mapToSave: MindMapData; existingId?: string; isSilent: boolean } | null>(null);
+  const lastSavedTopicMapIdRef = useRef<Record<string, string>>({});
   const generatingThumbnailsRef = useRef<Set<string>>(new Set());
   const [aiPersona, setAiPersona] = useState<string>('Teacher');
 
@@ -91,14 +92,22 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
     if (mapToSave.mode === 'compare' && !mapToSave.compareData) { console.warn('Refused to save empty comparison map'); return; }
     if (mapToSave.mode !== 'compare' && (!mapToSave.subTopics || mapToSave.subTopics.length === 0)) { console.warn('Refused to save empty mind map'); return; }
 
+    const topicKey = mapToSave.topic?.toLowerCase().trim();
+    const cachedMapId = topicKey ? lastSavedTopicMapIdRef.current[topicKey] : undefined;
+
     // Queue if a save is already in progress — replaces the stale pending save with latest data
     if (isSavingRef.current) {
-      saveQueueRef.current = { mapToSave, existingId, isSilent };
+      saveQueueRef.current = { 
+        mapToSave, 
+        existingId: existingId || mapToSave.id || cachedMapId, 
+        isSilent 
+      };
       return;
     }
 
     isSavingRef.current = true;
-    const targetId = existingId || mapToSave.id || null;
+    const targetId = existingId || mapToSave.id || cachedMapId || null;
+    let finalId: string | undefined;
 
     try {
       const safeTopic = mapToSave.topic || 'mind map topic';
@@ -169,7 +178,10 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
         nestedExpansions: nestedExpansions || mapToSave.nestedExpansions || [],
       };
 
-      const finalId = await saveMindMap(supabase, user.id, targetId, metadataToSave, contentToSave);
+      finalId = await saveMindMap(supabase, user.id, targetId, metadataToSave, contentToSave);
+      if (topicKey && finalId) {
+        lastSavedTopicMapIdRef.current[topicKey] = finalId;
+      }
 
       // Background thumbnail generation - Only if missing, not already generating, and not a temporary synthesis state
       // Skip for nested/sub-maps — they use icon-based cards instead of images
@@ -177,12 +189,13 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
       const isSubMap = (mapToSave as any).isSubMap || metadataToSave.is_sub_map || !!(mapToSave as any).parentMapId || !!metadataToSave.parent_map_id;
       
       // ONLY trigger background generation for BRAND NEW root maps (no existingId)
-      if (!existingId && !isSubMap && !mapToSave.thumbnailUrl && !generatingThumbnailsRef.current.has(finalId) && !isSynthesizing) {
+      if (finalId && !existingId && !isSubMap && !mapToSave.thumbnailUrl && !generatingThumbnailsRef.current.has(finalId) && !isSynthesizing) {
         generatingThumbnailsRef.current.add(finalId);
+        const currentFinalId = finalId;
         // Don't await — fire and forget async thumbnail generation
         (async () => {
           try {
-            console.log(`🖼️ Auto-generating topic-oriented thumbnail for map: ${finalId} (Topic: ${safeTopic})`);
+            console.log(`🖼️ Auto-generating topic-oriented thumbnail for map: ${currentFinalId} (Topic: ${safeTopic})`);
             
             const { enhanceImagePromptAction } = await import('@/app/actions');
             
@@ -241,8 +254,8 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
               const data = await response.json();
               if (data.imageUrl) {
                 // Save to DB
-                await updateMindMapField(supabase, finalId, { thumbnail_url: data.imageUrl }, user.id);
-                console.log(`✅ Thumbnail generated and saved for map: ${finalId}`);
+                await updateMindMapField(supabase, currentFinalId, { thumbnail_url: data.imageUrl }, user.id);
+                console.log(`✅ Thumbnail generated and saved for map: ${currentFinalId}`);
                 
                 // Update locally if callback provided
                 if (options.onRemoteUpdate) {
@@ -260,13 +273,13 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
           } finally {
             // Keep in set for a bit to prevent immediate retry if it failed or was slow
             setTimeout(() => {
-              generatingThumbnailsRef.current.delete(finalId);
+              generatingThumbnailsRef.current.delete(currentFinalId);
             }, 60000); // 1m lockout
           }
         })();
       }
 
-      if (!targetId) {
+      if (!targetId && finalId) {
         // New map — log activity
         try {
           const { logAdminActivityAction } = await import('@/app/actions');
@@ -298,7 +311,9 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
       const pending = saveQueueRef.current;
       if (pending) {
         saveQueueRef.current = null;
-        setTimeout(() => saveMap(pending.mapToSave, pending.existingId, pending.isSilent), 0);
+        const pendingTopicKey = pending.mapToSave.topic?.toLowerCase().trim();
+        const effectiveId = pending.existingId || finalId || pending.mapToSave.id || (pendingTopicKey ? lastSavedTopicMapIdRef.current[pendingTopicKey] : undefined);
+        setTimeout(() => saveMap(pending.mapToSave, effectiveId, pending.isSilent), 0);
       }
     }
   }, [user, supabase, toast, aiPersona, options, showAchievementToasts]);

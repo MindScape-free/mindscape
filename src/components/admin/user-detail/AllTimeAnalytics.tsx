@@ -87,10 +87,10 @@ export default function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {isPartial && (
-        <div className="relative overflow-hidden rounded-xl bg-amber-500/5 border border-amber-500/20 p-4">
-          <div className="flex items-center gap-3">
+        <div className="relative overflow-hidden rounded-xl bg-amber-500/5 border border-amber-500/20 p-3.5">
+          <div className="flex items-center gap-2.5">
             <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
             <p className="text-xs text-amber-400">
               Partial data: Some deleted maps are not included in breakdowns.
@@ -100,15 +100,18 @@ export default function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
       )}
 
       {/* Row 1: Mode & Depth */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-6">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full blur-3xl" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-5 sm:p-6">
+          <div className="absolute top-0 right-0 w-28 h-28 bg-violet-500/5 rounded-full blur-2xl" />
           <div className="relative">
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2.5 mb-4">
               <div className="p-2 bg-violet-500/10 rounded-xl border border-violet-500/20">
                 <MapIcon className="h-4 w-4 text-violet-400" />
               </div>
-              <p className="text-sm font-bold text-white">Maps by Mode</p>
+              <div className="flex flex-col">
+                <p className="text-xs font-black text-white uppercase tracking-widest">Map Styles</p>
+                <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">Single vs Multiple Topics</p>
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
               {([
@@ -118,7 +121,7 @@ export default function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
               ] as const).map(({ key, label, value, color, icon: Icon }) => {
                 const theme = getFullTheme(color);
                 return (
-                  <div key={key} className={`rounded-xl ${theme.bg500_5} border ${theme.border500_15} p-4 transition-all ${theme.hoverBg500_10}`}>
+                  <div key={key} className={`rounded-xl ${theme.bg500_5} border ${theme.border500_15} p-3.5 transition-all ${theme.hoverBg500_10}`}>
                     <div className="flex items-center gap-2 mb-2">
                       <div className={`p-1.5 ${theme.bg500_10} rounded-lg`}>
                         <Icon className={`h-3.5 w-3.5 ${theme.text400}`} />
@@ -126,8 +129,8 @@ export default function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
                       <span className={`text-[8px] font-bold uppercase tracking-wider ${theme.text400Muted}`}>{label}</span>
                     </div>
                     <div className="flex items-end justify-between">
-                      <p className="text-2xl font-black text-white tracking-tight">{value}</p>
-                      <span className={`px-1.5 py-0.5 rounded-lg ${theme.bg500_10} text-[9px] font-bold ${theme.text400}`}>{getPercentage(value)}%</span>
+                      <p className="text-xl font-black text-white tracking-tight">{value}</p>
+                      <span className={`px-1.5 py-0.5 rounded-md ${theme.bg500_10} text-[9px] font-bold ${theme.text400}`}>{getPercentage(value)}%</span>
                     </div>
                   </div>
                 );
@@ -136,14 +139,17 @@ export default function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
           </div>
         </div>
 
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-6">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl" />
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-5 sm:p-6">
+          <div className="absolute top-0 right-0 w-28 h-28 bg-indigo-500/5 rounded-full blur-2xl" />
           <div className="relative">
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2.5 mb-4">
               <div className="p-2 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
                 <Layers className="h-4 w-4 text-indigo-400" />
               </div>
-              <p className="text-sm font-bold text-white">Maps by Depth</p>
+              <div className="flex flex-col">
+                <p className="text-xs font-black text-white uppercase tracking-widest">Map Complexity</p>
+                <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">Quick vs Detailed Notes</p>
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
               {([
@@ -153,7 +159,7 @@ export default function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
               ] as const).map(({ key, label, value, color, icon: Icon }) => {
                 const theme = getFullTheme(color);
                 return (
-                  <div key={key} className={`rounded-xl ${theme.bg500_5} border ${theme.border500_15} p-4 transition-all ${theme.hoverBg500_10}`}>
+                  <div key={key} className={`rounded-xl ${theme.bg500_5} border ${theme.border500_15} p-3.5 transition-all ${theme.hoverBg500_10}`}>
                     <div className="flex items-center gap-2 mb-2">
                       <div className={`p-1.5 ${theme.bg500_10} rounded-lg`}>
                         <Icon className={`h-3.5 w-3.5 ${theme.text400}`} />
@@ -161,8 +167,8 @@ export default function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
                       <span className={`text-[8px] font-bold uppercase tracking-wider ${theme.text400Muted}`}>{label}</span>
                     </div>
                     <div className="flex items-end justify-between">
-                      <p className="text-2xl font-black text-white tracking-tight">{value}</p>
-                      <span className={`px-1.5 py-0.5 rounded-lg ${theme.bg500_10} text-[9px] font-black ${theme.text400}`}>{getPercentage(value)}%</span>
+                      <p className="text-xl font-black text-white tracking-tight">{value}</p>
+                      <span className={`px-1.5 py-0.5 rounded-md ${theme.bg500_10} text-[9px] font-black ${theme.text400}`}>{getPercentage(value)}%</span>
                     </div>
                   </div>
                 );
@@ -173,16 +179,16 @@ export default function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
       </div>
 
       {/* Row 2: Source Types */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-6">
-        <div className="absolute top-0 left-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-5 sm:p-6">
+        <div className="absolute top-0 left-0 w-28 h-28 bg-blue-500/5 rounded-full blur-2xl" />
         <div className="relative">
-          <div className="flex items-center gap-2 mb-6">
+          <div className="flex items-center gap-2.5 mb-4">
             <div className="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20">
               <Globe className="h-4 w-4 text-blue-400" />
             </div>
-            <div>
-              <p className="text-sm font-bold text-white">Maps by Source Type</p>
-              <p className="text-[9px] text-zinc-500 font-medium font-bold uppercase tracking-widest">Content source breakdown</p>
+            <div className="flex flex-col">
+              <p className="text-xs font-black text-white uppercase tracking-widest">Information Sources</p>
+              <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">Where content comes from</p>
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -197,7 +203,7 @@ export default function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
               const count = sourceCounts[type] || 0;
               const theme = getFullTheme(color);
               return (
-                <div key={type} className={`rounded-xl ${theme.bg500_5} border ${theme.border500_15} p-4 transition-all ${theme.hoverBg500_10} ${count === 0 ? 'opacity-20' : ''}`}>
+                <div key={type} className={`rounded-xl ${theme.bg500_5} border ${theme.border500_15} p-3 transition-all ${theme.hoverBg500_10} ${count === 0 ? 'opacity-20' : ''}`}>
                   <div className="flex items-center gap-2 mb-2">
                     <div className={`p-1.5 ${theme.bg500_10} rounded-lg`}>
                       <Icon className={`h-3.5 w-3.5 ${theme.text400}`} />
@@ -205,8 +211,8 @@ export default function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
                     <span className={`text-[8px] font-bold uppercase tracking-wider ${theme.text400Muted}`}>{label}</span>
                   </div>
                   <div className="flex items-end justify-between">
-                    <p className="text-2xl font-black text-white tracking-tight">{count}</p>
-                    <span className={`px-1.5 py-0.5 rounded-lg ${theme.bg500_10} text-[9px] font-bold ${theme.text400}`}>{getPercentage(count)}%</span>
+                    <p className="text-xl font-black text-white tracking-tight">{count}</p>
+                    <span className={`px-1.5 py-0.5 rounded-md ${theme.bg500_10} text-[9px] font-bold ${theme.text400}`}>{getPercentage(count)}%</span>
                   </div>
                 </div>
               );
@@ -216,15 +222,18 @@ export default function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
       </div>
 
       {/* Row 3: Sub-Maps & Persona */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-6">
-          <div className="absolute top-0 right-0 w-40 h-40 bg-violet-500/5 rounded-full blur-3xl" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 border border-white/5 p-5 sm:p-6">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full blur-2xl" />
           <div className="relative">
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2.5 mb-4">
               <div className="p-2 bg-violet-500/10 rounded-xl border border-violet-500/20">
                 <Brain className="h-4 w-4 text-violet-400" />
               </div>
-              <p className="text-sm font-bold text-white">Maps by Persona</p>
+              <div className="flex flex-col">
+                <p className="text-xs font-black text-white uppercase tracking-widest">AI Persona Distribution</p>
+                <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">Tone & Learning Style Preference</p>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               {([
@@ -236,12 +245,12 @@ export default function AllTimeAnalytics({ stats }: AllTimeAnalyticsProps) {
                 const count = personaCounts[key] || 0;
                 const theme = getFullTheme(color);
                 return (
-                  <div key={key} className={`rounded-xl ${theme.bg500_5} border ${theme.border500_15} p-4 transition-all ${theme.hoverBg500_10}`}>
+                  <div key={key} className={`rounded-xl ${theme.bg500_5} border ${theme.border500_15} p-3.5 transition-all ${theme.hoverBg500_10}`}>
                     <div className="flex items-center justify-between mb-2">
                       <span className={`text-[8px] font-bold uppercase tracking-wider ${theme.text400Muted}`}>{label}</span>
-                      <span className={`px-1.5 py-0.5 rounded-lg ${theme.bg500_10} text-[9px] font-bold ${theme.text400}`}>{getPercentage(count)}%</span>
+                      <span className={`px-1.5 py-0.5 rounded-md ${theme.bg500_10} text-[9px] font-bold ${theme.text400}`}>{getPercentage(count)}%</span>
                     </div>
-                    <p className="text-2xl font-black text-white tracking-tight">{count}</p>
+                    <p className="text-xl font-black text-white tracking-tight">{count}</p>
                   </div>
                 );
               })}

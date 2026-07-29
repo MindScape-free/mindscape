@@ -407,7 +407,7 @@ export const MindMapTreeView = React.memo(({
         nodesRef.current = nodes;
         zoomRef.current = zoom;
         offsetRef.current = offset;
-    });
+    }, [nodes, zoom, offset]);
 
     const lastExpandedRef = useRef<string | null>(null);
 

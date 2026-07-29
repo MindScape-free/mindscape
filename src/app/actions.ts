@@ -1462,6 +1462,65 @@ export async function logAdminActivityAction(entry: any) {
 }
 
 /**
+ * Server action to delete a user (admin only).
+ * Uses the service-role key to bypass RLS and also cleans up auth.users.
+ */
+export async function adminDeleteUserAction(targetUserId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { requireAdmin } = await import('@/lib/require-auth');
+    const adminId = await requireAdmin();
+
+    if (!targetUserId) {
+      return { success: false, error: 'No user ID provided.' };
+    }
+
+    const { getSupabaseAdmin } = await import('@/lib/supabase-server');
+    const supabase = getSupabaseAdmin();
+
+    // Delete related data in dependency order (child tables first)
+    // to avoid FK violations from triggers (mindmap delete trigger inserts into user_events)
+    await supabase.from('chat_sessions').delete().eq('user_id', targetUserId);
+    await supabase.from('user_notifications').delete().eq('user_id', targetUserId);
+    await supabase.from('community_posts').delete().eq('user_id', targetUserId);
+    // Delete mindmaps (their before-delete trigger will insert map_deleted events into user_events)
+    await supabase.from('mindmaps').delete().eq('user_id', targetUserId);
+    await supabase.from('user_settings').delete().eq('user_id', targetUserId);
+    await supabase.from('user_profiles').delete().eq('user_id', targetUserId);
+    // Delete user_events last to clean up any events the mindmap trigger inserted
+    await supabase.from('user_events').delete().eq('user_id', targetUserId);
+
+    // 1. Delete from public.users
+    const { error: userError } = await supabase.from('users').delete().eq('id', targetUserId);
+    if (userError) throw userError;
+
+    // 2. Delete auth user (cleans up auth.users)
+    const { error: authError } = await supabase.auth.admin.deleteUser(targetUserId);
+    if (authError) {
+      console.warn('Auth user deletion non-fatal:', authError.message);
+    }
+
+    // 2. Log the admin activity
+    try {
+      const { logActivityAdmin } = await import('@/lib/supabase-server');
+      await logActivityAdmin({
+        type: 'USER_DELETED',
+        targetId: targetUserId,
+        targetType: 'user',
+        details: `User deleted by admin: ${targetUserId}`,
+        performedBy: adminId,
+      });
+    } catch (logError) {
+      console.warn('Failed to log admin activity (non-critical):', logError);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('❌ adminDeleteUserAction failed:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Server action to synthesize two mind map nodes.
  */
 export async function synthesizeNodesAction(

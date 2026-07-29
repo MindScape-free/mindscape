@@ -95,6 +95,142 @@ import {
 import { useAIConfig } from '@/contexts/ai-config-context';
 
 import { useXP } from '@/contexts/xp-context';
+
+const PinCard = ({ pin, onUnpinFn, unpinConfirmId, setUnpinConfirmId, onOpenPinChat, onCreateMindmap }: {
+  pin: PinnedMessage;
+  onUnpinFn?: (id: string) => void;
+  unpinConfirmId?: string | null;
+  setUnpinConfirmId?: (id: string | null) => void;
+  onOpenPinChat?: (pin: PinnedMessage) => void;
+  onCreateMindmap?: (userContent: string, aiContent: string) => void;
+}) => {
+  const { toast } = useToast();
+  const aiContent = pin.response?.content || pin.soloMessage?.content || '';
+  const userContent = pin.question?.content || '';
+  const isConfirming = unpinConfirmId === pin.id;
+  const [copied, setCopied] = useState(false);
+
+  const openPinChat = () => onOpenPinChat?.(pin);
+
+  const handleCopy = () => {
+    const textToCopy = aiContent
+      ? `Q: ${userContent}\n\nA: ${aiContent}`
+      : userContent;
+    navigator.clipboard.writeText(textToCopy);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast({ title: 'Copied!', description: 'Copied to clipboard.' });
+  };
+
+  return (
+    <motion.div
+      layout
+      className="relative rounded-2xl overflow-hidden border border-white/8 bg-white/[0.03] hover:border-amber-500/20 hover:bg-white/[0.05] transition-all duration-200 group"
+    >
+      <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-amber-500/60 via-amber-400/40 to-transparent" />
+
+      <AnimatePresence>
+        {isConfirming && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="absolute inset-0 z-10 bg-zinc-950/92 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center gap-3 px-5"
+          >
+            <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center">
+              <PinOff className="h-4 w-4 text-amber-400" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-white">Remove this pin?</p>
+              <p className="text-xs text-zinc-500 mt-0.5">This can't be undone.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost" size="sm"
+                onClick={() => setUnpinConfirmId?.(null)}
+                className="h-8 px-4 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-white/8 rounded-xl"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="ghost" size="sm"
+                onClick={() => { setUnpinConfirmId?.(null); onUnpinFn?.(pin.id); }}
+                className="h-8 px-4 text-xs font-bold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 rounded-xl"
+              >
+                Unpin
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="px-4 pt-3.5 pb-1 flex items-start gap-2">
+        <div className="w-4 h-4 rounded-md bg-blue-500/20 flex items-center justify-center shrink-0 mt-0.5">
+          <User className="h-2.5 w-2.5 text-blue-400" />
+        </div>
+        <p className="text-[11px] font-medium text-zinc-500 leading-snug line-clamp-2 flex-1">
+          {userContent || 'Pinned message'}
+        </p>
+      </div>
+
+      <div className="mx-4 h-px bg-white/5 my-2" />
+
+      <div className="px-4 pb-3">
+        <div className="flex items-start gap-2 mb-2.5">
+          <div className="w-4 h-4 rounded-md bg-violet-500/20 flex items-center justify-center shrink-0 mt-0.5">
+            <Bot className="h-2.5 w-2.5 text-violet-400" />
+          </div>
+          <p className="text-sm text-zinc-200 leading-relaxed line-clamp-3 flex-1">
+            {aiContent || userContent}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-1.5 pt-1">
+          <button
+            onClick={openPinChat}
+            className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg bg-white/5 hover:bg-primary/15 border border-white/8 hover:border-primary/30 text-zinc-500 hover:text-primary transition-all text-[10px] font-bold uppercase tracking-wide"
+          >
+            <MessageSquare className="h-3 w-3" />
+            Chat
+          </button>
+
+          {aiContent && onCreateMindmap && (
+            <button
+              onClick={() => onCreateMindmap(userContent, aiContent)}
+              className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg bg-white/5 hover:bg-violet-500/15 border border-white/8 hover:border-violet-500/30 text-zinc-500 hover:text-violet-400 transition-all text-[10px] font-bold uppercase tracking-wide"
+            >
+              <Brain className="h-3 w-3" />
+              Map
+            </button>
+          )}
+
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/8 text-zinc-500 hover:text-zinc-200 transition-all text-[10px] font-bold uppercase tracking-wide"
+          >
+            {copied
+              ? <Check className="h-3 w-3 text-emerald-400" />
+              : <Copy className="h-3 w-3" />
+            }
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+
+          <div className="flex-1" />
+
+          {onUnpinFn && (
+            <button
+              onClick={() => setUnpinConfirmId?.(pin.id)}
+              className="flex items-center gap-1 h-7 px-2 rounded-lg text-zinc-700 hover:text-amber-400 hover:bg-amber-500/10 transition-all text-[10px] font-bold"
+            >
+              <PinOff className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
 declare global {
   interface Window {
     SpeechRecognition: any;
@@ -553,7 +689,8 @@ Please **sign out and sign back in** to continue using the AI assistant.
   /**
    * Starts a new chat session.
    */
-  const supabase = getSupabaseClient();  const loadAllUserPins = useCallback(async () => {
+  const supabase = getSupabaseClient();
+  const loadAllUserPins = useCallback(async () => {
     if (!user) return;
     setIsLoadingPins(true);
     try {
@@ -2840,154 +2977,24 @@ Please **sign out and sign back in** to continue using the AI assistant.
     );
   };
 
-  const PinCard = ({ pin, onUnpinFn }: { pin: import('@/types/chat').PinnedMessage; onUnpinFn?: (id: string) => void }) => {
+  const handleOpenPinChat = useCallback((pin: PinnedMessage) => {
     const aiContent = pin.response?.content || pin.soloMessage?.content || '';
     const userContent = pin.question?.content || '';
-    const isConfirming = unpinConfirmId === pin.id;
-    const [copied, setCopied] = useState(false);
+    setActiveChatPin(pin);
+    setPinChatInput('');
+    const initial: { role: 'user' | 'ai'; content: string }[] = [];
+    if (userContent) initial.push({ role: 'user', content: userContent });
+    if (aiContent) initial.push({ role: 'ai', content: aiContent });
+    setPinChatMessages(initial);
+    pinChatInitializedRef.current = false;
+    setView('pin-chat');
+  }, [setActiveChatPin, setPinChatInput, setPinChatMessages, setView]);
 
-    const openPinChat = () => {
-      setActiveChatPin(pin);
-      setPinChatInput('');
-      const initial: { role: 'user' | 'ai'; content: string }[] = [];
-      if (userContent) initial.push({ role: 'user', content: userContent });
-      if (aiContent) initial.push({ role: 'ai', content: aiContent });
-      setPinChatMessages(initial);
-      pinChatInitializedRef.current = false;
-      setView('pin-chat');
-    };
-
-    const handleCopy = () => {
-      const textToCopy = aiContent
-        ? `Q: ${userContent}\n\nA: ${aiContent}`
-        : userContent;
-      navigator.clipboard.writeText(textToCopy);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-      toast({ title: 'Copied!', description: 'Copied to clipboard.' });
-    };
-
-    return (
-      <motion.div
-        layout
-        className="relative rounded-2xl overflow-hidden border border-white/8 bg-white/[0.03] hover:border-amber-500/20 hover:bg-white/[0.05] transition-all duration-200 group"
-      >
-        {/* Amber top accent bar */}
-        <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-amber-500/60 via-amber-400/40 to-transparent" />
-
-        {/* Unpin confirmation overlay */}
-        <AnimatePresence>
-          {isConfirming && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="absolute inset-0 z-10 bg-zinc-950/92 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center gap-3 px-5"
-            >
-              <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center">
-                <PinOff className="h-4 w-4 text-amber-400" />
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-semibold text-white">Remove this pin?</p>
-                <p className="text-xs text-zinc-500 mt-0.5">This can't be undone.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost" size="sm"
-                  onClick={() => setUnpinConfirmId(null)}
-                  className="h-8 px-4 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-white/8 rounded-xl"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="ghost" size="sm"
-                  onClick={() => { setUnpinConfirmId(null); onUnpinFn?.(pin.id); }}
-                  className="h-8 px-4 text-xs font-bold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 rounded-xl"
-                >
-                  Unpin
-                </Button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Question label row */}
-        <div className="px-4 pt-3.5 pb-1 flex items-start gap-2">
-          <div className="w-4 h-4 rounded-md bg-blue-500/20 flex items-center justify-center shrink-0 mt-0.5">
-            <User className="h-2.5 w-2.5 text-blue-400" />
-          </div>
-          <p className="text-[11px] font-medium text-zinc-500 leading-snug line-clamp-2 flex-1">
-            {userContent || 'Pinned message'}
-          </p>
-        </div>
-
-        {/* Divider */}
-        <div className="mx-4 h-px bg-white/5 my-2" />
-
-        {/* AI response — hero content */}
-        <div className="px-4 pb-3">
-          <div className="flex items-start gap-2 mb-2.5">
-            <div className="w-4 h-4 rounded-md bg-violet-500/20 flex items-center justify-center shrink-0 mt-0.5">
-              <Bot className="h-2.5 w-2.5 text-violet-400" />
-            </div>
-            <p className="text-sm text-zinc-200 leading-relaxed line-clamp-3 flex-1">
-              {aiContent || userContent}
-            </p>
-          </div>
-
-          {/* Action pill row — always visible */}
-          <div className="flex items-center gap-1.5 pt-1">
-            <button
-              onClick={openPinChat}
-              className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg bg-white/5 hover:bg-primary/15 border border-white/8 hover:border-primary/30 text-zinc-500 hover:text-primary transition-all text-[10px] font-bold uppercase tracking-wide"
-            >
-              <MessageSquare className="h-3 w-3" />
-              Chat
-            </button>
-
-            {aiContent && (
-              <button
-                onClick={() => {
-                  setCreateMindmapUserMessage(userContent);
-                  setCreateMindmapContent(aiContent);
-                  setCreateMindmapOpen(true);
-                }}
-                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg bg-white/5 hover:bg-violet-500/15 border border-white/8 hover:border-violet-500/30 text-zinc-500 hover:text-violet-400 transition-all text-[10px] font-bold uppercase tracking-wide"
-              >
-                <Brain className="h-3 w-3" />
-                Map
-              </button>
-            )}
-
-            <button
-              onClick={handleCopy}
-              className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/8 text-zinc-500 hover:text-zinc-200 transition-all text-[10px] font-bold uppercase tracking-wide"
-            >
-              {copied
-                ? <Check className="h-3 w-3 text-emerald-400" />
-                : <Copy className="h-3 w-3" />
-              }
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-
-            {/* Spacer */}
-            <div className="flex-1" />
-
-            {/* Unpin — right-aligned, subtle */}
-            {onUnpinFn && (
-              <button
-                onClick={() => setUnpinConfirmId(pin.id)}
-                className="flex items-center gap-1 h-7 px-2 rounded-lg text-zinc-700 hover:text-amber-400 hover:bg-amber-500/10 transition-all text-[10px] font-bold"
-              >
-                <PinOff className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-        </div>
-      </motion.div>
-    );
-  };
+  const handleOpenCreateMindmap = useCallback((userContent: string, aiContent: string) => {
+    setCreateMindmapUserMessage(userContent);
+    setCreateMindmapContent(aiContent);
+    setCreateMindmapOpen(true);
+  }, [setCreateMindmapUserMessage, setCreateMindmapContent, setCreateMindmapOpen]);
 
   const renderCanvasPinsView = () => (
     <ScrollArea className="flex-grow p-4">
@@ -3005,7 +3012,7 @@ Please **sign out and sign back in** to continue using the AI assistant.
             {canvasPinnedMessages.length} pinned {canvasPinnedMessages.length === 1 ? 'message' : 'messages'}
           </p>
           {canvasPinnedMessages.map(pin => (
-            <PinCard key={pin.id} pin={pin} onUnpinFn={onCanvasUnpin} />
+            <PinCard key={pin.id} pin={pin} onUnpinFn={onCanvasUnpin} unpinConfirmId={unpinConfirmId} setUnpinConfirmId={setUnpinConfirmId} onOpenPinChat={handleOpenPinChat} onCreateMindmap={handleOpenCreateMindmap} />
           ))}
         </div>
       )}
@@ -3064,7 +3071,7 @@ Please **sign out and sign back in** to continue using the AI assistant.
               {allUserPins.length} pinned {allUserPins.length === 1 ? 'message' : 'messages'} across all maps
             </p>
             {allUserPins.map(pin => (
-              <PinCard key={pin.id} pin={pin} onUnpinFn={handleUnpinFromAll} />
+              <PinCard key={pin.id} pin={pin} onUnpinFn={handleUnpinFromAll} unpinConfirmId={unpinConfirmId} setUnpinConfirmId={setUnpinConfirmId} onOpenPinChat={handleOpenPinChat} onCreateMindmap={handleOpenCreateMindmap} />
             ))}
           </div>
         )}

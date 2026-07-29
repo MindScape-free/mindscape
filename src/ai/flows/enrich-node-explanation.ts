@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { generateContent, AIProvider } from '@/ai/client-dispatcher';
+import { shuffleQuestionOptions } from '@/lib/quiz-shuffler';
 
 // ── Zod Schemas ────────────────────────────────────────────────────────────
 
@@ -138,7 +139,7 @@ timeline (4–6 items, chronological oldest first):
 microQuiz (exactly 1 question):
 - question: a clear, specific question about "${nodeName}", not trivially obvious
 - options: exactly 4 options with ids A, B, C, D
-- correctId: the id of the correct option
+- correctId: the id of the correct option (randomize correct answer placement across A, B, C, D)
 - explanation: 1–2 sentences explaining why the correct answer is right
 
 Return ONLY this JSON object, no other text:
@@ -156,7 +157,7 @@ Return ONLY this JSON object, no other text:
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const result = await generateContent({
+      const result = (await generateContent({
         provider,
         apiKey,
         model,
@@ -164,8 +165,13 @@ Return ONLY this JSON object, no other text:
         userPrompt,
         schema: NodeEnrichmentOutputSchema,
         options: { capability: 'fast' },
-      });
-      return result as NodeEnrichmentOutput;
+      })) as NodeEnrichmentOutput;
+
+      if (result?.microQuiz) {
+        result.microQuiz = shuffleQuestionOptions(result.microQuiz);
+      }
+
+      return result;
     } catch (e: any) {
       console.error(`❌ Enrichment attempt ${attempt} failed:`, e.message);
       if (attempt === 2) throw e;

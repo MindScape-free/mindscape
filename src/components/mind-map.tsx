@@ -723,9 +723,21 @@ export const MindMap = React.memo(({
   }, [propNestedExpansions]);
 
   // Notify parent of updates — memoized to avoid recomputing on every render
-  const lastNotifiedRef = useRef<string>('');
+  const initialNotifiedString = useMemo(() => {
+    return JSON.stringify(toPlainObject({
+      nestedExpansions: propNestedExpansions || data.nestedExpansions || [],
+      savedImages: data.savedImages || [],
+      explanations: data.explanations || {},
+      enrichments: data.enrichments || {},
+      confidenceRatings: data.confidenceRatings || {},
+      quizAnswers: data.quizAnswers || {},
+    }));
+  }, []);
+
+  const lastNotifiedRef = useRef<string>(initialNotifiedString);
   const dataToNotify = useMemo(() => {
-    if (!onUpdate) return null;    return toPlainObject({
+    if (!onUpdate) return null;
+    return toPlainObject({
       nestedExpansions,
       savedImages: generatedImages,
       explanations,

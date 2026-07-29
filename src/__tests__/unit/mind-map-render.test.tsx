@@ -321,4 +321,33 @@ describe('MindMap React.memo optimization', () => {
     // Same props reference — should bail out
     expect(renderTracker.count).toBe(1);
   });
+
+  it('does not trigger onUpdate on initial mount when state matches initial props', () => {
+    const data = createMockMindMapData();
+    const onUpdate = jest.fn();
+
+    render(
+      <MindMap
+        data={data}
+        isSaved={true}
+        onSaveMap={jest.fn()}
+        onExplainInChat={jest.fn()}
+        onGenerateNewMap={jest.fn()}
+        onStartQuiz={jest.fn()}
+        generatingNode={null}
+        selectedLanguage="en"
+        onLanguageChange={jest.fn()}
+        onAIPersonaChange={jest.fn()}
+        aiPersona="Teacher"
+        onRegenerate={jest.fn()}
+        isRegenerating={false}
+        canRegenerate={false}
+        status="idle"
+        onUpdate={onUpdate}
+      />
+    );
+
+    // Initial mount should NOT trigger onUpdate callback loop
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
 });

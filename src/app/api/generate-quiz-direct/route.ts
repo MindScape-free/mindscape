@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { shuffleQuiz } from '@/lib/quiz-shuffler';
 
 export async function POST(request: NextRequest) {
     try {
@@ -18,6 +19,7 @@ You are an educational quiz generator.
 QUALITY RULES:
 - No duplicate questions.
 - Wrong options must be plausible (not obviously incorrect).
+- RANDOMIZE the position of the correct answer across options A, B, C, D evenly. Do NOT put option A as the correct answer by default.
 - Ensure even coverage across different aspects of the topic.
 - Each question tests a distinct concept.
 
@@ -35,7 +37,7 @@ Generate a quiz with this EXACT JSON structure:
         {"id": "C", "text": "Plausible option"},
         {"id": "D", "text": "Plausible option"}
       ],
-      "correctOptionId": "A",
+      "correctOptionId": "B",
       "conceptTag": "specific-concept",
       "explanation": "Why this answer is correct."
     }
@@ -98,7 +100,7 @@ Generate 5–10 questions. Return ONLY valid JSON.`;
             }
         }
 
-        return NextResponse.json({ success: true, data: quiz });
+        return NextResponse.json({ success: true, data: shuffleQuiz(quiz) });
     } catch (error: any) {
         console.error('❌ Quiz generation error:', error);
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });

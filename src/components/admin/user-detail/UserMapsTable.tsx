@@ -19,15 +19,15 @@ interface UserMapsTableProps {
 
 export default function UserMapsTable({ userMaps, isLoading, userId }: UserMapsTableProps) {
   return (
-    <div className="relative overflow-hidden rounded-[2.5rem] bg-white/[0.02] border border-white/10 p-8 transition-all hover:border-white/20 hover:bg-white/[0.04] shadow-[inset_0_0_40px_rgba(255,255,255,0.01)] group/library">
-      <div className="absolute top-0 left-0 w-96 h-96 bg-indigo-600/[0.03] rounded-full blur-[120px] pointer-events-none group-hover/library:bg-indigo-600/[0.06] transition-all duration-700" />
-      <div className="flex items-center justify-between mb-6 relative z-10">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
-            <Library className="h-5 w-5 text-indigo-400" />
+    <div className="relative overflow-hidden rounded-2xl bg-white/[0.02] border border-white/10 p-5 sm:p-6 transition-all hover:border-white/20 hover:bg-white/[0.04] shadow-[inset_0_0_30px_rgba(255,255,255,0.01)] group/library">
+      <div className="absolute top-0 left-0 w-64 h-64 bg-indigo-600/[0.03] rounded-full blur-[90px] pointer-events-none group-hover/library:bg-indigo-600/[0.06] transition-all duration-700" />
+      <div className="flex items-center justify-between mb-5 relative z-10">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2.5 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
+            <Library className="h-4 w-4 text-indigo-400" />
           </div>
           <div>
-            <h3 className="text-xl font-black text-white tracking-tighter">Subject Library ({userMaps.length})</h3>
+            <h3 className="text-lg font-black text-white tracking-tighter">Subject Library ({userMaps.length})</h3>
             <p className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500 mt-0.5">Mindmap index</p>
           </div>
         </div>
