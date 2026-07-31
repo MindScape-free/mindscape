@@ -17,6 +17,7 @@ const rateLimits: Record<string, RateLimitConfig> = {
   youtube: { windowMs: 60 * 1000, maxRequests: 15 },
   auth: { windowMs: 60 * 1000, maxRequests: 10 },
   upload: { windowMs: 60 * 1000, maxRequests: 5 },
+  analytics: { windowMs: 60 * 1000, maxRequests: 120 },
 };
 
 /**

@@ -4,7 +4,6 @@ import { useState, useCallback } from 'react';
 import { safeGetItem, safeRemoveItem } from '@/lib/storage';
 
 export function useSessionStorage() {
-  const [isLoading, setIsLoading] = useState(false);
 
   const getSessionData = useCallback(<T,>(sessionId: string): { type: string; content: T; persona: string } | null => {
     const sessionType = safeGetItem<string>(`session-type-${sessionId}`);
@@ -41,7 +40,7 @@ export function useSessionStorage() {
   }, []);
 
   return {
-    isLoading,
+    isLoading: false,
     getSessionData,
     clearSession,
     setSessionData,

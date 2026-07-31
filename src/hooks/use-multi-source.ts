@@ -14,6 +14,8 @@ export interface MultiSourceOptions {
 }
 
 export function useMultiSource(options?: MultiSourceOptions) {
+  const apiKey = options?.apiKey;
+  const userId = options?.userId;
   const [sources, setSources] = useState<SourceItem[]>([]);
 
   const addSourceItem = useCallback((item: SourceItem) => {
@@ -116,6 +118,14 @@ export function useMultiSource(options?: MultiSourceOptions) {
         const { content } = await parseDocxContent(buffer);
         updateSourceItem(id, { content, status: 'ready' });
       } else if (type === 'image') {
+        // P0 SECURITY: image analysis hits a server action that requires an
+        // authenticated session. Guard client-side so anonymous visitors get
+        // a clear message instead of an opaque server error.
+        if (!userId) {
+          updateSourceItem(id, { status: 'error', error: 'Please sign in to analyze images.' });
+          return;
+        }
+
         const reader = new FileReader();
         const dataUri = await new Promise<string>((resolve) => {
           reader.onloadend = () => resolve(reader.result as string);
@@ -125,7 +135,7 @@ export function useMultiSource(options?: MultiSourceOptions) {
         // Analyze image content using AI flow
         const result = await analyzeImageContentAction(
           { imageDataUri: dataUri },
-          { apiKey: options?.apiKey, userId: options?.userId }
+          { apiKey, userId }
         );
         
         if (result.error || !result.data) {
@@ -144,7 +154,7 @@ export function useMultiSource(options?: MultiSourceOptions) {
     } catch (err: any) {
       updateSourceItem(id, { status: 'error', error: err.message });
     }
-  }, [addSourceItem, updateSourceItem, options?.apiKey, options?.userId]);
+  }, [addSourceItem, updateSourceItem, apiKey, userId]);
 
   const clearSources = useCallback(() => {
     setSources([]);

@@ -160,7 +160,6 @@ flowchart LR
 
     DISPATCH --> POLL_A["Pollinations Client<br/>Primary provider"]
     DISPATCH -.->|Planned| OR_A["OpenRouter Client<br/>Not yet implemented"]
-    DISPATCH --> MONITOR["Provider Monitor<br/>Health tracking"]
 
     POLL_A --> POLL_API{External APIs}
     OR_A -.-> POLL_API
@@ -311,9 +310,6 @@ flowchart TD
 
     OR -.-> OPENMODELS{OpenRouter Models}
     OPENMODELS -.-> GPT4["GPT-4o / Claude<br/>(if user configured)"]
-
-    POLL --> MON["Provider Monitor<br/>Health tracking"]
-    MON --> REPORT["Health Report<br/>getAIHealthReportAction()"]
 
     subgraph CACHING["Caching Strategy"]
         API_CACHE["apiCache<br/>(explanations, examples, summaries)<br/>TTL-based sweep"]

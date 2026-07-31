@@ -122,7 +122,7 @@ AuthProvider                             ← src/lib/auth-context.tsx
        │    └─ Max: 50 notifications
        │    │
        │    └── ActivityProvider         ← src/contexts/activity-context.tsx
-       │         └─ Provides: status (idle|generating|syncing|error), aiHealth, activeTaskName
+       │         └─ Provides: status (idle|generating|syncing|error), activeTaskName
        │         └─ Lifespan: In-memory only (page session)
        │         │
        │         └── XPProvider          ← src/contexts/xp-context.tsx
@@ -182,7 +182,7 @@ Date:  Timestamps are serialized as strings, revived via new Date(n.timestamp) o
 ### Activity Context (`src/contexts/activity-context.tsx`)
 
 ```
-State: status (MindMapStatus), aiHealth (AIHealthStatus[]), activeTaskName (string | null)
+State: status (MindMapStatus), activeTaskName (string | null)
 Notes: Pure in-memory state. No persistence needed — it reflects transient generation state.
        Used by MindMap, CanvasClient, and ChatPanel to coordinate loading indicators.
 ```

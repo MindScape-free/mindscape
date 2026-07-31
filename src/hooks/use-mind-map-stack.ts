@@ -209,6 +209,7 @@ export function useMindMapStack(options: {
         generatingTopic,
         generationScope,
         push,
+        pop,
         navigate,
         update,
         replace,

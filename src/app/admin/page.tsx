@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo, lazy, Suspense, useRef } from 'react';
+import { useEffect, useState, useMemo, lazy, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';import {
   Users,
@@ -12,11 +12,8 @@ import { useAuth } from '@/lib/auth-context';import {
   MessageSquare,
   Activity,
   LogOut,
-  ChevronUp,
-  BarChart3,
   ChevronDown,
   Clock,
-  CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -36,11 +33,10 @@ import { formatDistanceToNow, format } from 'date-fns';
 import { AdminStats } from '@/types/chat';
 import { AdminActivityLogEntry } from '@/lib/admin-utils';
 import { logAdminActivity, subscribeToAdminActivityLogs } from '@/lib/tracker';
-import { AdminPageSkeleton } from '@/components/admin/AdminSkeletons';
 import { AdminTab, DashboardMetrics, DEFAULT_MAP_ANALYTICS } from '@/types/admin';
 import { useAdminDashboard } from '@/hooks/use-admin-dashboard';
 import { globalListenerManager } from '@/lib/listener-manager';
-import { normalizeTimestamp, sortByTimestamp } from '@/lib/timestamp-utils';
+import { sortByTimestamp } from '@/lib/timestamp-utils';
 
 // Lazy Loaded Tab Components
 const DashboardTab = lazy(() => import('@/components/admin/DashboardTab').then(m => ({ default: m.DashboardTab })));
@@ -70,7 +66,6 @@ export default function AdminDashboard() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isUserDetailOpen, setIsUserDetailOpen] = useState(false);
   const [logFilter, setLogFilter] = useState<AdminActivityLogEntry['type'] | 'all'>('all');
-  const [feedbackData, setFeedbackData] = useState<Feedback[]>([]);
 
   const [topContributorsStatFilter, setTopContributorsStatFilter] = useState<string>('totalMapsCreated');
   const [liveLogs, setLiveLogs] = useState<any[]>([]);
@@ -87,12 +82,7 @@ export default function AdminDashboard() {
     refreshBundle
   } = useAdminDashboard();
 
-  // Sync feedback data from bundle once available (avoids TDZ from using bundle in useState initializer)
-  useEffect(() => {
-    if (bundle?.feedback && bundle.feedback !== feedbackData) {
-      setFeedbackData(bundle.feedback);
-    }
-  }, [bundle?.feedback, feedbackData]);
+  const feedbackData = useMemo(() => bundle?.feedback || [], [bundle?.feedback]);
 
   const listenerIdsRef = useRef<string[]>([]);
 

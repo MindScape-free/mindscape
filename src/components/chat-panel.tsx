@@ -386,7 +386,6 @@ export function ChatPanel({
   const [createMindmapContent, setCreateMindmapContent] = useState('');
   const [createMindmapUserMessage, setCreateMindmapUserMessage] = useState('');
   const [unpinConfirmId, setUnpinConfirmId] = useState<string | null>(null);
-  const [agentMode, setAgentMode] = useState(false);
 
   // ATTACHMENTS STATE
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -835,7 +834,6 @@ Please **sign out and sign back in** to continue using the AI assistant.
       provider: providerOptionsConfig.provider,
       token: session?.access_token,
       model: providerOptionsConfig.textModel || providerOptionsConfig.pollinationsModel || 'openai',
-      agentMode,
       mindMapData: mindMapData ? toPlainObject(mindMapData) : undefined,
     });
 

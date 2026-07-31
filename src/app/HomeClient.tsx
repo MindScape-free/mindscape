@@ -23,23 +23,15 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import Link from 'next/link';
 import { parsePdfContent } from '@/lib/pdf-processor';
-import { safeSetItem, safeGetItem, safeRemoveItem, STORAGE_LIMITS } from '@/lib/storage';
+import { safeSetItem } from '@/lib/storage';
 import { resizeImage } from '@/lib/image-processor';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { languages } from '@/lib/languages';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -61,7 +53,7 @@ import dynamic from 'next/dynamic';
 import { useMultiSource } from '@/hooks/use-multi-source';
 import { MultiSourceInput } from '@/components/mind-map/MultiSourceInput';
 import { SourcePillList } from '@/components/mind-map/SourcePillList';
-import { resolveDepthWithConfidence, getDepthLabel, getDepthColor } from '@/lib/depth-analysis';
+import { resolveDepthWithConfidence } from '@/lib/depth-analysis';
 import { SectionContainer } from '@/components/home/section-container';
 import { ProcessStep } from '@/components/home/process-step';
 
@@ -193,6 +185,20 @@ function Hero({
   const [mounted, setMounted] = useState(false);
   const topicInputRef = useRef<HTMLInputElement>(null);
   const [uploadedUrl, setUploadedUrl] = useState<{ name: string; type: 'youtube' | 'website'; url: string } | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<any>(null);
+  const [uploadedFile2, setUploadedFile2] = useState<any>(null);
+  const [uploadTarget, setUploadTarget] = useState<'file1' | 'file2'>('file1');
+  const [pdfProgress, setPdfProgress] = useState<any>(null);
+  const [openSelect, setOpenSelect] = useState<string | null>(null);
+  const { toast } = useToast();
+  const { user } = useUser();
+  const { config, updateConfig } = useAIConfig();
+  const isSetupComplete = !!user && !!(config?.pollinationsApiKey || config?.openrouterApiKey || config?.nvidiaApiKey);
+
+  const { sources, addSource, addFile, removeSource, buildPayload, contextUsage, canGenerate, clearSources } = useMultiSource({
+    apiKey: config.pollinationsApiKey || config.openrouterApiKey || config.nvidiaApiKey,
+    userId: user?.id
+  });
 
   useEffect(() => {
     if (!selectedSource) return;
@@ -241,9 +247,6 @@ function Hero({
     return () => clearTimeout(scrollTimer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSource]);
-  // `fileInputRef` and `onActiveModeChange` intentionally omitted: they are stable ref/callback
-  // references and their values are captured correctly via the existing closure scope.
-  // Adding them would cause unnecessary re-runs when the user scrolls past source cards.
 
   useEffect(() => {
     // Defer state updates to avoid cascading render warning
@@ -294,20 +297,6 @@ function Hero({
 
   const isCompareMode = activeMode === 'compare';
   const isMultiMode = activeMode === 'multi';
-  const { toast } = useToast();
-  const [uploadedFile, setUploadedFile] = useState<any>(null);
-  const [uploadedFile2, setUploadedFile2] = useState<any>(null);
-  const [uploadTarget, setUploadTarget] = useState<'file1' | 'file2'>('file1');
-  const [pdfProgress, setPdfProgress] = useState<any>(null);
-  const [openSelect, setOpenSelect] = useState<string | null>(null);
-  const { user } = useUser();
-  const { config, updateConfig } = useAIConfig();
-  const isSetupComplete = !!user && !!(config?.pollinationsApiKey || config?.openrouterApiKey || config?.nvidiaApiKey);
-
-  const { sources, addSource, addFile, removeSource, buildPayload, contextUsage, canGenerate, clearSources } = useMultiSource({
-    apiKey: config.pollinationsApiKey || config.openrouterApiKey || config.nvidiaApiKey,
-    userId: user?.id
-  });
 
   const handleModeChange = (mode: 'single' | 'compare' | 'multi') => {
     setActiveMode(mode);

@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback } from 'react';
-import { getSupabaseClient } from '@/lib/supabase-db';
 import { useAuth } from '@/lib/auth-context';
 import { PinnedMessage, ChatMessage } from '@/types/chat';
 import { useToast } from '@/hooks/use-toast';

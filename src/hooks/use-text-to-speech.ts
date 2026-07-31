@@ -17,6 +17,62 @@ export function useTextToSpeech(options: UseTextToSpeechOptions = {}) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
+  // Server-side generation fallback helper
+  const generateAndPlayServer = useCallback(async (text: string, voice: string) => {
+    setIsGenerating(true);
+    options.onStart?.();
+
+    try {
+      const apiKey = config.pollinationsApiKey || config.apiKey;
+      
+      const response = await fetch('/api/generate-audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice, apiKey }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to generate audio');
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      if (audioRef.current) {
+        audioRef.current.pause();
+        if (audioRef.current.src) {
+          URL.revokeObjectURL(audioRef.current.src);
+        }
+      }
+
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+
+      audio.onended = () => {
+        setIsPlaying(false);
+        options.onEnd?.();
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      audio.onerror = () => {
+        setIsPlaying(false);
+        options.onEnd?.();
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      setIsPlaying(true);
+      await audio.play();
+
+      options.onGenerated?.();
+    } catch (error: any) {
+      console.error('Server TTS Error:', error);
+      options.onError?.(error.message || 'Failed to generate audio');
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [config.pollinationsApiKey, config.apiKey, options]);
+
   const generateAndPlay = useCallback(async (text: string, voice: string = 'alloy') => {
     if (!text) return;
 
@@ -78,61 +134,7 @@ export function useTextToSpeech(options: UseTextToSpeechOptions = {}) {
 
     // Fallback/Premium execution helper
     generateAndPlayServer(text, voice);
-  }, [config, options]);
-
-  // Server-side generation fallback helper
-  const generateAndPlayServer = useCallback(async (text: string, voice: string) => {
-    setIsGenerating(true);
-    options.onStart?.();
-
-    try {
-      const apiKey = config.pollinationsApiKey || config.apiKey;
-      
-      const response = await fetch('/api/generate-audio', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice, apiKey }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to generate audio');
-      }
-
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-
-      if (audioRef.current) {
-        audioRef.current.pause();
-        URL.revokeObjectURL(audioRef.current.src);
-      }
-
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
-
-      audio.onended = () => {
-        setIsPlaying(false);
-        options.onEnd?.();
-        URL.revokeObjectURL(audioUrl);
-      };
-
-      audio.onerror = () => {
-        setIsPlaying(false);
-        options.onEnd?.();
-        URL.revokeObjectURL(audioUrl);
-      };
-
-      setIsPlaying(true);
-      await audio.play();
-
-      options.onGenerated?.();
-    } catch (error: any) {
-      console.error('Server TTS Error:', error);
-      options.onError?.(error.message || 'Failed to generate audio');
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [config.pollinationsApiKey, config.apiKey, options]);
+  }, [config, options, generateAndPlayServer]);
 
   const stop = useCallback(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {

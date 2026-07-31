@@ -231,7 +231,6 @@ interface MindMapProps {
   onStackSelect?: (index: number) => void;
   onUpdate?: (updatedData: Partial<MindMapData> | ((prev: MindMapData) => Partial<MindMapData>)) => void;
   status: MindMapStatus;
-  aiHealth?: { name: string, status: string }[];
   hasUnsavedChanges?: boolean;
   onDeleteNestedMap?: (id: string) => void;
   onRegenerateNestedMap?: (topic: string, id: string) => void;
@@ -291,7 +290,6 @@ export const MindMap = React.memo(({
   onStackSelect,
   onUpdate,
   status,
-  aiHealth,
   hasUnsavedChanges,
   onDeleteNestedMap,
   onRegenerateNestedMap,

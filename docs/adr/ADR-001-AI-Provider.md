@@ -124,7 +124,7 @@ These workloads span **text generation** (structured JSON output), **vision** (i
 | **Latency** | ✅ Fast models (gemini-fast, openai-fast, step-flash) achieve <3s first token. 10s timeout per attempt with 2 retries and automatic model rotation. |
 | **Image Gen** | ✅ **Flux** via `https://gen.pollinations.ai/image` — free, high-quality concept art per mind-map node. Served via Pollinations' `image.pollinations.ai` CDN. |
 | **Lock-In** | ✅ API is OpenAI-compatible. Dispatcher abstraction (`@/ai/client-dispatcher.ts` → `@/ai/providers/orchestrator.ts`) allows swapping providers with a config change. The `IAIProvider` interface (`@/ai/providers/types.ts`) supports multi-provider natively. |
-| **Reliability** | ⚠️ Single provider risk. Provider monitor (`@/ai/provider-monitor.ts`) tracks degradation (25% failure threshold, 10-min cooldown). Automatic model rotation on 400/5xx with retry backoff. Planned OpenRouter fallback (see Future section). |
+| **Reliability** | ⚠️ Primary provider risk. The orchestrator (`@/ai/providers/orchestrator.ts`) retries with exponential backoff and rotates models on 400/5xx/429. Multi-provider failover (OpenRouter/NVIDIA) activates when keys are configured. |
 
 ---
 
@@ -165,13 +165,8 @@ Image Generation:                    ← @/app/actions.ts, @/app/canvas/CanvasCl
   └─ GET https://gen.pollinations.ai/image/<prompt>
   └─ CDN: https://image.pollinations.ai/prompt/<prompt>
 
-Health Monitoring:                   ← @/ai/provider-monitor.ts
-  ├─ Tracks: { failures, successes, lastFailureAt, degradedUntil }
-  ├─ Degradation threshold: 25% failure rate across sliding window of 20 calls
-  ├─ Degrade duration: 10 minutes
-  └─ Statuses: healthy → degraded → down
 
-JSON Post-Processing Pipeline:       ← @/ai/pollinations-client.ts (inline) + @/ai/providers/post-processor.ts (exports)
+JSON Post-Processing Pipeline:       ← @/ai/providers/post-processor.ts
   1. Strip markdown fences (```json ... ```)
   2. JSON.parse() — fast path
   3. jsonrepair() — library-based repair
@@ -235,21 +230,16 @@ script-src:   https://cdn.pollinations.ai
 
 ---
 
-## Future: OpenRouter Fallback (Planned)
+## Multi-Provider Failover (OpenRouter / NVIDIA)
 
-An OpenRouter adapter is planned but not yet implemented. The architecture supports it:
+OpenRouter and NVIDIA adapters are implemented (`@/ai/providers/openrouter-adapter.ts`, `@/ai/providers/nvidia-adapter.ts`) and activate automatically when keys are configured. The architecture supports the same pattern for additional providers:
 
-- `client-dispatcher.ts` exports `type AIProvider = 'pollinations'` — this type will be extended to `'pollinations' | 'openrouter'`
+- `client-dispatcher.ts` exports `type AIProvider = 'pollinations' | 'openrouter' | 'nvidia'`
 - `orchestrator.ts` already has the routing infrastructure for multi-provider
-- `provider-monitor.ts` tracks health per provider and can auto-failover
+- Each adapter implements the `IAIProvider` interface (`@/ai/providers/types.ts`) with its own health stats
 - The `IAIProvider` interface (`@/ai/providers/types.ts`) is the contract for new providers
 
-**Implementation priority**: Medium (Roadmap Q3 2026)
-
-**Trigger conditions**:
-- Pollinations returns 5xx errors for >25% of requests in a 5-minute window
-- Pollinates returns 402 (Insufficient Balance) for the system API key
-- User explicitly selects OpenRouter in provider settings
+**Activation**: failover kicks in automatically when the primary provider errors or when the user explicitly selects a provider in settings — e.g., Pollinations returns 5xx/429 for a sustained window, returns 402 (Insufficient Balance), or the user chooses OpenRouter/NVIDIA in provider settings.
 
 ---
 
@@ -258,12 +248,11 @@ An OpenRouter adapter is planned but not yet implemented. The architecture suppo
 | File | Role |
 |---|---|
 | `@/ai/client-dispatcher.ts` | Backward-compatible facade — routes all AI requests through orchestrator |
-| `@/ai/pollinations-client.ts` | Direct Pollinations API client with model selection, retry, JSON repair, deep extraction |
+| `@/ai/pollinations-client.ts` | Pollinations balance check + shared `ModelCapability` type |
 | `@/ai/providers/pollinations-adapter.ts` | Pollinations implementation of the `IAIProvider` interface |
 | `@/ai/providers/orchestrator.ts` | Multi-provider orchestration, routing, and telemetry |
 | `@/ai/providers/post-processor.ts` | JSON repair, schema validation, and mind map normalization |
 | `@/ai/providers/types.ts` | `IAIProvider` interface and type definitions |
-| `@/ai/provider-monitor.ts` | In-memory health tracking per provider |
 | `@/lib/env.ts` | Environment variable validation |
 | `next.config.ts` | CSP headers allowing Pollinations domains |
 | `@/app/actions.ts` — `resolveApiKey()` | API key resolution (user key → system fallback → error) |

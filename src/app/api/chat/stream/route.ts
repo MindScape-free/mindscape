@@ -25,7 +25,6 @@ const ChatStreamInputSchema = z.object({
   apiKey: z.string().optional(),
   model: z.string().optional(),
   provider: z.string().optional(),
-  agentMode: z.boolean().optional().default(false),
   mindMapData: z.any().optional(),
 });
 
@@ -38,7 +37,7 @@ export async function POST(req: NextRequest) {
     console.log('📦 [ChatStream] Request body parsed');
     const input = ChatStreamInputSchema.parse(body);
     console.log('✅ [ChatStream] Input validated');
-    const { apiKey: effectiveApiKey, provider, topic, persona, history, question, attachments, pdfContext, model: requestedModel, agentMode, mindMapData } = input;
+    const { apiKey: effectiveApiKey, provider, topic, persona, history, question, attachments, pdfContext, model: requestedModel, mindMapData } = input;
 
     // Authenticate user
     let currentUserId: string | undefined;

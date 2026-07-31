@@ -2,6 +2,8 @@
 
 import { useState, useCallback, useRef } from 'react';
 
+import { parseStreamChunk } from '@/lib/stream-parser';
+
 interface StreamingChatOptions {
   onChunk?: (chunk: string) => void;
   onComplete?: (fullText: string) => void;
@@ -32,7 +34,6 @@ interface StreamInput {
   apiKey?: string;
   provider?: string;
   token?: string;
-  agentMode?: boolean;
   /**
    * The full mind map data so the AI can contextualize answers within
    * the canvas structure (subTopics, categories, relationships, etc.).
@@ -114,42 +115,32 @@ export function useStreamingChat(options: StreamingChatOptions = {}): StreamingC
           throw new Error(chunk.replace('[ERROR]', '').trim());
         }
 
-        // Universal prefixed event parsing
-        const events = chunk.split(/(?=[TRCAHSCO]:)/);
-        
-        for (const event of events) {
-          if (event.startsWith('T:')) {
-            const delta = event.slice(2);
+        // Universal prefixed event parsing — lossless by design, see
+        // src/lib/stream-parser.ts. Text containing A:/S:/H:/C:/O: is never
+        // dropped: unparseable C:/O: segments fall through to onText.
+        parseStreamChunk(chunk, {
+          onText: (delta) => {
             accumulatedText += delta;
             fullTextRef.current = accumulatedText;
             setText(accumulatedText);
             options.onChunk?.(delta);
-          } else if (event.startsWith('R:')) {
-            const rText = event.slice(2);
+          },
+          onReasoning: (rText) => {
             setReasoning(prev => prev + rText);
-          } else if (event.startsWith('C:')) {
-            try {
-              const { name, args } = JSON.parse(event.slice(2));
-              setToolCalls(prev => [...prev, { name, args, status: 'calling' }]);
-            } catch (e) { console.error('Failed to parse tool call', e); }
-          } else if (event.startsWith('O:')) {
-            try {
-              const { callId, result } = JSON.parse(event.slice(2));
-              setToolCalls(prev => {
-                const last = prev[prev.length - 1];
-                if (last && last.status === 'calling') {
-                  return [...prev.slice(0, -1), { ...last, result, status: 'completed' }];
-                }
-                return prev;
-              });
-            } catch (e) { console.error('Failed to parse tool result', e); }
-          } else if (!event.includes(':')) {
-            accumulatedText += event;
-            fullTextRef.current = accumulatedText;
-            setText(accumulatedText);
-            options.onChunk?.(event);
-          }
-        }
+          },
+          onToolCall: ({ name, args }) => {
+            setToolCalls(prev => [...prev, { name, args, status: 'calling' }]);
+          },
+          onToolResult: ({ result }) => {
+            setToolCalls(prev => {
+              const last = prev[prev.length - 1];
+              if (last && last.status === 'calling') {
+                return [...prev.slice(0, -1), { ...last, result, status: 'completed' }];
+              }
+              return prev;
+            });
+          },
+        });
       }
 
       setIsStreaming(false);

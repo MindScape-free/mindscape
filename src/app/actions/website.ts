@@ -1,27 +1,19 @@
 "use server";
 
 import * as cheerio from "cheerio";
-import { headers } from "next/headers";
+import { safeFetch } from "@/lib/ssrf-guard";
+import { extractArticleFromHtml } from "@/lib/article-extractor";
 
 export async function extractWebsiteContent(url: string) {
   try {
-    const validatedUrl = new URL(url);
-    if (!['http:', 'https:'].includes(validatedUrl.protocol)) {
-      throw new Error("Invalid protocol. Only HTTP and HTTPS are supported.");
-    }
-
-    const hostname = validatedUrl.hostname;
-    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
-    const isPrivateIp = /^(10\.|172\.(1[6-9]|2[0-9]|3[12])\.|192\.168\.)/.test(hostname);
-
-    if (isLocalhost || isPrivateIp) {
-      throw new Error("Access to local or private networks is restricted.");
-    }
-
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    const response = await fetch(url, {
+    // P0 SSRF: safeFetch validates the target AND every redirect hop via
+    // DNS resolution + private-IP checks before fetching. This replaces the
+    // previous hostname-pattern-only check, which was bypassable via
+    // DNS rebinding or literal private IPs.
+    const response = await safeFetch(url, {
       signal: controller.signal,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -46,24 +38,9 @@ export async function extractWebsiteContent(url: string) {
     $('script, style, iframe, nav, footer').remove();
     const cleanedHtml = $.html();
 
-    let articleData = null;
-    try {
-      const headersList = await headers();
-      const host = headersList.get("host") || 'localhost:3000';
-      const protocol = headersList.get("x-forwarded-proto") || (process.env.NODE_ENV === "development" ? "http" : "https");
-      const apiResponse = await fetch(protocol + "://" + host + "/api/extract", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ html: cleanedHtml, url: validatedUrl.origin }),
-      });
-      if (apiResponse.ok) {
-        articleData = await apiResponse.json();
-      }
-    } catch (apiErr) {
-      console.warn("API extraction failed, using fallback:", apiErr);
-    }
-
-    const article = articleData?.article;
+    // Direct article extraction — no self-fetch to an internal HTTP endpoint
+    // (removes the self-fetch SSRF/fragility vector entirely).
+    const article = await extractArticleFromHtml(cleanedHtml, url);
 
     if (!article) {
       const title = $('title').text() || $('h1').first().text() || url;
@@ -98,7 +75,7 @@ export async function extractWebsiteContent(url: string) {
 
     return {
       success: true,
-      title: article.title,
+      title: article.title || url,
       textContent: (article.textContent ?? '').trim(),
       excerpt: article.excerpt,
       textBlocks,

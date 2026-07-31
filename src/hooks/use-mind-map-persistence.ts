@@ -311,9 +311,14 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
       const pending = saveQueueRef.current;
       if (pending) {
         saveQueueRef.current = null;
-        const pendingTopicKey = pending.mapToSave.topic?.toLowerCase().trim();
-        const effectiveId = pending.existingId || finalId || pending.mapToSave.id || (pendingTopicKey ? lastSavedTopicMapIdRef.current[pendingTopicKey] : undefined);
-        setTimeout(() => saveMap(pending.mapToSave, effectiveId, pending.isSilent), 0);
+        const retryCount = (pending as any).retryCount || 0;
+        if (retryCount < 3) {
+          const pendingTopicKey = pending.mapToSave.topic?.toLowerCase().trim();
+          const effectiveId = pending.existingId || finalId || pending.mapToSave.id || (pendingTopicKey ? lastSavedTopicMapIdRef.current[pendingTopicKey] : undefined);
+          setTimeout(() => saveMap(pending.mapToSave, effectiveId, pending.isSilent), 500 * Math.pow(2, retryCount));
+        } else {
+          console.warn('⚠️ Max save retries reached. Abandoning queued save.');
+        }
       }
     }
   }, [user, supabase, toast, aiPersona, options, showAchievementToasts]);

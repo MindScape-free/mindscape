@@ -1,9 +1,9 @@
 /**
  * Pollinations AI Adapter
  *
- * Wraps the existing generateContentWithPollinations function
- * into the IAIProvider interface. Preserves all current behavior:
- * model selection, retry within adapter, JSON repair, deep extraction.
+ * Implements the IAIProvider interface for Pollinations.ai with its own
+ * model selection, retry, JSON repair, and deep extraction logic
+ * (the legacy generateContentWithPollinations client was removed).
  */
 
 import {

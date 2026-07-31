@@ -16,6 +16,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { parseStreamChunk } from '@/lib/stream-parser';
 import { MarkdownRenderer } from './markdown-renderer';
 import { EntityAction } from './entity-action-menu';
 import { Quiz, QuizResult } from '@/ai/schemas/quiz-schema';
@@ -150,17 +151,15 @@ export function QuickExplainDrawer({
             throw new Error(chunk.replace('[ERROR]', '').trim());
           }
 
-          const events = chunk.split(/(?=[TRCAHSCO]:)/);
-          for (const event of events) {
-            if (event.startsWith('T:')) {
-              const delta = event.slice(2);
+          // Lossless prefixed event parsing — see src/lib/stream-parser.ts.
+          // Reasoning/tool events are intentionally ignored here (explanation
+          // text only); prose containing A:/S:/H:/C:/O: is preserved verbatim.
+          parseStreamChunk(chunk, {
+            onText: (delta) => {
               fullText += delta;
               setExplanation(fullText);
-            } else if (!event.includes(':')) {
-              fullText += event;
-              setExplanation(fullText);
-            }
-          }
+            },
+          });
         }
 
         if (!fullText) throw new Error('No explanation generated');

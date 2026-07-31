@@ -36,6 +36,13 @@ jest.mock('@/lib/supabase-server', () => ({
   getUserImageSettingsAdmin: jest.fn(),
 }));
 
+// ── Mock requireAuth (session verification) ────────────────────────────────
+// community actions now verify the caller's session matches the claimed
+// userId. Default to mockUserId (admin); individual tests override it.
+jest.mock('@/lib/require-auth', () => ({
+  requireAuth: jest.fn(),
+}));
+
 // Note: AI flow module mocks (categorize-mind-map, suggest-related-topics, lib/serialize)
 // were previously needed to prevent cheerio ESM loading. They have been removed
 // because the jest.config.ts moduleNameMapper for cheerio handles this now.
@@ -52,10 +59,14 @@ jest.spyOn(console, 'error').mockImplementation(() => {});
 // separate jest config for transform. The categorization test is covered
 // in the categorize-mind-map unit tests instead.
 import { publishMindMapAction, removeFromCommunityAction } from '@/app/actions/community';
+import { requireAuth } from '@/lib/require-auth';
+
+const mockRequireAuth = requireAuth as jest.Mock;
 
 // ── Setup ──────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
+  mockRequireAuth.mockResolvedValue(mockUserId);
   store.mindmaps.clear();
   store.public_mindmaps.clear();
   store.admin_activity_log = [];
@@ -124,6 +135,23 @@ describe('publishMindMapAction', () => {
     expect(pubEntry.topic).toBe('Admin Published');
   });
 
+  it('rejects publishing when session does not match the claimed userId', async () => {
+    // Session user is mockUserId (admin), but the client claims mockUserIdAlt.
+    mockRequireAuth.mockResolvedValue(mockUserId);
+    seedMindMap({ user_id: mockUserIdAlt });
+
+    const result = await publishMindMapAction(mockMapId, {
+      topic: 'Forge Attempt',
+      authorName: 'Attacker',
+      originalAuthorId: mockUserIdAlt,
+      publicCategories: [],
+    }, mockUserIdAlt);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Unauthorized');
+    expect(store.public_mindmaps.has(mockMapId)).toBe(false);
+  });
+
   it('logs admin activity on publish', async () => {
     seedMindMap();
 
@@ -172,6 +200,7 @@ describe('removeFromCommunityAction', () => {
   });
 
   it('allows the original author to remove their own map', async () => {
+    mockRequireAuth.mockResolvedValue(mockUserIdAlt);
     seedMindMap({ user_id: mockUserIdAlt, is_public: true });
     store.public_mindmaps.set(mockMapId, {
       id: mockMapId, topic: 'Own Map', original_author_id: mockUserIdAlt,
@@ -189,6 +218,20 @@ describe('removeFromCommunityAction', () => {
 
     const result = await removeFromCommunityAction(mockMapId, mockUserId); // Admin
     expect(result.success).toBe(true);
+  });
+
+  it('rejects removal when session does not match the claimed userId', async () => {
+    // Session user is mockUserId (admin), but the client claims mockUserIdAlt.
+    mockRequireAuth.mockResolvedValue(mockUserId);
+    seedMindMap({ user_id: mockUserIdAlt, is_public: true });
+    store.public_mindmaps.set(mockMapId, {
+      id: mockMapId, topic: 'Forge Attempt', original_author_id: mockUserIdAlt,
+    });
+
+    const result = await removeFromCommunityAction(mockMapId, mockUserIdAlt);
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Unauthorized');
+    expect(store.public_mindmaps.has(mockMapId)).toBe(true);
   });
 
   it('logs admin activity on removal', async () => {

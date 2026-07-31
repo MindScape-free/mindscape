@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit, createRateLimitResponse, getClientIdentifier } from '@/lib/rate-limit';
+import { safeFetch, isSafeOutboundUrl } from '@/lib/ssrf-guard';
+import { extractArticleFromHtml } from '@/lib/article-extractor';
 
 const PRIVATE_IP_PATTERNS = [
   /^127\./,
@@ -79,6 +81,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
+    // P0 SSRF: DNS-resolution-backed validation (replaces hostname-pattern-only
+    // checks, which DNS-rebinding could bypass). Runs as a final gate before
+    // any outbound fetch, on top of the fast-path validateUrl() above.
+    const dnsSafe = await isSafeOutboundUrl(url);
+    if (!dnsSafe) {
+      return NextResponse.json({ error: 'Access to private or internal addresses is not allowed' }, { status: 400 });
+    }
+
     // --- YouTube Support ---
     const isYouTube = url.includes('youtube.com/') || url.includes('youtu.be/');
     if (isYouTube) {
@@ -114,7 +124,7 @@ export async function POST(req: NextRequest) {
     if (!res.ok) {
       console.warn(`⚠️ Jina.ai extraction failed for ${url}, falling back to internal extractor.`);
       try {
-        const basicRes = await fetch(url, {
+        const basicRes = await safeFetch(url, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
           }
@@ -124,24 +134,15 @@ export async function POST(req: NextRequest) {
         
         const html = await basicRes.text();
         
-        // Call our internal extraction API
-        const host = req.headers.get("host");
-        const protocol = process.env.NODE_ENV === "development" ? "http" : "https";
-        const extractRes = await fetch(`${protocol}://${host}/api/extract`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ html, url }),
-        });
-
-        if (extractRes.ok) {
-          const { article } = await extractRes.json();
-          if (article && article.textContent) {
-            return NextResponse.json({
-              title: article.title || url,
-              content: article.textContent.trim(),
-              isFallback: true
-            });
-          }
+        // Direct article extraction — no self-fetch to an internal endpoint
+        // (removes the self-fetch SSRF/fragility vector).
+        const article = await extractArticleFromHtml(html, url);
+        if (article && article.textContent) {
+          return NextResponse.json({
+            title: article.title || url,
+            content: article.textContent.trim(),
+            isFallback: true
+          });
         }
 
         // Final fallback if internal extraction also fails

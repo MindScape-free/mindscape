@@ -2,15 +2,12 @@
 
 import crypto from 'crypto';
 import { AIProvider } from '@/ai/client-dispatcher';
-import { providerMonitor } from '@/ai/provider-monitor';
 import {
   generateMindMap,
-  GenerateMindMapOutput,
   GenerateMindMapInput,
 } from '@/ai/flows/generate-mind-map';
 import {
   generateMindMapFromImage,
-  GenerateMindMapFromImageOutput,
 } from '@/ai/flows/generate-mind-map-from-image';
 import { generateYouTubeMindMap } from '@/ai/flows/youtube-mindmap';
 import { generateMindMapFromPdf } from '@/ai/flows/generate-mind-map-from-pdf';
@@ -20,7 +17,6 @@ import { generateMindMapFromWebsite } from '@/ai/flows/generate-mind-map-from-we
 import { extractWebsiteContent } from './actions/website';
 import type {
   GenerateMindMapFromTextInput,
-  GenerateMindMapFromTextOutput,
 } from '@/ai/schemas/generate-mind-map-from-text-schema';
 import type {
   AnalyzeImageContentInput,
@@ -39,7 +35,6 @@ import {
 import {
   translateMindMap,
   TranslateMindMapInput,
-  TranslateMindMapOutput,
 } from '@/ai/flows/translate-mind-map';
 import { summarizeTopic } from '@/ai/flows/summarize-topic';
 import { apiCache } from '@/lib/cache';
@@ -72,14 +67,13 @@ import {
 import { RelatedQuestionsOutput } from '@/ai/schemas/related-questions-schema';
 import {
   generateComparisonMapV2,
-  GenerateComparisonMapOutputV2,
 } from '@/ai/compare/flow';
 import { GenerateComparisonMapInput } from '@/ai/compare/schema';
-import { MindMapData, SingleMindMapData, CompareMindMapData, SubTopic, Category, SubCategory, DepthSuggestion } from '@/types/mind-map';
+import { MindMapData, SingleMindMapData, CompareMindMapData, SubTopic, Category, SubCategory } from '@/types/mind-map';
 import { resolveDepthFast } from '@/lib/depth-analysis';
 
 import { generateSearchContext } from './actions/generateSearchContext';
-import { awardPoints } from '@/lib/points-engine';
+import { requireAuth } from '@/lib/require-auth';
 
 export interface AIActionOptions {
   apiKey?: string;
@@ -289,6 +283,13 @@ if (typeof setInterval !== 'undefined') {
 }
 
 export async function resolveApiKey(options: AIActionOptions): Promise<string | undefined> {
+  // P0 SECURITY: All AI generation must come from an authenticated session.
+  // Force the verified session userId — the client-supplied userId is never
+  // trusted, preventing attackers from passing another user's ID to fetch
+  // their stored API keys via getUserImageSettingsAdmin().
+  const verifiedUserId = await requireAuth();
+  options.userId = verifiedUserId;
+
   let effectiveApiKey = options.apiKey;
   const provider = options.provider || 'pollinations';
   let source = effectiveApiKey ? 'options' : 'none';
@@ -773,13 +774,16 @@ export async function generateMindMapFromWebsiteAction(
   }
 
   try {
+    // P0 SECURITY: authenticate before doing any outbound work (SSRF-guarded
+    // website extraction is expensive — gate it behind the session first).
+    const effectiveApiKey = await resolveApiKey(options);
+
     // 1. Extract content from the website
     const extractionResult = await extractWebsiteContent(input.url);
     if (!extractionResult.success || !extractionResult.textContent) {
       return { data: null, error: extractionResult.error || 'Failed to extract content from the website.' };
     }
 
-    const effectiveApiKey = await resolveApiKey(options);
     const rawDepth = input.depth || 'auto';
     const depth = (rawDepth === 'auto')
       ? await resolveDepthFast(extractionResult.title || input.url)
@@ -836,6 +840,10 @@ export async function explainNodeAction(
   options: AIActionOptions = {}
 ): Promise<{ explanation: ExplainMindMapNodeOutput | null; error: string | null }> {
   try {
+    // P0 SECURITY: authenticate before any work (incl. cache reads) so
+    // anonymous callers cannot consume server resources or leak cached data.
+    const effectiveApiKey = await resolveApiKey(options);
+
     const cacheKey = `explain_${input.subCategoryName}_${input.mainTopic}_${input.explanationMode}_${input.usePdfContext ? 'aware' : 'simple'}`;
     const cached = apiCache.get<ExplainMindMapNodeOutput>(cacheKey);
     if (cached) {
@@ -843,7 +851,6 @@ export async function explainNodeAction(
       return { explanation: cached, error: null };
     }
 
-    const effectiveApiKey = await resolveApiKey(options);
 
     let pdfContext = input.pdfContext;
     if (input.usePdfContext && !pdfContext && input.mainTopic) {
@@ -928,13 +935,20 @@ export async function chatAction(
         try {
           const { getMindMapAdmin } = await import('@/lib/supabase-server');
           const mapData = await getMindMapAdmin(input.sessionId);
-          if (mapData && mapData.pdfContext) {
-            console.log(`🧠 chatAction: Retrieved PDF context from supabase for doc ${input.sessionId}`);
+          // P0 SECURITY: resolveApiKey above already forced options.userId to
+          // the verified session user (and throws for unauthenticated callers),
+          // so the ownership check uses it directly.
+          const currentUserId = options.userId;
+          
+          if (mapData && mapData.pdfContext && currentUserId && mapData.user_id === currentUserId) {
+            console.log(`🧠 chatAction: Verified ownership and retrieved PDF context for doc ${input.sessionId}`);
             pdfContext = mapData.pdfContext;
 
             // Also store it back in memory for next time
             const { setPdfContext } = await import('@/lib/pdf-context-store');
             setPdfContext(input.sessionId, pdfContext as any);
+          } else if (mapData && mapData.user_id !== currentUserId) {
+            console.warn(`🔒 [IDOR Prevention] Unauthorized PDF context access attempt for map ${input.sessionId}`);
           }
         } catch (err) {
           console.warn('⚠️ Failed to fetch PDF context from supabase:', err);
@@ -1003,6 +1017,9 @@ export async function explainWithExampleAction(
   options: { apiKey?: string; provider?: AIProvider } = {}
 ): Promise<{ example: ExplainWithExampleOutput | null; error: string | null }> {
   try {
+    // P0 SECURITY: authenticate before any work (incl. cache reads).
+    const effectiveApiKey = await resolveApiKey(options);
+
     const cacheKey = `example_${input.topicName}_${input.mainTopic}_${input.explanationMode}_${input.usePdfContext ? 'aware' : 'simple'}`;
     const cached = apiCache.get<ExplainWithExampleOutput>(cacheKey);
     if (cached) {
@@ -1010,7 +1027,6 @@ export async function explainWithExampleAction(
       return { example: cached, error: null };
     }
 
-    const effectiveApiKey = await resolveApiKey(options);
 
     let pdfContext = input.pdfContext;
     if (input.usePdfContext && !pdfContext && input.mainTopic) {
@@ -1073,6 +1089,9 @@ export async function summarizeTopicAction(
   options: AIActionOptions = {}
 ): Promise<{ summary: string | null; error: string | null }> {
   try {
+    // P0 SECURITY: authenticate before any work (incl. cache reads).
+    const effectiveApiKey = await resolveApiKey(options);
+
     // Determine a stable key: could hash the data, but for simplicity we'll use topic length or specific ID (here using topic name and length as proxy)
     const topicName = input.mindMapData.topic.substring(0, 50);
     // Rough estimate of tree size to know if we are caching the same map
@@ -1085,7 +1104,6 @@ export async function summarizeTopicAction(
       return { summary: cached.summary, error: null };
     }
 
-    const effectiveApiKey = await resolveApiKey(options);
     const result = await summarizeTopic({ ...input, ...options, apiKey: effectiveApiKey });
 
     if (result && result.summary) {
@@ -1186,44 +1204,6 @@ export async function generateTopicFAQsAction(
     console.error('Error in generateTopicFAQsAction:', error.message);
     return { data: null, error: error.message || 'Failed to generate topic FAQs' };
   }
-}
-
-export async function getAIHealthReportAction() {
-  return providerMonitor.getReport();
-}
-
-/**
- * Returns the current OpenRouter model status — which model was actually used
- * in the most recent request and where we are in the fallback chain.
- * Falls back to 'pollinations' data if OpenRouter isn't the active provider.
- */
-export async function getAIProviderStatusAction(options: { provider?: string } = {}): Promise<{
-  model: string;
-  fallbackIndex: number;
-  chain: string[];
-  provider: string;
-}> {
-  if (options.provider === 'openrouter' || !options.provider) {
-    try {
-      const { getOpenRouterStatus } = await import('@/ai/providers/openrouter-adapter');
-      if (typeof getOpenRouterStatus === 'function') {
-        const status = getOpenRouterStatus();
-        return {
-          ...status,
-          provider: 'openrouter',
-        };
-      }
-    } catch {
-      // Fall through to default
-    }
-  }
-
-  return {
-    model: 'pollinations',
-    fallbackIndex: 0,
-    chain: ['pollinations'],
-    provider: 'pollinations',
-  };
 }
 
 /**
@@ -1482,6 +1462,12 @@ export async function adminDeleteUserAction(targetUserId: string): Promise<{ suc
     await supabase.from('chat_sessions').delete().eq('user_id', targetUserId);
     await supabase.from('user_notifications').delete().eq('user_id', targetUserId);
     await supabase.from('community_posts').delete().eq('user_id', targetUserId);
+    await supabase.from('public_mindmaps').delete().eq('user_id', targetUserId);
+    await supabase.from('user_points').delete().eq('user_id', targetUserId);
+    await supabase.from('point_transactions').delete().eq('user_id', targetUserId);
+    await supabase.from('feedback').delete().eq('user_id', targetUserId);
+    await supabase.from('ai_calls').delete().eq('user_id', targetUserId);
+    await supabase.from('analytics_events').delete().eq('user_id', targetUserId);
     // Delete mindmaps (their before-delete trigger will insert map_deleted events into user_events)
     await supabase.from('mindmaps').delete().eq('user_id', targetUserId);
     await supabase.from('user_settings').delete().eq('user_id', targetUserId);

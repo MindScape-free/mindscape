@@ -4,6 +4,7 @@ import { categorizeMindMap } from '@/ai/flows/categorize-mind-map';
 import { AIProvider } from '@/ai/client-dispatcher';
 import { suggestRelatedTopics } from '@/ai/flows/suggest-related-topics';
 import { resolveApiKey } from '@/app/actions';
+import { requireAuth } from '@/lib/require-auth';
 import { awardPoints } from '@/lib/points-engine';
 import { getSupabaseAdmin, isUserAdminServer, logActivityAdmin } from '@/lib/supabase-server';
 
@@ -40,6 +41,11 @@ export async function removeFromCommunityAction(mapId: string, userId: string): 
   try {
     if (!userId || !mapId) return { success: false, error: 'Map ID and user ID are required' };
 
+    // P0 SECURITY: verify the caller's session matches the claimed userId —
+    // a client cannot delete maps while impersonating another user.
+    const verifiedUserId = await requireAuth();
+    if (verifiedUserId !== userId) return { success: false, error: 'Unauthorized' };
+
     const supabase = getSupabaseAdmin();
     const { data: mapData, error } = await supabase.from('public_mindmaps').select('*').eq('id', mapId).single();
     if (error || !mapData) return { success: false, error: 'Map not found in community' };
@@ -66,6 +72,11 @@ export async function removeFromCommunityAction(mapId: string, userId: string): 
 export async function publishMindMapAction(mapId: string, publicData: any, userId: string): Promise<{ success: boolean; error: string | null }> {
   try {
     if (!userId || !mapId || !publicData) return { success: false, error: 'Map ID, data, and user ID are required' };
+
+    // P0 SECURITY: verify the caller's session matches the claimed userId —
+    // a client cannot publish/republish maps while impersonating another user.
+    const verifiedUserId = await requireAuth();
+    if (verifiedUserId !== userId) return { success: false, error: 'Unauthorized' };
 
     const supabase = getSupabaseAdmin();
     const targetAuthorId = publicData.originalAuthorId || userId;
@@ -104,5 +115,12 @@ export async function publishMindMapAction(mapId: string, publicData: any, userI
 
 export async function checkIsAdminAction(userId: string): Promise<{ isAdmin: boolean }> {
   if (!userId) return { isAdmin: false };
-  return { isAdmin: await isUserAdminServer(userId) };
+  try {
+    // P0 SECURITY: only report admin status for the caller's own account.
+    const verifiedUserId = await requireAuth();
+    if (verifiedUserId !== userId) return { isAdmin: false };
+    return { isAdmin: await isUserAdminServer(userId) };
+  } catch {
+    return { isAdmin: false };
+  }
 }

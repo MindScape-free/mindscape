@@ -161,12 +161,10 @@ MindScape/
 │   │   ├── schemas/          # Zod schemas for AI output validation
 │   │   ├── search/           # Google Search integration
 │   │   ├── compare/          # Comparison map generation (flow, schema, prompt)
-│   │   ├── agent.ts          # Event-emitter agent class (disabled)
 │   │   ├── tools.ts          # AI tool definitions (web search, calculator, time)
 │   │   ├── client-dispatcher.ts  # Backward-compatible facade → orchestrator
 │   │   ├── mind-map-schema.ts    # Comprehensive Zod schemas for all mind map types
-│   │   ├── pollinations-client.ts # Direct Pollinations API client
-│   │   └── provider-monitor.ts   # In-memory provider health tracking
+│   │   └── pollinations-client.ts # Pollinations balance check + shared types
 │   ├── app/                  # Next.js App Router
 │   │   ├── page.tsx + HomeClient.tsx  # Home page with hero, modes, generation
 │   │   ├── canvas/           # Core mind map workspace (CanvasClient.tsx) + loading + metadata
@@ -217,7 +215,6 @@ MindScape/
 │   │   ├── use-multi-source.ts          # Multi-file state management
 │   │   ├── use-points.ts / use-points-history.ts  # XP ledger
 │   │   ├── use-admin-dashboard.ts       # SWR admin data fetching
-│   │   ├── use-ai-health.ts             # AI provider health
 │   │   ├── use-tracking.ts              # Map view tracking
 │   │   ├── use-text-to-speech.ts        # AI voice generation
 │   │   ├── use-map-sharing.ts           # Share link generation

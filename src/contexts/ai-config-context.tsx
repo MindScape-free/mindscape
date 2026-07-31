@@ -215,9 +215,11 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
 
     // Keep stable refs to avoid tearing down the realtime subscription on every render
     const setStoredConfigRef = React.useRef(setStoredConfig);
-    setStoredConfigRef.current = setStoredConfig;
     const refreshBalanceRef = React.useRef(refreshBalance);
-    refreshBalanceRef.current = refreshBalance;
+    useEffect(() => {
+        setStoredConfigRef.current = setStoredConfig;
+        refreshBalanceRef.current = refreshBalance;
+    }, [setStoredConfig, refreshBalance]);
 
     // Sync with Supabase on user login - REAL-TIME LISTENER
     useEffect(() => {

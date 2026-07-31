@@ -8,29 +8,6 @@ import {
 } from './types';
 import { postProcess } from './post-processor';
 
-// ── Module-level state: persists across adapter instances within the same process ──
-// This lets the client query which model was actually used and whether the fallback
-// chain has advanced, without needing per-request persistence.
-let _lastModel = 'openrouter/free';
-let _lastFallbackIndex = 0;
-
-/**
- * Returns the last-used OpenRouter model and the current fallback index.
- * Called by the server action to expose status to the navbar badge.
- */
-export function getOpenRouterStatus() {
-  return {
-    model: _lastModel,
-    fallbackIndex: _lastFallbackIndex,
-    chain: [
-      'openrouter/free',
-      'google/gemma-3-27b-it:free',
-      'google/gemma-3-12b-it:free',
-      'nvidia/nemotron-3-super-49b-v1:free',
-    ],
-  };
-}
-
 export class OpenRouterAdapter implements IAIProvider {
   readonly name = 'openrouter';
 
@@ -254,10 +231,6 @@ export class OpenRouterAdapter implements IAIProvider {
       this.healthStatus.consecutiveFailures = 0;
       this.healthStatus.status = 'healthy';
 
-      // Sync module-level state so the navbar badge can show the live model
-      _lastModel = model;
-      _lastFallbackIndex = this.fallbackIndex;
-
       return {
         content: fullText,
         raw: fullText,
@@ -408,10 +381,6 @@ export class OpenRouterAdapter implements IAIProvider {
 
       // Run standardized schema parsing and JSON repair using postProcess
       const parsedContent = postProcess(rawText, request.schema, request.strict);
-
-      // Sync module-level state so the navbar badge can show the live model
-      _lastModel = model;
-      _lastFallbackIndex = this.fallbackIndex;
 
       return {
         content: parsedContent.data,

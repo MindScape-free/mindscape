@@ -66,8 +66,12 @@ async function getDynamicModels() {
     console.log("✅ [DynamicModels] Successfully refreshed.");
     return cachedModels;
   } catch (err: any) {
-    console.error("❌ Failed to fetch dynamic models:", err.message);
-    throw err;
+    console.error("❌ Failed to fetch dynamic models, using static fallbacks:", err.message);
+    return {
+      'flux': { cost: 0.01, quality: 'high', description: 'Flux Image Model', paid_only: false },
+      'turbo': { cost: 0.005, quality: 'rapid', description: 'Turbo Fast Image Model', paid_only: false },
+      'zimage': { cost: 0.01, quality: 'high', description: 'ZImage Model', paid_only: false }
+    };
   }
 }
 
@@ -316,14 +320,14 @@ export async function POST(req: NextRequest) {
     // Implement model rotation for higher success rate
     let currentModel = model;
     
-    const rotationPool = Object.keys(POLLINATIONS_MODELS);
+    const rotationPool = Object.keys(POLLINATIONS_MODELS).length > 0 ? Object.keys(POLLINATIONS_MODELS) : ['flux', 'turbo'];
     
     let rotationIndex = rotationPool.indexOf(currentModel as any);
     if (rotationIndex === -1) {
       console.warn(`⚠️ Requested model ${currentModel} not found in pool, using ${rotationPool[0]}`);
       rotationIndex = 0;
     }
-    currentModel = rotationPool[rotationIndex];
+    currentModel = rotationPool[rotationIndex] || 'flux';
 
     const maxRetries = 5;
     let triedAuthFallback = false;

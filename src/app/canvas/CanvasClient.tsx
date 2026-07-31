@@ -76,7 +76,6 @@ import { useCanvasSourceFiles } from '@/hooks/use-canvas-source-files';
 import { useCanvasChatState } from '@/hooks/use-canvas-chat-state';
 import { useCanvasDialogs } from '@/hooks/use-canvas-dialogs';
 import { Profiler } from '@/components/debug/profiler';
-import { useAIHealth } from '@/hooks/use-ai-health';
 import { useActivity } from '@/contexts/activity-context';
 import { resolveDepthWithConfidence, analyzeTopicComplexity } from '@/lib/depth-analysis';
 import { trackGenerationStart, trackGenerationComplete, trackGenerationFailed, type AIGenerationMeta } from '@/lib/tracker';
@@ -109,8 +108,7 @@ function MindMapPageContent() {
   const [hierarchyLoading, setHierarchyLoading] = useState(false);
 
 
-  const aiHealth = useAIHealth();
-  const { setStatus: setGlobalStatus, setAiHealth: setGlobalHealth, setActiveTaskName } = useActivity();
+  const { setStatus: setGlobalStatus, setActiveTaskName } = useActivity();
   const handleUpdateRef = useRef<(data: Partial<MindMapData>) => void>(() => { });
   const quizDeepenRef = useRef<((w: { tag: string; score: number }[], t: string) => void) | null>(null);
   const zoomToNodeRef = useRef<((nodeName: string) => void) | null>(null);
@@ -277,11 +275,6 @@ function MindMapPageContent() {
   }, [hookStatus, setGlobalStatus]);
 
   useEffect(() => {
-    setGlobalHealth(aiHealth || []);
-    return () => setGlobalHealth([]);
-  }, [aiHealth, setGlobalHealth]);
-
-  useEffect(() => {
     if (generatingTopic) {
       setActiveTaskName(generatingTopic);
     } else {
@@ -424,7 +417,9 @@ function MindMapPageContent() {
               const { data: row } = await supabase.from('public_mindmaps').select('*').eq('id', pubId).single();
               if (row) {
                 result.data = { ...row, ...(row.content || {}), id: row.id } as unknown as MindMapData;
-                await supabase.from('public_mindmaps').update({ public_views: (row.public_views || 0) + 1 }).eq('id', pubId);
+                // View counter is RLS-guarded (own-row UPDATE only): non-authors must
+                // increment through the SECURITY DEFINER RPC.
+                await supabase.rpc('increment_public_map_views', { p_map_id: pubId });
               }
             } else if ((user || params.ownerId) && params.mapId) {
               const targetUid = params.ownerId || user?.id;
@@ -861,15 +856,13 @@ function MindMapPageContent() {
   // Track views for community maps
   useEffect(() => {
     if (mindMap?.id && mindMap.isPublic) {
-      supabase.from('public_mindmaps')
-        .update({ views: (mindMap.views || 0) + 1 })
-        .eq('id', mindMap.id)
+      supabase
+        .rpc('increment_public_map_views', { p_map_id: mindMap.id })
         .then(({ error }) => {
           if (error) console.error('Failed to update views:', error);
         });
     }
-    // `mindMap.views` and `supabase` intentionally omitted: views is mutated inside
-    // the callback and would cause re-triggering. supabase is the stable client.
+    // `supabase` intentionally omitted: it is the stable client instance.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mindMap?.id, mindMap?.isPublic]);
 
@@ -1506,7 +1499,6 @@ function MindMapPageContent() {
             onStackSelect={handleBreadcrumbSelect}
             onUpdate={onMapUpdate}
             status={hookStatus}
-            aiHealth={aiHealth}
             onDeleteNestedMap={handleDeleteNestedMap}
             onRegenerateNestedMap={handleRegenerateNestedMap}
             onPracticeQuestionClick={handleExplainInChat}

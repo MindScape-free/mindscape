@@ -34,14 +34,14 @@ import { Badge } from '@/components/ui/badge';
 export function NotificationCenter() {
     const { notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications } = useNotifications();
     const router = useRouter();
-    const { status, aiHealth, activeTaskName } = useActivity();
+    const { status, activeTaskName } = useActivity();
     const mounted = React.useSyncExternalStore(
       () => () => {},
       () => true,
       () => false
     );
 
-    const isBusy = status !== 'idle' || aiHealth.some(h => h.status !== 'healthy');
+    const isBusy = status !== 'idle';
 
     const getIcon = (type: Notification['type']) => {
         switch (type) {
@@ -136,21 +136,12 @@ export function NotificationCenter() {
                                     <span className="text-[10px] font-black text-amber-500 tracking-widest uppercase italic">Quantum Materializing</span>
                                 </div>
                                 <div className="space-y-2">
-                                    {aiHealth.length > 0 ? (
-                                        aiHealth.map(h => (
-                                            <div key={h.name} className="flex justify-between items-center text-[9px] uppercase font-mono gap-4 pl-4 border-l-2 border-white/10">
-                                                <span className="text-zinc-500">{h.name}</span>
-                                                <span className={h.status === 'healthy' ? 'text-emerald-400' : 'text-amber-400 animate-pulse'}>{h.status}</span>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <div className="flex justify-between items-center text-[9px] uppercase font-mono gap-4 pl-4 border-l-2 border-white/10">
-                                            <span className="text-zinc-500 truncate max-w-[150px]" title={activeTaskName ? `Generating Submap: ${activeTaskName}` : "Mind Map Generation"}>
-                                                {activeTaskName ? `Map: ${activeTaskName}` : "AI Core Activity"}
-                                            </span>
-                                            <span className="text-amber-400 animate-pulse">Running</span>
-                                        </div>
-                                    )}
+                                    <div className="flex justify-between items-center text-[9px] uppercase font-mono gap-4 pl-4 border-l-2 border-white/10">
+                                        <span className="text-zinc-500 truncate max-w-[150px]" title={activeTaskName ? `Generating Submap: ${activeTaskName}` : "Mind Map Generation"}>
+                                            {activeTaskName ? `Map: ${activeTaskName}` : "AI Core Activity"}
+                                        </span>
+                                        <span className="text-amber-400 animate-pulse">Running</span>
+                                    </div>
                                 </div>
                             </div>
                         )}

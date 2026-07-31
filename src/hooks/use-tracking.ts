@@ -210,7 +210,7 @@ export function useSessionTracking(userId?: string) {
     [userId, metricsRef]
   );
 
-  const trackMapViewed = useCallback((mapId: string) => {
+  const trackMapViewed = useCallback((_mapId: string) => {
     metricsRef.current.mapsViewed++;
     metricsRef.current.lastActivity = Date.now();
   }, [metricsRef]);
