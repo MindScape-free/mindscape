@@ -677,6 +677,7 @@ export default function Home() {
     }
 
     if (youtubeRegex.test(trimmed)) {
+      const normalizedYt = (trimmed.startsWith('http://') || trimmed.startsWith('https://')) ? trimmed : `https://${trimmed}`;
       const sessionId = `yt-${Date.now()}`;
       trackGenerationStart(sessionId, {
         sourceType: 'youtube',
@@ -686,12 +687,13 @@ export default function Home() {
         userId: user?.id
       });
       safeSetItem(`session-type-${sessionId}`, 'youtube');
-      safeSetItem(`session-content-${sessionId}`, { file: trimmed, text: '' });
+      safeSetItem(`session-content-${sessionId}`, { file: normalizedYt, text: '' });
       router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${SOURCE_DEPTH_PRESETS.youtube}&persona=${persona}`);
       return;
     }
 
     if (websiteRegex.test(trimmed)) {
+      const normalizedWeb = (trimmed.startsWith('http://') || trimmed.startsWith('https://')) ? trimmed : `https://${trimmed}`;
       const sessionId = `web-${Date.now()}`;
       trackGenerationStart(sessionId, {
         sourceType: 'website',
@@ -701,7 +703,7 @@ export default function Home() {
         userId: user?.id
       });
       safeSetItem(`session-type-${sessionId}`, 'website');
-      safeSetItem(`session-content-${sessionId}`, { file: trimmed, text: '' });
+      safeSetItem(`session-content-${sessionId}`, { file: normalizedWeb, text: '' });
       router.push(`/canvas?sessionId=${sessionId}&lang=${lang}&depth=${SOURCE_DEPTH_PRESETS.website}&persona=${persona}`);
       return;
     }

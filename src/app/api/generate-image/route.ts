@@ -24,18 +24,12 @@ let cachedModels: any = null;
 let lastFetchTime = 0;
 const CACHE_EXPIRY = 60 * 60 * 1000; // 1 hour
 
-/**
- * Fetch and map models from Pollinations.ai live registry
- */
-async function getDynamicModels() {
-  const now = Date.now();
-  console.log("🔍 [DynamicModels] Checking cache...");
-  if (cachedModels && (now - lastFetchTime < CACHE_EXPIRY)) {
-    console.log("✅ [DynamicModels] Using cached list.");
-    return cachedModels;
-  }
+let isRefreshing = false;
 
-  console.log("🌐 [DynamicModels] Fetching from Pollinations...");
+async function refreshDynamicModelsBackground() {
+  if (isRefreshing) return;
+  isRefreshing = true;
+  console.log("🌐 [DynamicModels] Refreshing models in background...");
   try {
     const response = await fetch('https://gen.pollinations.ai/image/models', { next: { revalidate: 3600 } });
     if (!response.ok) throw new Error(`Pollinations Status: ${response.status}`);
@@ -62,17 +56,41 @@ async function getDynamicModels() {
     });
 
     cachedModels = mapped;
-    lastFetchTime = now;
-    console.log("✅ [DynamicModels] Successfully refreshed.");
-    return cachedModels;
+    lastFetchTime = Date.now();
+    console.log("✅ [DynamicModels] Background refresh completed.");
   } catch (err: any) {
-    console.error("❌ Failed to fetch dynamic models, using static fallbacks:", err.message);
-    return {
-      'flux': { cost: 0.01, quality: 'high', description: 'Flux Image Model', paid_only: false },
-      'turbo': { cost: 0.005, quality: 'rapid', description: 'Turbo Fast Image Model', paid_only: false },
-      'zimage': { cost: 0.01, quality: 'high', description: 'ZImage Model', paid_only: false }
-    };
+    console.error("❌ Failed to fetch dynamic models in background:", err.message);
+  } finally {
+    isRefreshing = false;
   }
+}
+
+/**
+ * Fetch and map models from Pollinations.ai live registry using Stale-While-Revalidate pattern
+ */
+async function getDynamicModels() {
+  const now = Date.now();
+  console.log("🔍 [DynamicModels] Checking cache...");
+  
+  if (cachedModels) {
+    if (now - lastFetchTime >= CACHE_EXPIRY) {
+      console.log("⚡ [DynamicModels] Cache expired. Returning stale cache & triggering background refresh.");
+      refreshDynamicModelsBackground().catch(() => {});
+    } else {
+      console.log("✅ [DynamicModels] Using cached list.");
+    }
+    return cachedModels;
+  }
+
+  // Initial fetch when no cache exists yet
+  console.log("🌐 [DynamicModels] Initial fetch from Pollinations...");
+  await refreshDynamicModelsBackground();
+
+  return cachedModels || {
+    'flux': { cost: 0.01, quality: 'high', description: 'Flux Image Model', paid_only: false },
+    'turbo': { cost: 0.005, quality: 'rapid', description: 'Turbo Fast Image Model', paid_only: false },
+    'zimage': { cost: 0.01, quality: 'high', description: 'ZImage Model', paid_only: false }
+  };
 }
 
 

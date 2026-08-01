@@ -84,7 +84,15 @@ Return ONLY: { "summary": "text" }`;
         : `Summarize mind map for "${topic}":\n\n${summaryContext}`;
 
     try {
-        const result = await generateContent({ provider, apiKey, model, systemPrompt, userPrompt, schema: SummarizeTopicOutputSchema });
+        const result = await generateContent({
+          provider,
+          apiKey,
+          model,
+          systemPrompt,
+          userPrompt,
+          schema: SummarizeTopicOutputSchema,
+          taskType: 'summarize-topic',
+        });
         if (!result?.summary) return { summary: `A structured exploration of ${topic} covering its core dimensions and key relationships.` };
         return result;
     } catch (e: any) {

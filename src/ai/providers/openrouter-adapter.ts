@@ -124,6 +124,7 @@ export class OpenRouterAdapter implements IAIProvider {
         messages,
         stream: true,
         temperature: 0.7,
+        max_tokens: request.maxTokens || 2048,
       };
 
       if (request.schema) {
@@ -148,7 +149,7 @@ export class OpenRouterAdapter implements IAIProvider {
           if (errBody?.error?.message) errDetails = errBody.error.message;
         } catch {}
 
-        const isFallbackError = response.status === 429 || response.status === 503 || 
+        const isFallbackError = response.status === 429 || response.status === 503 || response.status === 402 || 
           (response.status === 400 && errDetails.toLowerCase().match(/(not a valid model|invalid model|model not found)/));
 
         if (isFallbackError) {
@@ -288,6 +289,7 @@ export class OpenRouterAdapter implements IAIProvider {
         model: modelToUse,
         messages,
         temperature: 0.7,
+        max_tokens: request.maxTokens || 2048,
       };
 
       // If a JSON schema validation is requested, suggest JSON format
@@ -324,7 +326,7 @@ export class OpenRouterAdapter implements IAIProvider {
           if (errBody?.error?.message) errDetails = errBody.error.message;
         } catch {}
 
-        const isFallbackError = response.status === 429 || response.status === 503 || 
+        const isFallbackError = response.status === 429 || response.status === 503 || response.status === 402 || 
           (response.status === 400 && errDetails.toLowerCase().match(/(not a valid model|invalid model|model not found)/));
 
         if (isFallbackError) {

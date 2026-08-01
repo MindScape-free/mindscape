@@ -32,31 +32,36 @@ function isBlockedHostname(hostname: string): boolean {
   return BLOCKED_HOSTNAMES.some(blocked => lower === blocked || lower.endsWith(`.${blocked}`));
 }
 
-function validateUrl(urlString: string): { valid: boolean; error?: string } {
+function validateUrl(urlString: string): { valid: boolean; url: string; error?: string } {
   try {
-    const url = new URL(urlString);
+    let targetUrl = urlString.trim();
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+      targetUrl = `https://${targetUrl}`;
+    }
+
+    const url = new URL(targetUrl);
     
     if (!['http:', 'https:'].includes(url.protocol)) {
-      return { valid: false, error: 'Only HTTP and HTTPS protocols are allowed' };
+      return { valid: false, url: targetUrl, error: 'Only HTTP and HTTPS protocols are allowed' };
     }
     
     const hostname = url.hostname.toLowerCase();
     
     if (isPrivateIp(hostname)) {
-      return { valid: false, error: 'Access to private IPs is not allowed' };
+      return { valid: false, url: targetUrl, error: 'Access to private IPs is not allowed' };
     }
     
     if (isBlockedHostname(hostname)) {
-      return { valid: false, error: 'Access to metadata services is not allowed' };
+      return { valid: false, url: targetUrl, error: 'Access to metadata services is not allowed' };
     }
     
     if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) {
-      return { valid: false, error: 'Direct IP addresses are not allowed' };
+      return { valid: false, url: targetUrl, error: 'Direct IP addresses are not allowed' };
     }
     
-    return { valid: true };
+    return { valid: true, url: targetUrl };
   } catch {
-    return { valid: false, error: 'Invalid URL format' };
+    return { valid: false, url: urlString, error: 'Invalid URL format' };
   }
 }
 
@@ -70,16 +75,18 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { url } = await req.json();
+    const { url: rawUrl } = await req.json();
     
-    if (!url) {
+    if (!rawUrl) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
 
-    const validation = validateUrl(url);
+    const validation = validateUrl(rawUrl);
     if (!validation.valid) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
+
+    const url = validation.url;
 
     // P0 SSRF: DNS-resolution-backed validation (replaces hostname-pattern-only
     // checks, which DNS-rebinding could bypass). Runs as a final gate before

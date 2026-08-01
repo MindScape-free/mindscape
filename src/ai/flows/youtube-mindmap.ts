@@ -58,9 +58,14 @@ export async function generateYouTubeMindMap(
     if (!videoId) return { data: null, error: 'Invalid YouTube URL' };
 
     let transcriptParts: TranscriptPart[] = [];
-    let metadata = await getVideoMetadata(videoId);
+    let metadata = await getVideoMetadata(videoId).catch(() => null);
 
-    transcriptParts = await fetchTranscriptParts(videoId);
+    try {
+      transcriptParts = await fetchTranscriptParts(videoId);
+    } catch (tErr) {
+      console.warn(`⚠️ YouTube transcript fetch failed for ${videoId}, using metadata fallback.`);
+    }
+
     const fullTranscript = normalizeTranscript(transcriptParts, 120);
     const truncatedTranscript = fullTranscript.length > 25000
       ? fullTranscript.substring(0, 25000) + '\n\n[transcript truncated]'
@@ -73,13 +78,17 @@ export async function generateYouTubeMindMap(
     };
     const density = densityMap[depth] || densityMap.medium;
 
-    const contextSource = `VIDEO CONTENT:
-Title: ${metadata?.title}
-Creator: ${metadata?.author_name}
-Description: ${metadata?.description ? metadata.description.substring(0, 500) : 'N/A'}
+    const videoTitle = metadata?.title || 'YouTube Video';
+    const videoCreator = metadata?.author_name || 'YouTube Channel';
+    const videoDesc = metadata?.description ? metadata.description.substring(0, 1000) : 'Visual and educational content analysis.';
 
-TRANSCRIPT:
-${truncatedTranscript}`;
+    const contextSource = `VIDEO CONTENT:
+Title: ${videoTitle}
+Creator: ${videoCreator}
+Description: ${videoDesc}
+
+CONTENT & TRANSCRIPT:
+${truncatedTranscript.trim() ? truncatedTranscript : `Key topics and summary of "${videoTitle}" by ${videoCreator}.\nOverview: ${videoDesc}`}`;
 
     const systemPrompt = `${SYSTEM_GUARANTEES}
 

@@ -300,7 +300,14 @@ export async function resolveApiKey(options: AIActionOptions): Promise<string | 
     const cached = apiKeyCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < API_KEY_CACHE_TTL) {
       effectiveApiKey = cached.key;
-      if (cached.apiKeys) options.apiKeys = cached.apiKeys;
+      if (cached.apiKeys) {
+        Object.defineProperty(options, 'apiKeys', {
+          value: cached.apiKeys,
+          enumerable: false,
+          writable: true,
+          configurable: true,
+        });
+      }
       source = `supabase-cache-${provider}`;
     } else {
       try {
@@ -310,11 +317,17 @@ export async function resolveApiKey(options: AIActionOptions): Promise<string | 
         }
         const userSettings = await getUserImageSettingsAdmin(options.userId);
         if (userSettings) {
-          options.apiKeys = {
+          const resolvedKeys = {
             openrouter: userSettings.openrouterApiKey || '',
             pollinations: userSettings.pollinationsApiKey || '',
             nvidia: userSettings.nvidiaApiKey || '',
           };
+          Object.defineProperty(options, 'apiKeys', {
+            value: resolvedKeys,
+            enumerable: false,
+            writable: true,
+            configurable: true,
+          });
 
           // Determine effective provider
           let effectiveProvider = provider;
@@ -353,7 +366,7 @@ export async function resolveApiKey(options: AIActionOptions): Promise<string | 
           }
 
           // Cache the result
-          apiKeyCache.set(cacheKey, { key: effectiveApiKey, apiKeys: options.apiKeys, timestamp: Date.now() });
+          apiKeyCache.set(cacheKey, { key: effectiveApiKey, apiKeys: resolvedKeys, timestamp: Date.now() });
           console.log(`🔑 Using ${effectiveProvider} API key from supabase Admin for user: ${options.userId?.slice(0, 8)}...`);
         } else {
           // Cache the miss too (avoid repeated supabase reads)
