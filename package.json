@@ -12,6 +12,8 @@
     "prepare": "git config core.hooksPath .githooks",
     "typecheck": "tsc --noEmit",
     "typecheck:unused": "node scripts/check-unused.mjs",
+    "sweep:imports": "node scripts/remove-unused-imports.mjs --scan --dry",
+    "sweep:imports:apply": "node scripts/remove-unused-imports.mjs --scan",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
