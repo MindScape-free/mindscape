@@ -3,6 +3,12 @@
 #
 # Type check:  BLOCKING gate — catches TS2451 (duplicate vars), TS2448,
 #              and all type errors that ESLint alone misses.
+# Unused code: BLOCKING gate — tsc with noUnusedLocals + noUnusedParameters
+#              (dead code can't regress; only documented mock fields exempt).
+# Build:       BLOCKING gate — full production build (next build) so broken
+#              builds can't reach main. Requires two GitHub secrets
+#              (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+#              skipped on fork PRs where secrets are unavailable.
 # ESLint:      NON-BLOCKING — pre-existing issues tracked separately.
 # Tests:       NON-BLOCKING — pre-existing failures tracked separately.
 # ──────────────────────────────────────────────────────────────────────────
@@ -43,7 +49,33 @@ jobs:
       - name: TypeScript type check
         run: npm run typecheck
 
-      # ── 2. ESLint (NON-BLOCKING) ─────────────────────────────────────
+      # ── 2. Unused Code Check (BLOCKING) ──────────────────────────────
+      # Runs tsc with noUnusedLocals + noUnusedParameters so dead code
+      # can't regress after the sweep. Only the write-only mock API fields
+      # in src/__tests__/helpers/supabase-mock.ts are exempt (allowlisted
+      # in scripts/check-unused.mjs); anything else fails CI on push/PR.
+      - name: Unused code check
+        run: npm run typecheck:unused
+
+      # ── 3. Production Build (BLOCKING) ───────────────────────────────
+      # Full `next build` so a broken production build can never reach
+      # main. Runs after the fast typecheck gates to fail quickly on
+      # type errors while still guaranteeing the app compiles.
+      #
+      # The build statically prerenders pages that read the two NEXT_PUBLIC_
+      # Supabase vars, so they're injected from GitHub secrets (repo
+      # Settings → Secrets and variables → Actions). Fork PRs never receive
+      # secrets, so the step is skipped there instead of failing on a value
+      # a contributor can't provide.
+      - name: Production build
+        if: ${{ env.NEXT_PUBLIC_SUPABASE_URL != '' && env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY != '' }}
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm run build
+
+      # ── 4. ESLint (NON-BLOCKING) ─────────────────────────────────────
       # Pre-existing issues (471 errors) don't block CI.
       # continue-on-error shows the step as yellow/failed in the UI
       # without failing the entire workflow, so issues stay visible.
@@ -51,7 +83,7 @@ jobs:
         run: npm run lint -- --format unix
         continue-on-error: true
 
-      # ── 3. Jest Tests (NON-BLOCKING) ─────────────────────────────────
+      # ── 5. Jest Tests (NON-BLOCKING) ─────────────────────────────────
       - name: Tests
         run: npm test
         continue-on-error: true
