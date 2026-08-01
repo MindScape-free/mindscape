@@ -982,35 +982,58 @@ export type Database = {
       }
     }
     Functions: {
-      check_if_admin: { Args: { user_id: string }; Returns: boolean }
-      increment_fork_count: { Args: { map_id: string }; Returns: undefined }
-      increment_stat: {
-        Args: { increment_by?: number; stat_field: string }
-        Returns: undefined
-      }
-      increment_user_profile: {
+      award_user_points_atomic: {
         Args: {
-          p_chats?: number
-          p_compare_maps?: number
-          p_expansions?: number
-          p_images?: number
-          p_is_map_deleted?: boolean
-          p_map_depth?: string
-          p_map_mode?: string
-          p_map_persona?: string
-          p_map_source?: string
-          p_maps?: number
-          p_multi_maps?: number
-          p_nodes?: number
-          p_study_minutes?: number
+          p_base_points: number
+          p_cap: number
+          p_event_type: string
           p_user_id: string
         }
         Returns: Json
       }
+      check_if_admin: { Args: { user_id: string }; Returns: boolean }
+      increment_fork_count: { Args: { map_id: string }; Returns: undefined }
+      increment_public_map_views: {
+        Args: { p_map_id: string }
+        Returns: undefined
+      }
+      increment_stat: {
+        Args: { increment_by?: number; stat_field: string }
+        Returns: undefined
+      }
+      increment_user_profile:
+        | {
+            Args: { p_amount?: number; p_field: string; p_user_id: string }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_chats?: number
+              p_compare_maps?: number
+              p_expansions?: number
+              p_images?: number
+              p_is_map_deleted?: boolean
+              p_map_depth?: string
+              p_map_mode?: string
+              p_map_persona?: string
+              p_map_source?: string
+              p_maps?: number
+              p_multi_maps?: number
+              p_nodes?: number
+              p_study_minutes?: number
+              p_user_id: string
+            }
+            Returns: Json
+          }
+      is_admin: { Args: never; Returns: boolean }
       recompute_active_user_profiles: { Args: never; Returns: string }
       recompute_all_user_profiles: { Args: never; Returns: string }
       recompute_platform_stats: { Args: never; Returns: Json }
       recompute_user_profile: { Args: { p_user_id: string }; Returns: Json }
+      recompute_user_profile_impl: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
       refresh_platform_analytics: { Args: never; Returns: Json }
     }
     Enums: {

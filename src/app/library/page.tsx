@@ -803,18 +803,20 @@ export default function DashboardPage() {
       if (fetchError || !fullData) throw new Error('Mind map not found.');
 
       // 2. Create shared entry (unlisted) - Using stable share_ prefix
+      // Only columns that exist on shared_mindmaps (id, original_map_id,
+      // original_author_id, content, is_shared, shared_at, updated_at) — the
+      // earlier topic/summary/is_public/author_name payload was 400-rejected
+      // by PostgREST (unknown columns) so sharing silently failed.
       const shareId = `share_${map.id}`;
 
       const sharedData = {
-        topic: fullData.topic,
-        summary: fullData.summary,
         content: fullData.content || {},
         id: shareId,
-        is_shared: true,
-        is_public: false,
-        shared_at: new Date().toISOString(),
+        original_map_id: map.id,
         original_author_id: user.id,
-        author_name: user.displayName || 'ADMIN',
+        is_shared: true,
+        shared_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
       await supabase.from('shared_mindmaps').upsert(sharedData);
 

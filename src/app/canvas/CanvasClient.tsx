@@ -1321,7 +1321,7 @@ function MindMapPageContent() {
     try {
       const shareId = `share_${mindMap.id}`;
       await supabase.from('shared_mindmaps').upsert({
-        id: shareId, original_map_id: mindMap.id, original_author_id: user?.id || 'anonymous',
+        id: shareId, original_map_id: mindMap.id, original_author_id: user?.id ?? null,
         content: toPlainObject(mindMap), is_shared: true,
         shared_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       }, { onConflict: 'id' });

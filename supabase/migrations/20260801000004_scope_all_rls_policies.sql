@@ -95,7 +95,8 @@ create policy "Service role can all mindmaps"
 -- ═════════════════════════════════════════════════════════════════════════
 -- 2. public_mindmaps  (community showcase / published maps)
 -- Public maps are readable by everyone (community page, shared viewing).
--- Writes are restricted to the author (user_id or original_author_id).
+-- Writes are restricted to the original author (original_author_id — this
+-- table has NO user_id column; publishing writes original_author_id only).
 -- ═════════════════════════════════════════════════════════════════════════
 alter table public.public_mindmaps enable row level security;
 
@@ -109,20 +110,20 @@ drop policy if exists "Authors can insert public mindmaps" on public.public_mind
 create policy "Authors can insert public mindmaps"
   on public.public_mindmaps for insert
   to authenticated
-  with check (user_id = auth.uid() or original_author_id = auth.uid());
+  with check (original_author_id = auth.uid());
 
 drop policy if exists "Authors can update public mindmaps" on public.public_mindmaps;
 create policy "Authors can update public mindmaps"
   on public.public_mindmaps for update
   to authenticated
-  using (user_id = auth.uid() or original_author_id = auth.uid() or public.is_admin())
-  with check (user_id = auth.uid() or original_author_id = auth.uid() or public.is_admin());
+  using (original_author_id = auth.uid() or public.is_admin())
+  with check (original_author_id = auth.uid() or public.is_admin());
 
 drop policy if exists "Authors can delete public mindmaps" on public.public_mindmaps;
 create policy "Authors can delete public mindmaps"
   on public.public_mindmaps for delete
   to authenticated
-  using (user_id = auth.uid() or original_author_id = auth.uid() or public.is_admin());
+  using (original_author_id = auth.uid() or public.is_admin());
 
 drop policy if exists "Service role can all public mindmaps" on public.public_mindmaps;
 create policy "Service role can all public mindmaps"
@@ -139,10 +140,14 @@ create policy "Service role can all public mindmaps"
 
 -- ═════════════════════════════════════════════════════════════════════════
 -- 3. feedback
--- Community "Insights" section is intentionally public (SELECT). INSERT is
--- own-row. UPDATE is own-row OR admin (the FeedbackCards moderation UI runs
--- from the client and must keep working for admins; non-admins were able to
--- edit ANY feedback's status/priority/admin_notes before — closed here).
+-- Community "Insights" section is intentionally public (SELECT). The remote
+-- feedback table has NO user_id column — feedback is keyed by tracking_id and
+-- written server-side (submitFeedbackAction via getSupabaseAdmin), so:
+--   • no client INSERT policy (writes go through service_role)
+--   • UPDATE is admin-only — FeedbackCards moderation runs from the client
+--     and must keep working for admins (this also closes the prior hole where
+--     any authenticated user could edit ANY feedback's status/priority/notes)
+--   • service_role gets full access
 -- ═════════════════════════════════════════════════════════════════════════
 alter table public.feedback enable row level security;
 
@@ -152,21 +157,12 @@ create policy "Anyone can read feedback"
   to anon, authenticated
   using (true);
 
-drop policy if exists "Users can insert own feedback" on public.feedback;
-create policy "Users can insert own feedback"
-  on public.feedback for insert
-  to authenticated
-  with check (user_id = auth.uid());
-
 drop policy if exists "Users or admins can update feedback" on public.feedback;
 create policy "Users or admins can update feedback"
   on public.feedback for update
   to authenticated
-  using (user_id = auth.uid() or public.is_admin())
-  with check (user_id = auth.uid() or public.is_admin());
--- NOTE: the own-row branch deliberately lets a user edit their OWN feedback's
--- status/priority/admin_notes. FeedbackCards is admin-only UI, but this keeps
--- the policy simple and only affects the user's own row (accepted trade-off).
+  using (public.is_admin())
+  with check (public.is_admin());
 
 drop policy if exists "Service role can all feedback" on public.feedback;
 create policy "Service role can all feedback"
@@ -300,68 +296,43 @@ create policy "Service role can all point transactions"
 
 -- ═════════════════════════════════════════════════════════════════════════
 -- 9. user_notifications  (own-row reads; server pushes via service_role)
+-- NOTE: this table does NOT exist in the linked remote DB (the app references
+-- it only in adminDeleteUserAction cleanup). Guarded with to_regclass so the
+-- migration applies cleanly now and hardens the table if/when it is created.
 -- ═════════════════════════════════════════════════════════════════════════
-alter table public.user_notifications enable row level security;
-
-drop policy if exists "Users can read own notifications" on public.user_notifications;
-create policy "Users can read own notifications"
-  on public.user_notifications for select
-  to authenticated
-  using (user_id = auth.uid());
-
-drop policy if exists "Users can update own notifications" on public.user_notifications;
-create policy "Users can update own notifications"
-  on public.user_notifications for update
-  to authenticated
-  using (user_id = auth.uid())
-  with check (user_id = auth.uid());
-
-drop policy if exists "Service role can all notifications" on public.user_notifications;
-create policy "Service role can all notifications"
-  on public.user_notifications for all
-  to service_role
-  using (true)
-  with check (true);
+do $$
+begin
+  if to_regclass('public.user_notifications') is not null then
+    execute 'alter table public.user_notifications enable row level security';
+    execute 'create policy "Users can read own notifications" on public.user_notifications for select to authenticated using (user_id = auth.uid())';
+    execute 'create policy "Users can update own notifications" on public.user_notifications for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid())';
+    execute 'create policy "Service role can all notifications" on public.user_notifications for all to service_role using (true) with check (true)';
+  end if;
+end $$;
 
 -- ═════════════════════════════════════════════════════════════════════════
 -- 10. community_posts  (own-row; admin moderation via service_role)
+-- NOTE: this table does NOT exist in the linked remote DB (the app references
+-- it only in adminDeleteUserAction cleanup). Guarded with to_regclass so the
+-- migration applies cleanly now and hardens the table if/when it is created.
 -- ═════════════════════════════════════════════════════════════════════════
-alter table public.community_posts enable row level security;
-
-drop policy if exists "Users can read own community posts" on public.community_posts;
-create policy "Users can read own community posts"
-  on public.community_posts for select
-  to authenticated
-  using (user_id = auth.uid());
-
-drop policy if exists "Users can insert own community posts" on public.community_posts;
-create policy "Users can insert own community posts"
-  on public.community_posts for insert
-  to authenticated
-  with check (user_id = auth.uid());
-
-drop policy if exists "Users can update own community posts" on public.community_posts;
-create policy "Users can update own community posts"
-  on public.community_posts for update
-  to authenticated
-  using (user_id = auth.uid())
-  with check (user_id = auth.uid());
-
-drop policy if exists "Users can delete own community posts" on public.community_posts;
-create policy "Users can delete own community posts"
-  on public.community_posts for delete
-  to authenticated
-  using (user_id = auth.uid());
-
-drop policy if exists "Service role can all community posts" on public.community_posts;
-create policy "Service role can all community posts"
-  on public.community_posts for all
-  to service_role
-  using (true)
-  with check (true);
+do $$
+begin
+  if to_regclass('public.community_posts') is not null then
+    execute 'alter table public.community_posts enable row level security';
+    execute 'create policy "Users can read own community posts" on public.community_posts for select to authenticated using (user_id = auth.uid())';
+    execute 'create policy "Users can insert own community posts" on public.community_posts for insert to authenticated with check (user_id = auth.uid())';
+    execute 'create policy "Users can update own community posts" on public.community_posts for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid())';
+    execute 'create policy "Users can delete own community posts" on public.community_posts for delete to authenticated using (user_id = auth.uid())';
+    execute 'create policy "Service role can all community posts" on public.community_posts for all to service_role using (true) with check (true)';
+  end if;
+end $$;
 
 -- ═════════════════════════════════════════════════════════════════════════
 -- 11. shared_mindmaps  (share-by-link: anon can read shared rows)
+-- original_author_id is uuid + FK -> users.id in the remote DB, so an
+-- anonymous share-by-link writes NULL (never a string marker; a literal
+-- 'anonymous' would violate the uuid cast / FK).
 -- ═════════════════════════════════════════════════════════════════════════
 alter table public.shared_mindmaps enable row level security;
 
@@ -377,14 +348,14 @@ create policy "Users can insert shared mindmaps"
   to authenticated
   with check (original_author_id = auth.uid());
 
--- Anonymous share-by-link: the client writes original_author_id = 'anonymous'
--- when no user is signed in (CanvasClient handleShare). Scope anon writes to
--- the literal 'anonymous' marker so anon callers can never claim a real uid.
+-- Anonymous share-by-link: the client writes original_author_id = NULL when no
+-- user is signed in (CanvasClient handleShare). Scope anon writes to NULL so
+-- anon callers can never claim a real user's uid.
 drop policy if exists "Anonymous can insert shared maps" on public.shared_mindmaps;
 create policy "Anonymous can insert shared maps"
   on public.shared_mindmaps for insert
   to anon
-  with check (original_author_id = 'anonymous');
+  with check (original_author_id is null);
 
 drop policy if exists "Users can update shared mindmaps" on public.shared_mindmaps;
 create policy "Users can update shared mindmaps"
@@ -394,13 +365,13 @@ create policy "Users can update shared mindmaps"
   with check (original_author_id = auth.uid());
 
 -- Anonymous re-share (upsert on conflict 'id' performs an UPDATE for existing
--- rows, so anon needs an UPDATE policy scoped to the 'anonymous' marker).
+-- rows, so anon needs an UPDATE policy scoped to NULL-author rows).
 drop policy if exists "Anonymous can update shared maps" on public.shared_mindmaps;
 create policy "Anonymous can update shared maps"
   on public.shared_mindmaps for update
   to anon
-  using (original_author_id = 'anonymous')
-  with check (original_author_id = 'anonymous');
+  using (original_author_id is null)
+  with check (original_author_id is null);
 
 drop policy if exists "Users can delete shared mindmaps" on public.shared_mindmaps;
 create policy "Users can delete shared mindmaps"
@@ -518,7 +489,10 @@ begin
     'user_daily_challenges',
     'feedback_counters'
   ]) as t
-  where not exists (
+  -- Only verify tables that actually exist (user_notifications/community_posts
+  -- are absent from the remote DB and are handled by guarded DO blocks above).
+  where to_regclass('public.' || t) is not null
+    and not exists (
     select 1
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace

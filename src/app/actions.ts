@@ -1462,7 +1462,8 @@ export async function adminDeleteUserAction(targetUserId: string): Promise<{ suc
     await supabase.from('chat_sessions').delete().eq('user_id', targetUserId);
     await supabase.from('user_notifications').delete().eq('user_id', targetUserId);
     await supabase.from('community_posts').delete().eq('user_id', targetUserId);
-    await supabase.from('public_mindmaps').delete().eq('user_id', targetUserId);
+    // public_mindmaps has NO user_id column — authorship is original_author_id
+    await supabase.from('public_mindmaps').delete().eq('original_author_id', targetUserId);
     await supabase.from('user_points').delete().eq('user_id', targetUserId);
     await supabase.from('point_transactions').delete().eq('user_id', targetUserId);
     await supabase.from('feedback').delete().eq('user_id', targetUserId);

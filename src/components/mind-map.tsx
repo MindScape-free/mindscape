@@ -1437,17 +1437,22 @@ export const MindMap = React.memo(({
     setIsSharing(true);
     try {
       // 1. Create shared entry (Unlisted)
+      // Only columns that exist on shared_mindmaps (id, original_map_id,
+      // original_author_id, content, is_shared, shared_at, updated_at) — the
+      // earlier topic/summary/is_public/author_name payload was 400-rejected
+      // by PostgREST (unknown columns) so sharing silently failed.
       const shareId = `share_${effectiveId}`;
       const sharedData = {
-        topic: data.topic,
-        summary: data.summary,
         content: (data as any).content || {},
         id: shareId,
-        is_shared: true,
-        is_public: false,
-        shared_at: new Date().toISOString(),
+        // original_map_id is a uuid column; never write a share_/public_-prefixed id.
+        original_map_id: effectiveId.startsWith('share_') || effectiveId.startsWith('public_')
+          ? null
+          : effectiveId,
         original_author_id: user.id,
-        author_name: user.displayName || 'Explorer'
+        is_shared: true,
+        shared_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
       await supabase.from('shared_mindmaps').upsert(sharedData);
