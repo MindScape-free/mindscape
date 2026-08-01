@@ -23,7 +23,7 @@ MindScape manages a wide variety of application state across its client-side arc
 | **Chat Sessions** | Message history, quiz history, weak tags | Persistent across sessions | ChatPanel, session list |
 | **Notifications** | Toast-style notifications with read/unread | Persistent across sessions | Navbar badge, notification center |
 | **XP & Gamification** | Points, streaks, achievements, level-up state | In-memory + server (not cached client-side) | Toast stack, level-up overlay, navbar |
-| **Activity** | Generation status, AI health, task names | Current page session | MindMap, toolbar, generation indicators |
+| **Activity** | Generation status, active task name | Current page session | MindMap, toolbar, generation indicators |
 | **Navigation** | URL params (topic, mapId, depth, persona, lang) | URL-based, survives refresh | Canvas routing, page reloads |
 | **Preferences** | Explanation mode, collapsed sections, view mode | Persistent across sessions | MindMap accordion state, dialogs |
 

@@ -115,16 +115,11 @@ export function useMindMapPersistence(options: PersistenceOptions = {}) {
 
       const { 
         subTopics, compareData, nodes, edges, explanations, 
-        sourceFileContent, originalPdfFileContent, id, 
+        sourceFileContent, originalPdfFileContent,
         aiPersona: mapAiPersona, nodeCount: mapNodeCount, isSubMap: mapIsSubMap, 
         sourceFileType: mapSourceFileType, isPublic: mapIsPublic, thumbnailUrl: mapThumbnailUrl,
-        shortTitle, thumbnailPrompt,        summaryAudioUrl, isShared, publicCategories,
-        publicViews, originalAuthorId, authorName, authorAvatar, searchSources,
-        searchImages, searchTimestamp, pdfContext, videoId, sourceType,
-        categoriesCount, sourcesCount, pinnedMessages, enrichments,
-        confidenceRatings, quizAnswers, createdAt, updatedAt,
-        nestedExpansions,
-        ...metadata
+        shortTitle,
+        nestedExpansions
       } = mapToSave as any;
 
       // Calculate node count

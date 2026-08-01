@@ -93,7 +93,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (!cancelled) setIsUserLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event: AuthChangeEvent, session: Session | null) => {
       if (cancelled) return;
       if (session?.user) {
         const userData = session.user;

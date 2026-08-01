@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { safeGetItem, safeRemoveItem } from '@/lib/storage';
 
 export function useSessionStorage() {

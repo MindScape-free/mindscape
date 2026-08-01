@@ -7,8 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
-import { Brain, Sparkles, MoreHorizontal, ChevronRight, Share2, GitBranch } from 'lucide-react';
+import { Brain, Sparkles, MoreHorizontal,  } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { GenerateMindMapOutput } from '@/ai/flows/generate-mind-map';
 

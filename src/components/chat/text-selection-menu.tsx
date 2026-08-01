@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { motion } from 'framer-motion';
 import { MessageSquare, Map, Sparkles } from 'lucide-react';
 import {
@@ -9,7 +8,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
 import { EntityAction } from './entity-action-menu';
 
 interface TextSelectionMenuProps {

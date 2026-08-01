@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { motion } from 'framer-motion';
 import { 
   Loader2, Brain, Sparkles, Wand2, Zap, BookOpen, 
@@ -15,8 +14,6 @@ import {
 import { cn } from '@/lib/utils';
 import { generateMindMapAction } from '@/app/actions';
 import { MindMapData } from '@/types/mind-map';
-import { useAIConfig } from '@/contexts/ai-config-context';
-import { useUser } from '@/lib/auth-context';
 import { useActivity } from '@/contexts/activity-context';
 import { useNotifications } from '@/contexts/notification-context';
 
@@ -60,8 +57,6 @@ export function CreateMindmapDialog({
   const [error, setError] = useState<string | null>(null);
   const [hasContext, setHasContext] = useState(false);
 
-  const { config } = useAIConfig();
-  const { user } = useUser();
   const { setStatus: setActivityStatus, setActiveTaskName } = useActivity();
   const { addNotification, updateNotification } = useNotifications();
 

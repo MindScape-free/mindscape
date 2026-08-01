@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Sparkles,
@@ -24,7 +24,6 @@ import {
     Dialog,
     DialogContent,
     DialogDescription,
-    DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
 
@@ -39,7 +38,7 @@ export function OnboardingWizard() {
 
     const [isOpen, setIsOpen] = useState(false);
     const [step, setStep] = useState(1);
-    const [isDismissed, setIsDismissed] = useState(false);
+    const [, setIsDismissed] = useState(false);
 
     const hasValidKey = !!(config.pollinationsApiKey || config.openrouterApiKey || config.nvidiaApiKey);
 

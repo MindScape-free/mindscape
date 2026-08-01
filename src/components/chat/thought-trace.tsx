@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, BrainCircuit, ChevronDown, ChevronRight, Search, GitBranch, Sparkles, Lightbulb } from 'lucide-react';
+import { Brain, ChevronRight, Search, GitBranch, Sparkles, Lightbulb } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ThoughtChainItem {

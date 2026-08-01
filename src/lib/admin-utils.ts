@@ -1,6 +1,6 @@
 'use client';
 
-import { UserPlus, UserMinus, UserCheck, Shield, Ban, Unlock, Trash2, Edit, Eye, Star, Flag, Settings, Database, RefreshCw, Download, LogIn, LogOut, Key, AlertTriangle, CheckCircle, XCircle, Activity as ActivityIcon, Brain, Share2, Copy, FileDown, Image, Zap, MessageSquare, Clock, Search, Bookmark, EyeOff, Loader2, Send, Sparkles, Wand2 } from 'lucide-react';
+import { UserPlus, UserMinus, UserCheck, Shield, Ban, Unlock, Trash2, Edit, Eye, Star, Flag, Settings, Database, RefreshCw, Download, LogIn, LogOut, Key, AlertTriangle, CheckCircle, XCircle, Activity as ActivityIcon, Brain, Share2, Copy, FileDown, Image, Zap, MessageSquare, Clock, Search, Bookmark, EyeOff, Send, Sparkles } from 'lucide-react';
 
 export type ActivityType =
   // User events

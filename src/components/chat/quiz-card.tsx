@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, ChevronRight, ChevronLeft, BrainCircuit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Quiz, QuizQuestion } from '@/ai/schemas/quiz-schema';
+import { Quiz } from '@/ai/schemas/quiz-schema';
 import { cn, cleanCitations } from '@/lib/utils';
 
 interface QuizCardProps {

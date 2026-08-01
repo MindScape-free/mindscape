@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useUser, useAuth } from '@/lib/auth-context';
+import { useAuth } from '@/lib/auth-context';
 import { Button } from './ui/button';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
-import { User, LogOut, Menu, Zap, MessageSquare } from 'lucide-react';
+import { User, LogOut, Menu, MessageSquare } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -38,7 +38,7 @@ export function Navbar() {
   const { user, isUserLoading, isAdmin, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const { config, updateConfig, resetConfig, pollenBalance, isBalanceLoading } = useAIConfig();
+  const { config, resetConfig, pollenBalance, isBalanceLoading } = useAIConfig();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isPointsOpen, setIsPointsOpen] = useState(false);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -40,7 +40,6 @@ import {
 import { ModelSelector } from '@/components/model-selector';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAIConfig } from '@/contexts/ai-config-context';
 
 interface ImageGenerationDialogProps {
@@ -134,7 +133,6 @@ export function ImageGenerationDialog({
     onClose,
     onGenerate,
     nodeName,
-    nodeDescription,
     initialPrompt,
     onEnhancePrompt,
     isEnhancing

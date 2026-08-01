@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { HelpCircle, Search } from 'lucide-react';
+import { HelpCircle } from 'lucide-react';
 import { FAQSection } from '@/components/faq-section';
 import { GENERAL_FAQS } from '@/data/faq';
 

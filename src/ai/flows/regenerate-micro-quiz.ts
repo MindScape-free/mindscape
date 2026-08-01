@@ -18,7 +18,7 @@ export type MicroQuizOutput = z.infer<typeof MicroQuizSchema>;
 
 export async function regenerateMicroQuiz(
     nodeName: string,
-    nodeDescription: string,
+    _nodeDescription: string,
     mainTopic: string,
     apiKey?: string,
     model?: string

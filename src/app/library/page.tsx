@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { LogIn, Search, Share2, Trash2, Loader2, Clock, Rocket, Info, ExternalLink, ChevronRight, Sparkles, Copy, Check, Database, Plus, Globe, BarChart3, Binary, Layers, Image as ImageIcon } from 'lucide-react';
+import { LogIn, Search, Share2, Trash2, Loader2, Clock, Rocket, Info, ExternalLink, ChevronRight, Sparkles, Check, Database, Plus, Globe, BarChart3, Binary, Layers, Image as ImageIcon } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,18 +16,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { GenerateMindMapOutput } from '@/ai/flows/generate-mind-map';
 import { generateMindMapAction } from '@/app/actions';
 
 import { MindMapData } from '@/types/mind-map';
-import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { formatShortDistanceToNow } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { TextOverflowTooltip } from '@/components/ui/text-overflow-tooltip';
 import { useNotifications } from '@/contexts/notification-context';
 import { useAIConfig } from '@/contexts/ai-config-context';
@@ -41,7 +39,6 @@ import { jsPDF } from 'jspdf';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DepthBadge } from '@/components/mind-map/depth-badge';
 import { SourceBadge } from '@/components/mind-map/source-badge';
-import { ModeBadge } from '@/components/mind-map/mode-badge';
 import { ImageGenerationDialog, ImageSettings } from '@/components/mind-map/image-generation-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMindMapPersistence } from '@/hooks/use-mind-map-persistence';
@@ -205,15 +202,14 @@ export default function DashboardPage() {
   const [selectedMapForPreview, setSelectedMapForPreview] = useState<SavedMindMap | null>(null);
   const [suggestedTopics, setSuggestedTopics] = useState<string[]>([]);
   const [isSuggestingTopics, setIsSuggestingTopics] = useState(false);
-  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
-  const [isSuggestingQuestions, setIsSuggestingQuestions] = useState(false);
+  const [, setSuggestedQuestions] = useState<string[]>([]);
+  const [, setIsSuggestingQuestions] = useState(false);
   const [isPublishingMapId, setIsPublishingMapId] = useState<string | null>(null);
   const [isUnpublishingMapId, setIsUnpublishingMapId] = useState<string | null>(null);
   const [previewMapPublishStatus, setPreviewMapPublishStatus] = useState<boolean | null>(null);
   const [isLinkCopied, setIsLinkCopied] = useState(false);
   const [isSharingMapId, setIsSharingMapId] = useState<string | null>(null);
   const [isCopiedMapId, setIsCopiedMapId] = useState<string | null>(null);
-  const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
   const [isDownloadingFullData, setIsDownloadingFullData] = useState(false);
   const [selectedMapFullData, setSelectedMapFullData] = useState<MindMapData | null>(null);
   const [isFullDataLoading, setIsFullDataLoading] = useState(false);
@@ -291,7 +287,7 @@ export default function DashboardPage() {
           .eq('user_id', user.id)
           .single()
           .then((res: any) => {
-            const { data, error } = res;
+            const { data } = res;
             if (isMounted && data) {
               const content = data.content || {};
               setSelectedMapFullData({
@@ -592,75 +588,6 @@ export default function DashboardPage() {
     }
   };
 
-  const handleDownloadPDF = async (map: SavedMindMap) => {
-    setIsDownloadingPDF(true);
-    try {
-      const doc = new jsPDF();
-
-      // Title - Centered and All Caps
-      const topicUpper = (map.topic || 'UNTITLED').toUpperCase();
-      doc.setFontSize(24);
-      doc.setTextColor(124, 58, 237); // Purple
-      doc.setFont("helvetica", "bold");
-
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const titleLines = doc.splitTextToSize(topicUpper, 160);
-      titleLines.forEach((line: string, index: number) => {
-        doc.text(line, pageWidth / 2, 20 + (index * 10), { align: 'center' });
-      });
-      let y = 20 + (titleLines.length * 10) + 15;
-
-      // Metadata
-      doc.setFontSize(10);
-      doc.setTextColor(100);
-      const pdfCreatedDate = map.createdAt ? new Date(map.createdAt) : null;
-      doc.text(`Created: ${pdfCreatedDate?.toLocaleDateString() || 'Recently'}`, 20, y);
-      y += 5;
-      doc.text(`Complexity: ${(map as any).depth || 'Low'}`, 20, y);
-      y += 15;
-
-      // Suggestions
-      if (suggestedTopics.length > 0) {
-        doc.setFontSize(14);
-        doc.setTextColor(0);
-        doc.text("AI Recommendations", 20, y);
-        doc.setFontSize(11);
-        suggestedTopics.forEach((topic, i) => {
-          doc.text(`• ${topic}`, 25, y + 10 + (i * 7));
-        });
-      }
-
-      const addHeaderFooter = (doc: any) => {
-        const pageCount = (doc as any).internal.getNumberOfPages();
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
-
-        for (let i = 1; i <= pageCount; i++) {
-          doc.setPage(i);
-          doc.setDrawColor(240);
-          doc.line(20, 12, pageWidth - 20, 12);
-
-          doc.setFontSize(9);
-          doc.setFont("helvetica", "normal");
-          doc.setTextColor(150);
-          doc.text(`MindScape Intelligence • mindscape-free.vercel.app`, 20, pageHeight - 10);
-          doc.link(20, pageHeight - 15, 80, 10, { url: 'https://mindscape-free.vercel.app/' });
-
-          doc.text(`Page ${i} of ${pageCount}`, pageWidth - 40, pageHeight - 10);
-        }
-      };
-
-      addHeaderFooter(doc);
-
-      doc.save(`${map.topic.replace(/\s+/g, '_')}_MindMap.pdf`);
-      toast({ title: "PDF Downloaded", description: "Your mind map overview is ready." });
-    } catch (err) {
-      console.error("PDF Export Error:", err);
-      toast({ variant: "destructive", title: "Export Failed", description: "Could not generate PDF." });
-    } finally {
-      setIsDownloadingPDF(false);
-    }
-  };
 
   const handlePublish = async (map: SavedMindMap) => {
     if (!user || !supabase || isPublishingMapId) return;
@@ -944,7 +871,7 @@ export default function DashboardPage() {
 
     try {
       // Use the dedicated server action that AI-enhances the prompt + generates the image
-      const { imageUrl, enhancedPrompt, error } = await generateThumbnailAction({
+      const { imageUrl, error } = await generateThumbnailAction({
         topic: mapToUpdate.topic,
         context: mapToUpdate.summary,
         width: 512,

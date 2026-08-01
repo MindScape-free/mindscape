@@ -250,7 +250,6 @@ Platform administration and monitoring (admin-only access).
 
 - **User management**: View all users, statistics, activity
 - **Activity logs**: Real-time feed of platform events
-- **AI Health**: Status of AI providers
 - **Platform stats**: Total maps, users, chats, active users
 - **System monitoring**: Performance metrics, error tracking
 

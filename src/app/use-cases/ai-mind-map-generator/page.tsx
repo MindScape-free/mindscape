@@ -1,4 +1,3 @@
-import React from 'react';
 import { Metadata } from 'next';
 import { Brain, Zap, Target, Layers, ArrowRight, Sparkles, Network, GitBranch } from 'lucide-react';
 import Link from 'next/link';

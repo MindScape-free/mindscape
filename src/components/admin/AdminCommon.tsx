@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { Loader2, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 
 export function ActivityIcon({ className }: { className?: string }) {

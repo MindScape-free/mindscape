@@ -9,7 +9,6 @@ import {
   ArrowRight,
   Network,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { getSupabaseClient } from '@/lib/supabase-db';
 import { useUser } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';

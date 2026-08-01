@@ -35,7 +35,14 @@ interface RlsPolicy {
   file: string;
 }
 
-/** Tables created directly in the remote DB (not in this repo's migrations). */
+/**
+ * Tables created directly in the remote DB (not in this repo's migrations), plus
+ * guarded future tables (user_notifications, community_posts). The latter do NOT
+ * exist in the linked remote DB — notifications are localStorage-based and
+ * community content lives in public_mindmaps — but they are kept here so their
+ * RLS hardening is enforced by the migration's to_regclass DO blocks if they are
+ * ever created.
+ */
 const REMOTE_TABLES = [
   'users',
   'mindmaps',

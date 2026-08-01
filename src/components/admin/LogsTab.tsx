@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Activity, RefreshCw, ChevronRight, Calendar } from 'lucide-react';
+import { Activity, RefreshCw, Calendar } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

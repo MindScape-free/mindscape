@@ -40,9 +40,6 @@ function warn(msg: string): void {
   if (typeof console !== 'undefined') console.warn('[Env] ' + msg);
 }
 
-function err(msg: string): void {
-  if (typeof console !== 'undefined') console.error('[Env] ' + msg);
-}
 
 export function getEnv(): EnvVars {
   if (_cached) return _cached;

@@ -39,6 +39,27 @@ type ErrorConfig = {
   afterCalls?: number;
 };
 
+// ── Optional RLS simulation (shared_mindmaps) ──────────────────────────────
+// When createMockSupabaseClient() is given an rlsConfig, the mock enforces the
+// shared_mindmaps policies from migration 20260801000004:
+//   SELECT: anon + authenticated  using (is_shared = true)
+//   INSERT: authenticated          with check (original_author_id = auth.uid())
+//           anon                   with check (original_author_id is null)
+//   UPDATE: authenticated          using + with check (original_author_id = auth.uid())
+//           anon                   using + with check (original_author_id is null)
+//   DELETE: authenticated          using (original_author_id = auth.uid())
+//           anon                   (no delete policy → deletes nothing)
+// All other tables are unaffected (RLS stays off for them).
+export interface MockRlsContext {
+  role: 'anon' | 'authenticated';
+  authUid: string | null;
+}
+
+export const MOCK_RLS_ERROR = {
+  code: '42501',
+  message: 'new row violates row-level security policy',
+};
+
 // ── CompleteFilter: a thenable builder for read operations ─────────────────
 // Handles the chain: select(...).eq(...).eq(...).single() / maybeSingle() / order() / limit()
 
@@ -54,7 +75,8 @@ class CompleteFilter implements PromiseLike<{ data: any; error: any }> {
     private table: string,
     private pendingOp: PendingOp | null,
     private errorConfigs: ErrorConfig[],
-    private callCounts: Map<string, number>
+    private callCounts: Map<string, number>,
+    private rls: MockRlsContext | null = null
   ) {}
 
   eq(column: string, value: any): this {
@@ -110,6 +132,10 @@ class CompleteFilter implements PromiseLike<{ data: any; error: any }> {
     let rows = this._getRows();
     if (this.conditions.length > 0) {
       rows = rows.filter(r => this._matchFilters(r));
+    }
+    // RLS SELECT policy: shared_mindmaps is only visible when is_shared = true.
+    if (this.rls && this.table === 'shared_mindmaps') {
+      rows = rows.filter(r => r.is_shared === true);
     }
     return rows;
   }
@@ -177,7 +203,7 @@ class CompleteFilter implements PromiseLike<{ data: any; error: any }> {
         const targets = this.conditions.length > 0
           ? Array.from(store.values()).filter(r => this._matchFilters(r))
           : Array.from(store.values());
-        for (const target of targets) {
+        for (const _target of targets) {
           // Find by id entry in Map
           for (const [key, val] of store.entries()) {
             if (this.conditions.every(c => (val as any)[c.column] == c.value)) {
@@ -209,8 +235,36 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any }> {
     private store: any,
     private table: string,
     private errorConfigs: ErrorConfig[],
-    private callCounts: Map<string, number>
+    private callCounts: Map<string, number>,
+    private rls: MockRlsContext | null = null
   ) {}
+
+  // ── RLS simulation helpers (shared_mindmaps) ────────────────────────────
+  // USING clause: which existing rows a role may UPDATE / DELETE.
+  private _rlsUsingAllows(op: OperationType, existing?: Record<string, any> | null): boolean {
+    if (!this.rls || this.table !== 'shared_mindmaps') return true;
+    const { role, authUid } = this.rls;
+    if (op === 'delete' && role === 'anon') return false; // no anon DELETE policy
+    const author = existing?.original_author_id ?? null;
+    return role === 'authenticated' ? author === (authUid ?? null) : author === null;
+  }
+
+  // WITH CHECK clause: what a new / updated row must satisfy.
+  private _rlsWithCheckAllows(values?: Record<string, any>, existing?: Record<string, any> | null): boolean {
+    if (!this.rls || this.table !== 'shared_mindmaps') return true;
+    const { role, authUid } = this.rls;
+    const author =
+      values?.original_author_id !== undefined
+        ? (values.original_author_id ?? null)
+        : (existing?.original_author_id ?? null);
+    return role === 'authenticated' ? author === (authUid ?? null) : author === null;
+  }
+
+  // RLS SELECT policy: shared_mindmaps rows are only visible when is_shared = true.
+  private _rlsReadFilter(rows: any[]): any[] {
+    if (!this.rls || this.table !== 'shared_mindmaps') return rows;
+    return rows.filter(r => r.is_shared === true);
+  }
 
   // ── Read chaining ───────────────────────────────────────────────────────
 
@@ -237,8 +291,8 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any }> {
 
   single(): { data: any; error: any } {
     // Delegate to a CompleteFilter to evaluate
-    const filter = new CompleteFilter(this.store, this.table, this.pendingOp, this.errorConfigs, this.callCounts);
     // Transfer conditions
+    const filter = new CompleteFilter(this.store, this.table, this.pendingOp, this.errorConfigs, this.callCounts, this.rls);
     for (const c of this.conditions) filter.eq(c.column, c.value);
     // If there's a pending write op, execute it first via the filter
     if (this.pendingOp) {
@@ -251,9 +305,7 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any }> {
 
   maybeSingle(): { data: any; error: any } {
     return this.single();
-  }
-
-  private _getFilteredRows(filter: CompleteFilter): any[] {
+  }    private _getFilteredRows(_filter: CompleteFilter): any[] {
     let rows = this._getAllRows();
     if (this.conditions.length > 0) {
       rows = rows.filter(r =>
@@ -265,7 +317,7 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any }> {
         })
       );
     }
-    return rows;
+    return this._rlsReadFilter(rows);
   }
 
   private _executeSingleAfterWrite(filter: CompleteFilter): { data: any; error: any } {
@@ -275,7 +327,8 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any }> {
       if (err) return { data: null, error: err };
     }
 
-    this._executeOpSync();
+    const rlsErr = this._executeOpSync();
+    if (rlsErr) return { data: null, error: rlsErr };
 
     // For inserts, return the specific inserted row (not the first unfiltered row)
     if (this.pendingOp?.type === 'insert' && this._lastInsertedId) {
@@ -287,30 +340,34 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any }> {
     return { data: rows.length > 0 ? rows[0] : null, error: null };
   }
 
-  private _executeOpSync(): void {
-    if (!this.pendingOp) return;
+  private _executeOpSync(): Record<string, any> | null {
+    if (!this.pendingOp) return null;
     const store = this.store[this.table as keyof MockStore];
-    if (!(store instanceof Map)) return;
+    if (!(store instanceof Map)) return null;
     const op = this.pendingOp;
 
     switch (op.type) {
       case 'insert': {
+        if (!this._rlsWithCheckAllows(op.values)) return MOCK_RLS_ERROR;
         const id = op.values?.id || `auto-sync-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
         store.set(id, { ...op.values, id });
         this._lastInsertedId = id;
         break;
       }
       case 'update': {
+        // RLS USING: rows not visible to the role are silently skipped.
         for (const [key, val] of store.entries()) {
-          if (this.conditions.every(c => (val as any)[c.column] == c.value)) {
-            store.set(key, { ...val, ...op.values });
-          }
+          if (!this.conditions.every(c => (val as any)[c.column] == c.value)) continue;
+          if (!this._rlsUsingAllows('update', val)) continue;
+          if (!this._rlsWithCheckAllows(op.values, val)) return MOCK_RLS_ERROR;
+          store.set(key, { ...val, ...op.values });
         }
         break;
       }
       case 'delete': {
         for (const [key, val] of store.entries()) {
           if (this.conditions.length === 0 || this.conditions.every(c => (val as any)[c.column] == c.value)) {
+            if (!this._rlsUsingAllows('delete', val)) continue; // RLS: skip silently
             store.delete(key);
           }
         }
@@ -320,14 +377,21 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any }> {
         const conflictCol = op.options?.onConflict || 'id';
         const conflictValue = op.values?.[conflictCol];
         if (conflictValue && store.has(conflictValue)) {
-          store.set(conflictValue, { ...store.get(conflictValue), ...op.values });
+          // On-conflict = UPDATE: USING on the existing row, WITH CHECK on merged.
+          const existing = store.get(conflictValue);
+          if (!this._rlsUsingAllows('update', existing)) break; // silent no-op
+          const merged = { ...existing, ...op.values };
+          if (!this._rlsWithCheckAllows(merged)) return MOCK_RLS_ERROR;
+          store.set(conflictValue, merged);
         } else {
+          if (!this._rlsWithCheckAllows(op.values)) return MOCK_RLS_ERROR;
           const id = op.values?.id || `auto-sync-${Date.now()}`;
           store.set(id, { ...op.values, id });
         }
         break;
       }
     }
+    return null;
   }
 
   // ── Write chaining ──────────────────────────────────────────────────────
@@ -375,13 +439,14 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any }> {
           })
         );
       }
-      return { data: rows, error: null };
+      return { data: this._rlsReadFilter(rows), error: null };
     }
 
     const err = this._checkError(this.pendingOp.type);
     if (err) return { data: null, error: err };
 
-    this._executeOpSync();
+    const rlsErr = this._executeOpSync();
+    if (rlsErr) return { data: null, error: rlsErr };
     return { data: null, error: null };
   }
 
@@ -427,7 +492,8 @@ class ChannelMock {
 
 export function createMockSupabaseClient(
   initialStore?: Partial<MockStore>,
-  errorConfigs: ErrorConfig[] = []
+  errorConfigs: ErrorConfig[] = [],
+  rlsConfig?: MockRlsContext | null
 ) {
   const callCounts = new Map<string, number>();
 
@@ -450,11 +516,9 @@ export function createMockSupabaseClient(
 
   const mockClient = {
     from: (table: string): QueryBuilder => {
-      return new QueryBuilder(defaultStore, table, errorConfigs, callCounts);
-    },
-
-    channel: (name: string): ChannelMock => new ChannelMock(),
-    removeChannel: (channel: ChannelMock): void => {},
+      return new QueryBuilder(defaultStore, table, errorConfigs, callCounts, rlsConfig ?? null);
+    },      channel: (_name: string): ChannelMock => new ChannelMock(),
+      removeChannel: (_channel: ChannelMock): void => {},
 
     rpc: jest.fn().mockResolvedValue({ data: null, error: null }),
 

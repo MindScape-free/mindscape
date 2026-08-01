@@ -12,7 +12,6 @@ import {
     Brain,
     Activity,
     Compass,
-    RefreshCw,
     Star,
     AlertTriangle,
     CheckCircle2,
@@ -655,7 +654,6 @@ function J_ConfidenceMeter({
 
 function CompactExplanationCard({ 
     point, 
-    title, 
     isBusy, 
     onExplainInChat 
 }: { 

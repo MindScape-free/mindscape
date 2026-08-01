@@ -221,7 +221,7 @@ script-src:   https://cdn.pollinations.ai
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| **Pollinations downtime** | Low | 🔴 Critical — no AI generation | Planned OpenRouter fallback; in-memory provider monitor detects degradation |
+| **Pollinations downtime** | Low | 🔴 Critical — no AI generation | Multi-provider failover to OpenRouter/NVIDIA when keys are configured; orchestrator retries with exponential backoff and rotates models on 400/5xx/429 |
 | **Model deprecation** | Medium | 🟡 Medium — map quality degrades | Model registry in `AVAILABLE_MODELS` array; periodic sync with Pollinations API |
 | **API key exhaustion** | Medium | 🟡 Medium — user can't generate | Pre-generation key balance check (`checkPollinationsBalance`); user notified in settings |
 | **Rate limiting** | Low | 🟢 Low — slow generation | Automatic retry with backoff (1s for 5xx, 2s for 429); model rotation on repeated 400s |

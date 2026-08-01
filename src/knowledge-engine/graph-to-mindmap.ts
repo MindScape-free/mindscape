@@ -3,7 +3,7 @@
  * Converts a knowledge graph into structured text that guides AI generation.
  */
 
-import { KnowledgeGraph, GraphNode, GraphEdge } from './graph-builder';
+import { KnowledgeGraph,  } from './graph-builder';
 
 /**
  * Convert a knowledge graph into a structured prompt context string.

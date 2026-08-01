@@ -2,8 +2,6 @@
 'use client';
 
 import { Skeleton } from '@/components/ui/skeleton';
-import { Users, Filter, Search } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 
 /**
  * Loading skeleton for the Community page.

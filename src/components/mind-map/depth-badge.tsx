@@ -1,5 +1,4 @@
 
-import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';

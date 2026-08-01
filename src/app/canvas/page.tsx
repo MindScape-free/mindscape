@@ -8,7 +8,7 @@ type Props = {
 
 export async function generateMetadata(
   { searchParams }: Props,
-  parent: ResolvingMetadata
+  _parent: ResolvingMetadata
 ): Promise<Metadata> {
   const params = await searchParams;
   const mapId = (params.mapId || params.publicMapId || params.sharedMapId) as string;

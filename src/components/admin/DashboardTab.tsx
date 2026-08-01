@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { 
   Users, 
   Map as MapIcon, 
@@ -16,7 +16,6 @@ import {
   Trophy, 
   Flame, 
   MessageSquare, 
-  Sparkles, 
   Globe, 
   FileText, 
   Image as ImageIcon, 
@@ -35,7 +34,6 @@ import {
   Signal,
   ShieldAlert,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -190,7 +188,7 @@ const DashboardTabInner: React.FC<DashboardTabProps> = ({
               { label: 'Current Nodes', value: stats?.totalNodesActive || 0, icon: Layers, color: 'indigo' },
               { label: 'Total Nodes (inc. deleted)', value: stats?.totalNodes || 0, icon: Signal, color: 'violet' },
               { label: 'AI Chats', value: stats?.totalChats || 0, icon: MessageSquare, color: 'emerald' },
-            ].map((stat: any, i) => (
+            ].map((stat: any) => (
               <motion.div 
                 key={stat.label}
                 whileHover={{ y: -2, scale: 1.01 }}

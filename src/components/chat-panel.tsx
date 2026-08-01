@@ -8,13 +8,9 @@ import {
   SheetTitle,
   SheetDescription,
   SheetClose,
-  SheetPortal,
 } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import {
   Loader2,
   Send,
@@ -23,10 +19,6 @@ import {
   X,
   Wand2,
   HelpCircle,
-  FileQuestion,
-  TestTube2,
-  GitCompareArrows,
-  Save,
   Plus,
   History,
   ArrowLeft,
@@ -43,7 +35,6 @@ import {
   MicOff,
   Download,
   Eraser,
-  GitBranch,
   ChevronRight,
   BrainCircuit,
   Paperclip,
@@ -62,14 +53,13 @@ if (typeof window !== 'undefined') {
 }
 import { chatAction, summarizeChatAction, generateRelatedQuestionsAction, generateQuizAction } from '@/app/actions';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { cn, formatShortDistanceToNow, cleanCitations } from '@/lib/utils';
+import { cn, cleanCitations } from '@/lib/utils';
 import { resizeImage } from '@/lib/image-processor';
 import { MarkdownRenderer } from './chat/markdown-renderer';
 import { EntityAction } from './chat/entity-action-menu';
 import { QuickExplainDrawer } from './chat/quick-explain-dialog';
 import { TextSelectionMenu } from './chat/text-selection-menu';
 import { ThoughtTrace } from './chat/thought-trace';
-import { Separator } from './ui/separator';
 import { formatDistanceToNow } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
@@ -83,7 +73,7 @@ import { QuizResultCard } from './chat/quiz-result';
 import { CreateMindmapDialog } from './chat/CreateMindmapDialog';
 
 // mindscape-native data types
-import { ChatSession, ChatMessage, ChatAttachment, PinnedMessage, toDate } from '@/types/chat';
+import { ChatSession, ChatMessage, PinnedMessage, toDate } from '@/types/chat';
 
 import { toPlainObject } from '@/lib/serialize';
 import {
@@ -288,32 +278,6 @@ interface ChatPanelProps {
   onLatestResponse?: (answer: string) => void;
 }
 
-const allSuggestionPrompts = [
-  // Science & Tech
-  { icon: Wand2, text: 'Generate a mind map about space exploration', color: 'text-purple-400' },
-  { icon: GitCompareArrows, text: 'Compare AI vs Machine Learning', color: 'text-blue-400' },
-
-  { icon: HelpCircle, text: 'Explain quantum computing simply', color: 'text-yellow-400' },
-  { icon: Zap, text: 'Explain the theory of relativity', color: 'text-orange-400' },
-
-  { icon: GitBranch, text: 'Explain Blockchain technology', color: 'text-gray-400' }, // Assuming GitBranch icon available or use generic
-
-  // Creative & Ideas
-  { icon: Palette, text: 'Brainstorm marketing ideas for a coffee shop', color: 'text-pink-400' },
-  { icon: Sparkles, text: 'Write a short story about a time traveler', color: 'text-purple-300' },
-  { icon: Wand2, text: 'Design a workout routine for beginners', color: 'text-blue-300' },
-  { icon: GraduationCap, text: 'Give me 5 study tips for exams', color: 'text-yellow-500' },
-
-  // Philosophy & Soft Skills
-  { icon: HelpCircle, text: 'What is the philosophy of Stoicism?', color: 'text-orange-300' },
-  { icon: GitCompareArrows, text: 'Analyze the pros and cons of remote work', color: 'text-blue-500' },
-  { icon: Zap, text: 'How to improve public speaking skills?', color: 'text-yellow-300' },
-
-  // Fun & Random
-  { icon: Wand2, text: 'Suggest a creative hobby to start', color: 'text-pink-500' },
-  { icon: Sparkles, text: 'Plan a 3-day trip to Japan', color: 'text-red-400' },
-
-];
 
 export function ChatPanel({
   isOpen,
@@ -328,7 +292,6 @@ export function ChatPanel({
   sourceFileContent,
   sourceFileType,
   onMindMapGenerated,
-  onOpenPinnedMessages,
   onAddMindMapPin,
   onRemoveMindMapPin,
   canvasPinnedMessages = [],
@@ -397,7 +360,7 @@ export function ChatPanel({
   const [isResizing, setIsResizing] = useState(false);
 
   // REMEMBER LAST VIEW
-  const [lastView, setLastView] = useLocalStorage<'chat' | 'history' | 'pins' | 'canvas-pins' | 'pin-chat'>('mindscape-chat-last-view', 'chat');
+  const [, setLastView] = useLocalStorage<'chat' | 'history' | 'pins' | 'canvas-pins' | 'pin-chat'>('mindscape-chat-last-view', 'chat');
   const [hasOpenedBefore, setHasOpenedBefore] = useLocalStorage('mindscape-chat-opened', false);
   const [savedView, setSavedView] = useState<'chat' | 'history' | 'pins' | 'canvas-pins' | 'pin-chat'>('chat');
   
@@ -416,7 +379,6 @@ export function ChatPanel({
 
 
 
-  const scrollRef = useRef<HTMLDivElement>(null);
   const [isListening, setIsListening] = useState(false);
   const [relatedQuestions, setRelatedQuestions] = useState<string[]>([]);
   const [isGeneratingRelated, setIsGeneratingRelated] = useState(false);
@@ -435,7 +397,6 @@ export function ChatPanel({
   const [isQuizLoading, setIsQuizLoading] = useState(false);
   const [isDeepeningMap, setIsDeepeningMap] = useState(false);
   const [deepenedTags, setDeepenedTags] = useState<string[]>([]);
-  const [quizDifficulty, setQuizDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [quizShowingDifficultySelector, setQuizShowingDifficultySelector] = useState(false);
   const [hiddenSelectorMessages, setHiddenSelectorMessages] = useState<Set<number>>(new Set());
 
@@ -471,14 +432,14 @@ export function ChatPanel({
     streamingIdsRef.current = streamingIds;
   }, [streamingIds]);
 
-  const { startStream, stopStream, reset: resetStream, text: streamText, isStreaming, error: streamError, reasoning, toolCalls } = useStreamingChat({
-    onChunk: (chunk) => {
+  const { startStream, stopStream, text: streamText, isStreaming, error: streamError, reasoning, toolCalls } = useStreamingChat({
+    onChunk: (_chunk) => {
       // Chunk updates handled via effect below
     },
-    onComplete: (fullText) => {
+    onComplete: (_fullText) => {
       // Stream complete - will be handled via effect
     },
-    onError: (error) => {
+    onError: (_error) => {
       // Error handled via effect below
     }
   });
@@ -1096,7 +1057,7 @@ Please **sign out and sign back in** to continue using the AI assistant.
   /**
    * Handles adaptive quiz regeneration
    */
-  const handleRegenerateQuiz = useCallback(async (prevQuiz: Quiz, result: QuizResult) => {
+  const handleRegenerateQuiz = useCallback(async (_prevQuiz: Quiz, result: QuizResult) => {
     if (!activeSessionId) return;
 
     const weakAreas = Object.keys(result.weakAreas);
@@ -1548,7 +1509,7 @@ Please **sign out and sign back in** to continue using the AI assistant.
       const pageWidth = doc.internal.pageSize.width;
       const maxWidth = pageWidth - (margin * 2);
 
-      activeSession.messages.forEach((msg, index) => {
+      activeSession.messages.forEach((msg) => {
         // Check if we need a new page
         if (yPosition > pageHeight - 40) {
           doc.addPage();
@@ -3478,7 +3439,6 @@ Please **sign out and sign back in** to continue using the AI assistant.
           apiKey={providerOptions.apiKey}
           authToken={session?.access_token}
           onAskInChat={(message) => handleSend(message)}
-          panelWidth={panelWidth}
           historyExplanations={historyExplanations}
           onExplanationGenerated={handleExplanationGenerated}
           onEntityAction={handleEntityAction}

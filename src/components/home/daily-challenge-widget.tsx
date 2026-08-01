@@ -27,7 +27,7 @@ export function DailyChallengeWidget() {
       }
       
       const supabase = getSupabaseClient();
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('user_daily_challenges')
         .select('id')
         .eq('user_id', user.id)

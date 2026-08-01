@@ -128,7 +128,7 @@ export function useAdminDashboard() {
     }
   );
 
-  const refreshBundle = useCallback(async (forceFullRefresh = false) => {
+  const refreshBundle = useCallback(async (_forceFullRefresh = false) => {
     if (isSyncing || !session) return;
     setIsSyncing(true);
     try {

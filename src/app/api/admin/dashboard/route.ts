@@ -92,7 +92,6 @@ export async function GET(request: Request) {
     // map_analytics and ai_performance were previously in admin_stats (deprecated)
     // they now use empty defaults — the response builder handles fallbacks below
     const mapAnalyticsSource = {} as Record<string, any>;
-    const ai = {} as Record<string, any>;
     const bundleUsers = (usersResult || []).map(mapUserRow);
     const bundleLogs = (logsResult || []).map(l => ({
       ...l,

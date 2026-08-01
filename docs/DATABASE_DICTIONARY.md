@@ -5,7 +5,7 @@
 | **Project** | MindScape |
 | **Database** | PostgreSQL 17 (via Supabase) |
 | **Schema** | `public` (primary), `auth` (managed by Supabase Auth) |
-| **Last Updated** | 2026-07-12 |
+| **Last Updated** | 2026-08-01 |
 | **Source** | Supabase migrations in `supabase/migrations/` (13 migration files) |
 
 > **Note**: This document is generated from the SQL migration files. Some tables and columns defined in the migrations may not yet exist in the production database if migrations have not been fully applied. Cross-reference with `supabase/migrations/` for the authoritative sequence.
@@ -34,6 +34,7 @@
    - [user_daily_challenges](#user_daily_challenges)
 5. [Deprecated Tables](#5-deprecated-tables)
    - [admin_stats](#admin_stats)
+   - [Not-Created Tables (Future-Guarded)](#not-created-tables-future-guarded)
 6. [Database Functions](#6-database-functions)
 7. [Triggers](#7-triggers)
 8. [Cron Jobs](#8-cron-jobs)
@@ -497,6 +498,19 @@ Tracks daily challenge completion for the gamification system.
 Replaced by `platform_stats`. All reads and writes have been removed from application code. The single canonical source for platform metrics is now `platform_stats`.
 
 **Reason for deprecation**: Duplicated data and inconsistent update paths. The new materialized approach (`user_profiles` → `recompute_platform_stats()`) has a single, auditable execution path.
+
+---
+
+### Not-Created Tables (Future-Guarded)
+
+**Status**: 🚫 **Never created** in the linked remote DB. Documented here to prevent confusion.
+
+| Table | Reality |
+|---|---|
+| `user_notifications` | No DB-backed notification system exists. Notifications are **`localStorage`-based** (`src/contexts/notification-context.tsx`, key `mindscape-notifications`). |
+| `community_posts` | No posts table exists. Community content lives entirely in `public_mindmaps`. |
+
+**Future-proofing**: `supabase/migrations/20260801000004_scope_all_rls_policies.sql` guards both tables with `to_regclass(...) IS NOT NULL` DO blocks — if either is ever created, the scoped RLS policies apply automatically. The `adminDeleteUserAction` cleanup deletes for these tables were removed because they target tables that don't exist.
 
 ---
 

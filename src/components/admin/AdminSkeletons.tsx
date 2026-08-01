@@ -1,6 +1,5 @@
 'use client';
 
-import { Skeleton } from '@/components/ui/skeleton';
 
 export function StatCardSkeleton({ className }: { className?: string }) {
   return (
@@ -26,7 +25,6 @@ export function HealthScoreSkeleton() {
 
 export function AnalyticsCardSkeleton({ variant }: { variant?: 'mode' | 'depth' | 'source' | 'submaps' | 'public' | 'persona' | 'contributors' }) {
   const containerStyle = "rounded-[2.5rem] bg-white/5 border border-white/10 p-8 backdrop-blur-3xl relative overflow-hidden";
-  const glassPulse = "bg-white/5 animate-pulse rounded-2xl";
   
   if (variant === 'mode' || variant === 'depth') {
     return (

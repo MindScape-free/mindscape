@@ -2,7 +2,6 @@
 
 import { getSupabaseClient } from '@/lib/supabase-db';
 import { useState, useEffect, useCallback } from 'react';
-import { useUser } from '@/lib/auth-context';
 import { formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,7 +24,6 @@ interface ModerationCardsProps {
 export function ModerationCards({ onViewMap }: ModerationCardsProps) {
   const [maps, setMaps] = useState<MindMapData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { user } = useUser();
 
   const fetchPublicMaps = useCallback(async () => {
     setIsLoading(true);

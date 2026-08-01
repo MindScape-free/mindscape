@@ -11,9 +11,9 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { ScrollArea } from './ui/scroll-area';
-import { Card, CardContent } from './ui/card';
+import { Card } from './ui/card';
 import { Button } from './ui/button';
-import { Download, Expand, X, Loader2, AlertTriangle, RefreshCw, Info, Sparkles, MessageCircle, Settings, ImageIcon } from 'lucide-react';
+import { Download, X, Loader2, AlertTriangle, RefreshCw, Info, Sparkles, MessageCircle, Settings, ImageIcon } from 'lucide-react';
 import { GeneratedImage } from '@/types/mind-map';
 import { cn } from '@/lib/utils';
 import { Badge } from './ui/badge';

@@ -6,9 +6,7 @@ import {
   Map as MapIcon, 
   Clock, 
   ChevronRight,
-  Loader2,
   Shield,
-  Sparkles,
   Layers,
   Image as ImageIcon,
   Flame,
@@ -16,7 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { format, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
 import { UsersTabSkeleton } from './AdminSkeletons';
 
@@ -44,8 +42,6 @@ const UsersTabInner: React.FC<UsersTabProps> = ({
   setSortBy,
   filteredUsers,
   isLoading,
-  isDeepLoading,
-  loadMoreFromSupabase,
   setSelectedUser,
   setIsUserDetailOpen,
 }) => {

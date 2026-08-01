@@ -1,4 +1,4 @@
-import type { MindMapData, MindMapWithId, SubTopic, Category, SubCategory } from '@/types/mind-map';
+import type { MindMapData, MindMapWithId, SubTopic } from '@/types/mind-map';
 
 // ── User Fixtures ──────────────────────────────────────────────────────────
 

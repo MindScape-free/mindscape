@@ -19,7 +19,7 @@ import Link from 'next/link';
 
 export function ChangelogDialog() {
     const [isOpen, setIsOpen] = useState(false);
-    const [hasChecked, setHasChecked] = useState(false);
+    const [, setHasChecked] = useState(false);
 
     useEffect(() => {
         // Check local storage on mount

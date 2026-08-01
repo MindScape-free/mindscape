@@ -286,7 +286,7 @@ export class PollinationsAdapter implements IAIProvider {
 
   // ── Internal API Call ──────────────────────────────────────────────
 
-  private async callAPI(request: AIRequest, model: string, attempt: number): Promise<any> {
+  private async callAPI(request: AIRequest, model: string, _attempt: number): Promise<any> {
     const apiKey = request.apiKey;
 
     const isStructured = request.schema || request.systemPrompt.toLowerCase().includes('json');

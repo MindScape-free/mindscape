@@ -39,6 +39,13 @@ cd MindScape
 npm install
 ```
 
+> 🪝 **Pre-commit hook (auto-wired)**: `npm install` runs the `prepare` script,
+> which points Git at the versioned hooks in `.githooks/` (`git config
+> core.hooksPath .githooks`). The `pre-commit` hook runs `npm run check:docs`
+> before every commit, blocking commits that reference removed/nonexistent
+> tables or code symbols in `docs/`. Bypass it for a one-off with
+> `git commit --no-verify`, or run `npm run check:docs` manually anytime.
+
 ### Step 2: Configure Environment
 
 ```bash
@@ -272,6 +279,7 @@ Read these docs in order:
 npm run dev              # Start dev server (Turbopack)
 npm run typecheck        # TypeScript check
 npm run lint             # ESLint
+npm run check:docs       # Docs consistency lint (also runs pre-commit)
 
 # Testing
 npm test                 # Run Jest tests

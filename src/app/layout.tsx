@@ -7,7 +7,6 @@ export const runtime = 'nodejs';
 import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
 import { Navbar } from '@/components/navbar';
-import { Icons } from '@/components/icons';
 import localFont from 'next/font/local';
 import { AIConfigProvider } from '@/contexts/ai-config-context';
 import { NotificationProvider } from '@/contexts/notification-context';

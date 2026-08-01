@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { 
   Globe, 
   Video, 
@@ -10,8 +10,7 @@ import {
   Plus, 
   ArrowRight,
   Loader2,
-  Brain,
-  BrainCircuit
+  
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -38,8 +37,7 @@ export function MultiSourceInput({
   onAttachFile,
   onGenerate,
   isGenerating,
-  canGenerate,
-  sourceCount
+  canGenerate
 }: MultiSourceInputProps) {
   const { config, updateConfig } = useAIConfig();
   const [value, setValue] = useState('');

@@ -1,132 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, memo, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
-import { Separator } from '@/components/ui/separator';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Library,
-  FolderOpen,
-  FileText,
-  Book,
-  Loader2,
-  Sparkles,
-  MessageCircle,
-  Lightbulb,
-  GitBranch,
-  Save,
-  Check,
-  MoreVertical,
-  TestTube2,
-  ChevronDown,
-  BookOpen,
-  ArrowRight,
-  File,
-  Image as ImageIcon,
-  RefreshCw,
-  Images,
-  Share,
-  Share2,
-  Copy,
-  ClipboardCheck,
-  Network,
-  Minimize2,
-  Maximize2,
-  Fingerprint,
-  BrainCircuit,
-  Languages,
-  Download,
-  X,
-  Info,
-  GraduationCap,
-  Palette,
-  Link2,
-  UploadCloud,
-  Cloud,
   ZapOff,
-  Search,
-  Target,
-  Brain,
-  Eye,
-  Settings,
-  Shield,
   Zap,
-  Circle,
-  HelpCircle,
-  Clock,
-  ExternalLink,
 } from 'lucide-react';
-const LucideIcons = {
-  Library,
-  FolderOpen,
-  FileText,
-  Book,
-  Loader2,
-  Sparkles,
-  MessageCircle,
-  Lightbulb,
-  GitBranch,
-  Save,
-  Check,
-  MoreVertical,
-  TestTube2,
-  ChevronDown,
-  BookOpen,
-  ArrowRight,
-  File,
-  Image: ImageIcon,
-  RefreshCw,
-  Images,
-  Share,
-  Share2,
-  Copy,
-  ClipboardCheck,
-  Network,
-  Minimize2,
-  Maximize2,
-  Fingerprint,
-  BrainCircuit,
-  Languages,
-  Download,
-  X,
-  Info,
-  GraduationCap,
-  Zap,
-  Palette,
-  Link2,
-  UploadCloud,
-  Cloud,
-  ZapOff,
-  Search,
-  Target,
-  Brain,
-  Eye,
-  Settings,
-  Shield,
-  Circle,
-  HelpCircle,
-  Clock,
-  ExternalLink,
-};
 import {
   enhanceImagePromptAction,
   translateMindMapAction,
@@ -140,7 +20,6 @@ import {
   MindMapData,
   NestedExpansionItem,
   GeneratedImage,
-  MindMapWithId,
   SubCategoryInfo,
   ExplainableNode,
   ExplanationMode,
@@ -149,7 +28,6 @@ import {
 } from '@/types/mind-map';
 import { categorizeMindMapAction, publishMindMapAction } from '@/app/actions/community';
 import { MindMapStatus } from '@/hooks/use-mind-map-stack';
-import { LeafNodeCard } from './mind-map/leaf-node-card';
 import { useRenderTiming } from '@/hooks/use-render-timing';
 import { useAIConfig } from '@/contexts/ai-config-context';
 import { ExplanationDialog } from './mind-map/explanation-dialog';
@@ -160,45 +38,24 @@ import { MindMapTreeView } from './mind-map/mind-map-tree-view';
 import { cn } from '@/lib/utils';
 import { MindMapAccordion } from './mind-map/mind-map-accordion';
 import { CompareView } from './mind-map/compare-view';
-import { BreadcrumbNavigation } from './breadcrumb-navigation';
 import { NestedMapsDialog } from './nested-maps-dialog';
 import { PracticeQuestionsDialog } from './practice-questions-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { useLocalStorage } from '@/hooks/use-local-storage';
-import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { ImageGenerationDialog, ImageSettings } from './mind-map/image-generation-dialog';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipPortal,
-  TooltipTrigger,
-} from './ui/tooltip';
-import { formatText } from '@/lib/utils';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { languages } from '@/lib/languages';
 import { AiContentDialog } from './ai-content-dialog';
 import { ExampleDialog } from './example-dialog';
-import { Icons } from './icons';
 import { ImageGalleryDialog } from './image-gallery-dialog';
-import Image from 'next/image';
-import { toPascalCase } from '@/lib/utils';
 import { toPlainObject } from '@/lib/serialize';
 import { findMatchingCategory } from '@/lib/depth-analysis';
 
 // Supabase logic
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
-import { trackNestedExpansion, trackImageGenerated, trackMapCreated } from '@/lib/tracker';
+import { trackImageGenerated } from '@/lib/tracker';
 import { useXP } from '@/contexts/xp-context';
 
 
@@ -253,16 +110,6 @@ interface MindMapProps {
 /**
  * Props for the ExplanationDialog component.
  */
-interface ExplanationDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
-  title: string;
-  content: string[];
-  isLoading: boolean;
-  onExplainInChat: (message: string) => void;
-  explanationMode: ExplanationMode;
-  onExplanationModeChange: (mode: ExplanationMode) => void;
-}
 
 
 /**
@@ -279,7 +126,6 @@ export const MindMap = React.memo(({
   generatingNode,
   selectedLanguage,
   onLanguageChange,
-  onAIPersonaChange,
   aiPersona,
   onRegenerate,
   isRegenerating,
@@ -290,7 +136,6 @@ export const MindMap = React.memo(({
   onStackSelect,
   onUpdate,
   status,
-  hasUnsavedChanges,
   onDeleteNestedMap,
   onRegenerateNestedMap,
   onPracticeQuestionClick,
@@ -373,7 +218,6 @@ export const MindMap = React.memo(({
     return () => window.removeEventListener('resize', handleResize);
   }, [viewMode]);
 
-  const [activeTab, setActiveTab] = useState<'visual' | 'radial' | 'accordion' | 'compare'>('visual');
   const useSearch = true; // Always ON in background
 
   const providerOptions = useMemo(() => ({
@@ -383,12 +227,6 @@ export const MindMap = React.memo(({
     userId: user?.id,
   }), [config.provider, config.apiKey, config.pollinationsApiKey, config.textModel, config.pollinationsModel, user?.id, useSearch]);
 
-  const imageProviderOptions = useMemo(() => ({
-    provider: config.provider as 'pollinations',
-    apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
-    model: config.imageModel || config.pollinationsModel,
-    userId: user?.id,
-  }), [config.provider, config.apiKey, config.pollinationsApiKey, config.imageModel, config.pollinationsModel, user?.id]);
 
 
 
@@ -450,7 +288,6 @@ export const MindMap = React.memo(({
     data.mode === 'single' && data.subTopics && data.subTopics.length > 0 ? ['topic-0'] : []
   );
   const [openCategories, setOpenCategories] = useState<string[]>([]);
-  const [openCompareNodes, setOpenCompareNodes] = useState<string[]>([]);
   const [isAllExpanded, setIsAllExpanded] = useState(false);
   const [isAiContentDialogOpen, setIsAiContentDialogOpen] = useState(false);
 
@@ -469,16 +306,12 @@ export const MindMap = React.memo(({
 
   const [mounted, setMounted] = useState(false);
   const [languageUI, setLanguageUI] = useState(selectedLanguage);
-  const [personaUI, setPersonaUI] = useState(aiPersona);
 
   // Sync UI state with props ONLY on mount or when props change externally
   useEffect(() => {
     setLanguageUI(selectedLanguage);
   }, [selectedLanguage]);
 
-  useEffect(() => {
-    setPersonaUI(aiPersona);
-  }, [aiPersona, data]);
 
   // Forward ref so handleLanguageChangeInternal can call handleLanguageChange
   // without a TDZ issue (handleLanguageChange is defined much later in the file).
@@ -491,13 +324,6 @@ export const MindMap = React.memo(({
       handleLanguageChangeRef.current(newLang);
     }
   }, [mounted]);
-
-  const handlePersonaChangeInternal = useCallback((newPersona: string) => {
-    setPersonaUI(newPersona);
-    if (mounted) {
-      onAIPersonaChange(newPersona);
-    }
-  }, [mounted, onAIPersonaChange]);
 
   useEffect(() => {
     setMounted(true);
@@ -513,7 +339,7 @@ export const MindMap = React.memo(({
 
   // Nested expansion state - load from saved data if available
   const [isNestedMapsDialogOpen, setIsNestedMapsDialogOpen] = useState(false);
-  const [expandingNodeId, setExpandingNodeId] = useState<string | null>(null);
+  const [expandingNodeId] = useState<string | null>(null);
 
   // Advanced Image Generation (Visual Insight Lab)
   const [isImageLabOpen, setIsImageLabOpen] = useState(false);
@@ -622,10 +448,6 @@ export const MindMap = React.memo(({
       triggerAutoSummary();
     }
   }, [status, data.id, data.topic, summaryContent, isSummarizing, providerOptions, onUpdate]);
-
-  const handleSaveMap = useCallback(async () => {
-    if (onSaveMap) onSaveMap();
-  }, [onSaveMap]);
 
   const handleStartDebate = useCallback((topicA: string, topicB: string) => {
     const debatePrompt = `Let's have an "Intelligence Clash". Act as both ${topicA} and ${topicB}. Start a deep, analytical debate about your core philosophies, fundamental trade-offs, and real-world advantages. Challenge each other to prove which one offers a more optimal solution or superior experience in your respective domains.`;
@@ -1750,10 +1572,6 @@ export const MindMap = React.memo(({
                   setOpenCategories={setOpenCategories}
                   onGenerateNewMap={onGenerateNewMap}
                   onSubCategoryClick={(subCategory) => {
-                    const existingExpansion = mergedExpansions.find(
-                      e => e.topic.toLowerCase().trim() === subCategory.name.toLowerCase().trim() &&
-                           ((e as any).fullData?.parentMapId === data.id || (e as any).fullData?.parent_map_id === data.id || e.parentName === data.topic)
-                    );
                     handleSubCategoryClick(subCategory);
                   }}
                   onGenerateImage={handleGenerateImageClick}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { rateLimit, createRateLimitResponse, getClientIdentifier, getRateLimitHeaders } from '@/lib/rate-limit';
+import { rateLimit, createRateLimitResponse, getClientIdentifier } from '@/lib/rate-limit';
 
 export const maxDuration = 60; // 60s timeout for serverless environments
 
@@ -95,7 +95,6 @@ interface GenerateImageRequest {
  * Enhance prompt with style-specific keywords or cinematic defaults
  */
 function applyStyleToPrompt(prompt: string, style?: string, composition?: string, mood?: string, colorPalette?: string, lighting?: string): string {
-  const lowerPrompt = prompt.toLowerCase();
   let enhancedPrompt = prompt;
 
   // De-duplicate: If the prompt already contains these keywords (e.g. from an earlier "Enhance" click), don't add them again
@@ -262,7 +261,6 @@ export async function POST(req: NextRequest) {
       lighting,
       width = 1024,
       height = 1024,
-      userId,
       userApiKey
     } = body;
 

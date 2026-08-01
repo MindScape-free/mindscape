@@ -198,7 +198,7 @@ export const ACHIEVEMENTS: Achievement[] = [
  */
 export function checkUnlockedAchievements(
     stats: UserStatistics,
-    currentAchievements: string[]
+    _currentAchievements: string[]
 ): string[] {
     const unlockedIds = ACHIEVEMENTS.filter((achievement) =>
         achievement.condition(stats)

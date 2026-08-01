@@ -8,7 +8,7 @@ export function toPlainObject<T>(obj: T): T {
     if (!obj) return obj;
     try {
         const seen = new WeakSet();
-        const safe = JSON.stringify(obj, (key, value) => {
+        const safe = JSON.stringify(obj, (_key, value) => {
             if (typeof value === "object" && value !== null) {
                 if (seen.has(value)) return;
                 seen.add(value);

@@ -267,7 +267,7 @@ export function getDepthColor(depth: 'low' | 'medium' | 'deep'): string {
 
 // ── Quiz-adaptive: fuzzy conceptTag → Category matcher (#10) ─────────
 // 4-level fallback chain: exact → contains → Levenshtein < 3 → root SubTopic
-import type { SubTopic, Category } from '@/types/mind-map';
+import type { SubTopic } from '@/types/mind-map';
 
 function levenshtein(a: string, b: string): number {
   const m = a.length, n = b.length;

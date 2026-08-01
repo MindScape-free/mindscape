@@ -13,14 +13,13 @@ import React from 'react';
 import { render } from '@testing-library/react';
 import { MindMap } from '@/components/mind-map';
 import { createMockMindMapData } from '../helpers/test-data';
-import type { MindMapData } from '@/types/mind-map';
 
 // ── Mock all the context providers and hooks MindMap depends on ──
 
 // Mock useToast
 jest.mock('@/hooks/use-toast', () => ({
   useToast: () => ({
-    toast: jest.fn((opts?: any) => {
+    toast: jest.fn((_opts?: any) => {
       // Return the shape that MindMap expects: { id, dismiss, update }
       const id = `toast-${Math.random().toString(36).slice(2, 9)}`;
       return { id, dismiss: jest.fn(), update: jest.fn() };
@@ -120,17 +119,18 @@ jest.mock('@/lib/tracker', () => ({
 // Mock framer-motion — render children directly (no animation)
 jest.mock('framer-motion', () => {
   const ActualReact = require('react');
+  // IMPORTANT: create the component ONCE and return the same identity from the
+  // Proxy. A fresh forwardRef per render would make React see a different
+  // element.type each render, unmounting/remounting the motion.div subtree on
+  // every re-render — which detaches DOM node references captured earlier in a
+  // test (causing events on a stale node to silently no-op).
+  const MotionComponent = ActualReact.forwardRef((props: any, ref: any) => {
+    const { initial, animate, exit, whileHover, whileTap, layout, layoutId, transition, variants, viewport, ...rest } = props;
+    return ActualReact.createElement('div', { ...rest, ref });
+  });
+  MotionComponent.displayName = 'MotionComponent';
   return {
-    motion: new Proxy({}, {
-      get: () => {
-        const Component = ActualReact.forwardRef((props: any, ref: any) => {
-          const { initial, animate, exit, whileHover, whileTap, layout, layoutId, transition, variants, ...rest } = props;
-          return ActualReact.createElement('div', { ...rest, ref });
-        });
-        Component.displayName = 'MotionComponent';
-        return Component;
-      },
-    }),
+    motion: new Proxy({}, { get: () => MotionComponent }),
     AnimatePresence: ({ children }: any) => <>{children}</>,
   };
 });

@@ -124,7 +124,7 @@ CREATE POLICY service_role_select ON ai_calls FOR SELECT TO service_role USING (
   }
 
   // Verify
-  const { data, error: countError } = await supabase
+  const { error: countError } = await supabase
     .from('ai_calls')
     .select('id', { count: 'exact', head: true });
 

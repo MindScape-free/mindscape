@@ -45,7 +45,6 @@ const LogsTab = lazy(() => import('@/components/admin/LogsTab').then(m => ({ def
 const UserDetailDialog = lazy(() => import('@/components/admin/UserDetailDialog'));
 
 import { FeedbackCards } from '@/components/feedback/FeedbackCards';
-import { Feedback } from '@/types/feedback';
 
 export default function AdminDashboard() {
   const { user, isAdmin, isUserLoading, supabase, session } = useAuth();
@@ -69,8 +68,8 @@ export default function AdminDashboard() {
 
   const [topContributorsStatFilter, setTopContributorsStatFilter] = useState<string>('totalMapsCreated');
   const [liveLogs, setLiveLogs] = useState<any[]>([]);
-  const [liveUsers, setLiveUsers] = useState<any[]>([]);
-  const [extraUsers, setExtraUsers] = useState<any[]>([]);
+  const [liveUsers] = useState<any[]>([]);
+  const [extraUsers] = useState<any[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   // logAdminActivity and subscribeToAdminActivityLogs are imported directly from @/lib/tracker
@@ -351,12 +350,6 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleMonthChange = (direction: 'prev' | 'next') => {
-    setSelectedMonth(prev => {
-      const next = new Date(prev.getFullYear(), prev.getMonth() + (direction === 'next' ? 1 : -1), 1);
-      return next > new Date() ? prev : next;
-    });
-  };
 
   const navItems = [
     { id: 'dashboard' as AdminTab, label: 'Overview', icon: Brain, desc: 'System overview and metrics' },

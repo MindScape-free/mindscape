@@ -4,8 +4,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Rocket, Filter, SortAsc, Users, Sparkles } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { Search, Filter, Users, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
     Select,
@@ -20,11 +19,9 @@ import {
     DropdownMenuContent,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useUser } from '@/lib/auth-context';
 import { getSupabaseClient } from '@/lib/supabase-db';
 import { mapPublicMindMapRows } from '@/lib/map-mappers';
 
-import { MindMapWithId } from '@/types/mind-map';
 import { CommunityCard } from '@/components/community/community-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -52,7 +49,10 @@ export default function CommunityPage() {
             if (sortOption === 'recent') {
                 query = query.order('updated_at', { ascending: false });
             } else {
-                query = query.order('views', { ascending: false });
+                // increment_public_map_views() bumps public_views (the RLS-safe
+                // counter for non-author viewers) — sort Trending on that column.
+                // nullsFirst:false keeps never-viewed (NULL) maps at the bottom.
+                query = query.order('public_views', { ascending: false, nullsFirst: false });
             }
             
             const { data } = await query.limit(50);

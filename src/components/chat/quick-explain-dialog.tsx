@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles,
@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { cn } from '@/lib/utils';
 import { parseStreamChunk } from '@/lib/stream-parser';
 import { MarkdownRenderer } from './markdown-renderer';
 import { EntityAction } from './entity-action-menu';
@@ -36,7 +35,6 @@ interface QuickExplainDrawerProps {
   onAskInChat?: (message: string) => void;
   apiKey?: string;
   authToken?: string;
-  panelWidth: number;
   historyExplanations: ExplanationHistoryItem[];
   onExplanationGenerated: (topic: string, explanation: string) => void;
   onEntityAction?: (action: EntityAction, topic: string) => void;
@@ -56,7 +54,6 @@ export function QuickExplainDrawer({
   onAskInChat,
   apiKey,
   authToken,
-  panelWidth,
   historyExplanations,
   onExplanationGenerated,
   onEntityAction,

@@ -4,7 +4,6 @@ import { getSupabaseClient } from '@/lib/supabase-db';
 import React, { useState, useRef } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
 import { FeedbackSchema, FeedbackInput } from '@/ai/schemas/feedback-schema';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -15,12 +14,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { 
     Bug, 
     Sparkles, 
-    TrendingUp, 
     Lightbulb, 
     Loader2, 
     Send, 
     CheckCircle2, 
-    ChevronRight, 
     ChevronLeft,
     Upload,
     X,
@@ -49,7 +46,7 @@ export const FeedbackForm: React.FC<{ userId?: string, userName?: string, userEm
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submittedId, setSubmittedId] = useState<string | null>(null);
     const [files, setFiles] = useState<File[]>([]);
-    const [uploadProgress, setUploadProgress] = useState<number>(0);
+    const [uploadProgress] = useState<number>(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const {

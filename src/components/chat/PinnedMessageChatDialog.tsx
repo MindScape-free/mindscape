@@ -3,10 +3,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Pin, Bot, User, Send, Loader2, X, Brain } from 'lucide-react';
+import { Pin, Bot, User, Send, Loader2, Brain } from 'lucide-react';
 import { cn, formatText } from '@/lib/utils';
 import { PinnedMessage } from '@/types/chat';
 import { chatAction } from '@/app/actions';
@@ -28,7 +27,7 @@ interface PinnedMessageChatDialogProps {
   onMindMapGenerated?: (mapData: MindMapData) => void;
 }
 
-export function PinnedMessageChatDialog({ pin, onClose, currentMap, onMindMapGenerated }: PinnedMessageChatDialogProps) {
+export function PinnedMessageChatDialog({ pin, onClose, onMindMapGenerated }: PinnedMessageChatDialogProps) {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<EphemeralMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);

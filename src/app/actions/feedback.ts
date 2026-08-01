@@ -73,7 +73,7 @@ export async function getFeedbackAction(filters?: { type?: string; status?: stri
   }
 }
 
-export async function updateFeedbackAction(feedbackId: string, updates: { status?: string; adminNotes?: string }, adminUserId: string) {
+export async function updateFeedbackAction(feedbackId: string, updates: { status?: string; adminNotes?: string }, _adminUserId: string) {
   try {
     const supabase = getSupabaseAdmin();
     const mappedUpdates: any = { ...updates };

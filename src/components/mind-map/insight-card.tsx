@@ -1,6 +1,5 @@
 "use client";
 
-import React from 'react';
 import { Sparkles, Info, Lightbulb } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
@@ -11,7 +10,7 @@ interface InsightCardProps {
     mode?: 'topic' | 'category' | 'node';
 }
 
-export const InsightCard = ({ text, title, mode = 'node' }: InsightCardProps) => {
+export const InsightCard = ({ text, mode = 'node' }: InsightCardProps) => {
     return (
         <Card className="relative overflow-hidden border border-white/5 bg-zinc-900/60 backdrop-blur-xl rounded-2xl p-5 shadow-2xl group transition-all duration-500 hover:bg-zinc-900/80">
             {/* Subtle glow effect */}

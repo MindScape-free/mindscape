@@ -13,7 +13,7 @@ interface ActivityLogCardProps {
   isLast?: boolean;
 }
 
-function ActivityLogCardComponent({ log, isFirst, isLast }: ActivityLogCardProps) {
+function ActivityLogCardComponent({ log, isFirst }: ActivityLogCardProps) {
   const [copiedId, setCopiedId] = useState(false);
   const [copiedTarget, setCopiedTarget] = useState(false);
 

@@ -40,7 +40,7 @@ export class OpenRouterAdapter implements IAIProvider {
   ];
   private fallbackIndex = 0;
 
-  private selectModel(capability: AIProviderCapability = 'creative', attempt: number = 0): string {
+  private selectModel(_capability: AIProviderCapability = 'creative', _attempt: number = 0): string {
     // Use the current fallback index to choose a model.
     // This advances when a model is rejected by OpenRouter (400 invalid model).
     const idx = Math.min(this.fallbackIndex, this.freeModelChain.length - 1);

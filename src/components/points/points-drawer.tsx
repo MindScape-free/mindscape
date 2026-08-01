@@ -9,15 +9,9 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Zap, Flame, TrendingUp, Shield, X, 
-  Brain, GitBranch, GitCompare, Layers,
-  BookOpen, CheckCircle, Star, MessageCircle, Pin,
-  HelpCircle, Award, Trophy, Image, Volume2, Globe,
-  Share2, Eye, Copy, LogIn, PenTool, Clock,
-  Medal, Crown, Loader2 } from 'lucide-react';
+import { Zap, Flame, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePoints } from '@/hooks/use-points';
-import { usePointsHistory } from '@/hooks/use-points-history';
 import { RankBadge } from '@/components/points/rank-badge';
 import {
   getRankForPoints,
@@ -25,9 +19,7 @@ import {
   POINT_VALUES,
   DAILY_CAPS,
   PointEventType,
-  EVENT_LABELS,
 } from '@/types/points';
-import { PointTransaction } from '@/types/points';
 
 interface PointsDialogProps {
   isOpen: boolean;
@@ -36,11 +28,6 @@ interface PointsDialogProps {
 
 type Tab = 'progress' | 'earn' | 'ranks';
 
-const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
-  const d = new Date();
-  d.setMonth(d.getMonth() - i);
-  return d;
-});
 
 const EARN_TABLE: { category: string; rows: { label: string; type: PointEventType; note?: string }[] }[] = [
   {
@@ -111,100 +98,10 @@ const CATEGORY_EVENTS: { label: string; events: PointEventType[] }[] = [
   { label: 'Streak', events: ['DAILY_LOGIN', 'STREAK_3', 'STREAK_7', 'STREAK_30'] },
 ];
 
-const EVENT_ICONS: Record<string, React.ElementType> = {
-  brain: Brain,
-  'git-branch': GitBranch,
-  'git-compare': GitCompare,
-  layers: Layers,
-  'book-open': BookOpen,
-  'check-circle': CheckCircle,
-  star: Star,
-  'message-circle': MessageCircle,
-  pin: Pin,
-  'help-circle': HelpCircle,
-  award: Award,
-  trophy: Trophy,
-  image: Image,
-  'volume-2': Volume2,
-  globe: Globe,
-  'share-2': Share2,
-  eye: Eye,
-  copy: Copy,
-  'log-in': LogIn,
-  'pen-tool': PenTool,
-  clock: Clock,
-  medal: Medal,
-  crown: Crown,
-};
-
-const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  Maps: { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/20' },
-  Learning: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20' },
-  Quiz: { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/20' },
-  Chat: { bg: 'bg-violet-500/10', text: 'text-violet-400', border: 'border-violet-500/20' },
-  Content: { bg: 'bg-rose-500/10', text: 'text-rose-400', border: 'border-rose-500/20' },
-  Community: { bg: 'bg-cyan-500/10', text: 'text-cyan-400', border: 'border-cyan-500/20' },
-  Streak: { bg: 'bg-orange-500/10', text: 'text-orange-400', border: 'border-orange-500/20' },
-  Study: { bg: 'bg-sky-500/10', text: 'text-sky-400', border: 'border-sky-500/20' },
-  Achievement: { bg: 'bg-yellow-500/10', text: 'text-yellow-400', border: 'border-yellow-500/20' },
-};
-
-function formatTime(timestamp: number): string {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
-  if (isToday) {
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  }
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
-
-function TransactionItem({ tx }: { tx: PointTransaction }) {
-  const info = EVENT_LABELS[tx.type];
-  const Icon = EVENT_ICONS[info.icon] ?? Zap;
-  const colors = CATEGORY_COLORS[info.category] ?? CATEGORY_COLORS.Content;
-
-  return (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.03] transition-colors group">
-      <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', colors.bg)}>
-        <Icon className={cn('h-3.5 w-3.5', colors.text)} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-zinc-200 truncate">
-          {info.label}
-          {tx.metadata?.topic && (
-            <span className="text-zinc-500 font-normal ml-1.5">— {tx.metadata.topic}</span>
-          )}
-          {tx.metadata?.node && (
-            <span className="text-zinc-500 font-normal ml-1.5">— {tx.metadata.node}</span>
-          )}
-          {tx.metadata?.targetLang && (
-            <span className="text-zinc-500 font-normal ml-1.5">— {tx.metadata.targetLang}</span>
-          )}
-        </p>
-        <div className="flex items-center gap-1.5 mt-0.5">
-          <span className={cn('text-[9px] font-medium px-1.5 py-0.5 rounded border', colors.bg, colors.text, colors.border)}>
-            {info.category}
-          </span>
-          <span className="text-[10px] text-zinc-600">{formatTime(tx.timestamp)}</span>
-        </div>
-      </div>
-      <div className="text-right shrink-0">
-        <p className="text-xs font-bold text-white">+{tx.totalPoints}</p>
-        {tx.multiplier > 1 && (
-          <p className="text-[9px] text-amber-400">×{tx.multiplier}</p>
-        )}
-      </div>
-    </div>
-  );
-}
 
 export function PointsDialog({ isOpen, onClose }: PointsDialogProps) {
-  const { ledger, dailyCaps, history, isLoading, xpPercent } = usePoints();
-  const { history: txHistory, isLoading: txLoading, hasMore, loadMore } = usePointsHistory();
+  const { ledger, dailyCaps, history, xpPercent } = usePoints();
   const [tab, setTab] = useState<Tab>('progress');
-  const [selectedMonth, setSelectedMonth] = useState<string>('all');
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
   const rankInfo = ledger ? getRankForPoints(ledger.totalPoints) : RANKS[0];
   const nextRank = RANKS[rankInfo.level] ?? null;
@@ -225,23 +122,6 @@ export function PointsDialog({ isOpen, onClose }: PointsDialogProps) {
 
   const maxSpark = Math.max(...sparkData.map(d => d.points), 1);
 
-  const filteredHistory = useMemo(() => {
-    if (selectedMonth === 'all') return txHistory;
-    const [year, month] = selectedMonth.split('-').map(Number);
-    return txHistory
-      .map(group => {
-        const groupDate = new Date(group.date);
-        if (groupDate.getFullYear() === year && groupDate.getMonth() === month - 1) {
-          return group;
-        }
-        return null;
-      })
-      .filter((g): g is NonNullable<typeof g> => g !== null);
-  }, [txHistory, selectedMonth]);
-
-  const totalFilteredPoints = useMemo(() => {
-    return filteredHistory.reduce((sum, group) => sum + group.totalPoints, 0);
-  }, [filteredHistory]);
 
   const TABS: { id: Tab; label: string }[] = [
     { id: 'progress', label: 'My Progress' },

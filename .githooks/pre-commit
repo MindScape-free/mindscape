@@ -1,0 +1,28 @@
+#!/bin/sh
+# Pre-commit hook: blocks commits that introduce stale references to
+# removed/nonexistent tables or code symbols in docs/.
+#
+# Auto-wired by the "prepare" npm script via `git config core.hooksPath .githooks`.
+# Bypass a one-off with: git commit --no-verify
+
+if command -v npm >/dev/null 2>&1; then
+  npm run check:docs
+elif command -v node >/dev/null 2>&1; then
+  # Fallback for hook environments where npm is not on PATH (Git for Windows).
+  node scripts/check-docs-consistency.mjs
+else
+  echo "Docs consistency check could not run: neither 'npm' nor 'node' is on PATH."
+  exit 1
+fi
+status=$?
+
+if [ "$status" -ne 0 ]; then
+  echo
+  echo "Docs consistency check FAILED - commit blocked."
+  echo "Fix the stale references above (see scripts/check-docs-consistency.mjs)."
+  echo "For intentional quotes, add a per-line 'docs-lint:ignore' marker."
+  echo "To bypass this check: git commit --no-verify"
+  exit 1
+fi
+
+exit 0

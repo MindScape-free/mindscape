@@ -49,7 +49,6 @@ import {
   Rainbow,
   Waves,
   Sprout,
-  Puzzle,
   Theater,
   Building2,
   CircuitBoard,
@@ -70,7 +69,6 @@ import {
   Hash,
   Headphones,
   Heart,
-  History,
   IceCream,
   Image,
   Infinity,
@@ -81,7 +79,6 @@ import {
   Microscope,
   Network,
   Nut,
-  Paintbrush,
   PawPrint,
   Pi,
   Piano,
@@ -93,23 +90,17 @@ import {
   Presentation,
   Quote,
   Recycle,
-  Ribbon,
   Sailboat,
   Salad,
   Sandwich,
   Satellite,
-  School,
   Server,
-  ShieldCheck,
   Shrub,
-  Sigma,
   Smile,
   Snowflake,
   Soup,
   Stethoscope,
   Store,
-  Sunrise,
-  Sunset,
   SwatchBook,
   Syringe,
   Target,
@@ -132,7 +123,6 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 
 interface QuickStartTopic {
   icon: any;

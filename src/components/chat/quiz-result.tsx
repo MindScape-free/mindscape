@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { motion } from 'framer-motion';
 import { Trophy, Target, AlertTriangle, RefreshCw, Check } from 'lucide-react';
 import { Quiz, QuizQuestion, QuizResult } from '@/ai/schemas/quiz-schema';

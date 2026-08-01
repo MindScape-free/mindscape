@@ -1,4 +1,3 @@
-import React from 'react';
 import { Metadata } from 'next';
 import { BookOpen, GraduationCap, Lightbulb, CheckCircle2, ArrowRight, Sparkles, Layout, MousePointer2, Network } from 'lucide-react';
 import Link from 'next/link';

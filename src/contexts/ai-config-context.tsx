@@ -48,26 +48,17 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
     const [config, setConfig] = useState<AIConfig>(DEFAULT_CONFIG);
     const { user } = useUser();
 
-    const [hydrated, setHydrated] = useState(false);
+    const [, setHydrated] = useState(false);
     const [pollenBalance, setPollenBalance] = useState<number | null>(null);
     const [isBalanceLoading, setIsBalanceLoading] = useState(false);
     const isRefreshingRef = React.useRef(false);
 
     // SSE balance stream — provides real-time updates, replaces old 60s polling
-    const handleSSEBalanceUpdate = useCallback((balance: number) => {
-        setPollenBalance(balance);
-        setConfig(current => {
-            const updated = { ...current, pollenBalance: balance };
-            setStoredConfig(updated);
-            return updated;
-        });
-    }, [setStoredConfig]);
 
     // Track if we're currently syncing from Supabase to prevent loops
     const isSyncingFromSupabase = React.useRef(false);
     const lastStoredConfigRef = React.useRef<string>('');
     const configRef = React.useRef<AIConfig>(DEFAULT_CONFIG);
-    const remoteFromSettingsRef = React.useRef<Partial<AIConfig>>({});
 
     // Keep configRef in sync with config state
     React.useEffect(() => {

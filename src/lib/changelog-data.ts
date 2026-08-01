@@ -1,5 +1,5 @@
 
-import { Sparkles, Zap, Palette, Layout, Network, Image as ImageIcon, FastForward, Info, Shield, Brain, Cpu, RefreshCw, Trash2, Eye, FileText, MessageSquare, Search, Video, Layers, Globe, Folders, SlidersHorizontal, ListFilter, BarChart2, Wrench, MousePointerClick, Gem, PanelRight, BookOpen, ChevronDown, Star } from 'lucide-react';
+import { Sparkles, Zap, Palette, Layout, Network, Image as ImageIcon, FastForward, Shield, Brain, RefreshCw, Trash2, Eye, FileText, MessageSquare, Video, Layers, Globe, Folders, SlidersHorizontal, BarChart2, Wrench, MousePointerClick, Gem, PanelRight, BookOpen, Star } from 'lucide-react';
 
 export interface ChangelogHighlight {
     icon: any;

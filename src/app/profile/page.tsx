@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { mapMindMapRows, mapUserRow, mapUserProfileRow } from '@/lib/map-mappers';
-import { useAuth, useUser } from '@/lib/auth-context';
+import { mapMindMapRows, mapUserProfileRow } from '@/lib/map-mappers';
+import { useAuth } from '@/lib/auth-context';
 import { getSupabaseClient } from '@/lib/supabase-db';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card,  } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,18 +15,10 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import {
-    Loader2, Flame, Map, Brain, BrainCircuit, LogOut, Settings, Globe, Wand2,
-    Pencil, Edit2, Check, X, Trophy, Target, Lock, ChevronRight, Sparkles, Copy, Key, RefreshCw, ShieldCheck, Activity,
-    FastForward, Scale, BookOpen, BarChart3, Zap, Layers, Video, Image as ImageIcon, ChevronLeft, ExternalLink, Heart, Library, Clock, FileText, TrendingUp
+    Loader2, Map, Brain, BrainCircuit, LogOut, Settings, Globe, Wand2,
+    Pencil, Edit2, Check, X, Trophy, Target, Lock, ChevronRight, Sparkles, Copy, Key, RefreshCw, Activity,
+    BookOpen, BarChart3, Zap, Layers, Video, Image as ImageIcon, ChevronLeft, ExternalLink, Library, Clock, FileText, TrendingUp
 } from 'lucide-react';
-import {
-    Sheet,
-    SheetContent,
-    SheetHeader,
-    SheetTitle,
-    SheetTrigger,
-    SheetClose,
-} from "@/components/ui/sheet";
 import {
     Tooltip,
     TooltipContent,
@@ -42,8 +34,7 @@ import {
     syncUserStatisticsAction, 
     checkPollenBalanceAction,
 } from '@/app/actions';
-import { trackStudyTime } from '@/lib/tracker';
-import { ModelSelector, CompactModelSelector } from '@/components/model-selector';
+import { CompactModelSelector } from '@/components/model-selector';
 import { Eye, EyeOff, Menu } from 'lucide-react';
 import { getUserImageSettings, saveUserApiKey, deleteUserApiKey, saveUserOpenRouterKey, deleteUserOpenRouterKey, saveUserNvidiaKey, deleteUserNvidiaKey } from '@/lib/supabase-db';
 import { useAIConfig } from '@/contexts/ai-config-context';
@@ -112,8 +103,8 @@ function ProfileContent() {
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [activeMapsCount, setActiveMapsCount] = useState(0);
     const [userMaps, setUserMaps] = useState<any[]>([]);
-    const [isLoadingMaps, setIsLoadingMaps] = useState(false);
-    const [chatCount, setChatCount] = useState<number | null>(null);
+    const [isLoadingMaps] = useState(false);
+    const [, setChatCount] = useState<number | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [editName, setEditName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
@@ -132,13 +123,9 @@ function ProfileContent() {
     const [showOpenRouterKey, setShowOpenRouterKey] = useState(false);
     const [nvidiaKeyInput, setNvidiaKeyInput] = useState('');
     const [showNvidiaKey, setShowNvidiaKey] = useState(false);
-    const [isLoadingBalance, setIsLoadingBalance] = useState(false);
-    const [balanceError, setBalanceError] = useState<string | null>(null);
-    const [lastBalanceCheck, setLastBalanceCheck] = useState<Date | null>(null);
-    const [editingGoal, setEditingGoal] = useState(false);
-    const [goalInput, setGoalInput] = useState('');
-    const [editingMonthly, setEditingMonthly] = useState(false);
-    const [monthlyInput, setMonthlyInput] = useState('');
+    const [, setIsLoadingBalance] = useState(false);
+    const [, setBalanceError] = useState<string | null>(null);
+    const [, setLastBalanceCheck] = useState<Date | null>(null);
     const [userHeatmapMonth, setUserHeatmapMonth] = useState<Date>(new Date());
     const [selectedSourceMap, setSelectedSourceMap] = useState<any | null>(null);
 
@@ -184,9 +171,6 @@ function ProfileContent() {
             setLoading(false);
             return;
         }
-
-        let unsubscribeProfile: (() => void) | null = null;
-        let unsubscribeMaps: (() => void) | null = null;
 
         const setupListeners = async () => {
             try {
@@ -333,79 +317,7 @@ function ProfileContent() {
         }
     };
 
-    // Calculate Analytics Metrics
-    const { 
-        userHealthScore, 
-        engagementRate, 
-        avgNodesPerMap, 
-        mapsThisWeek, 
-        nodesThisWeek 
-    } = React.useMemo(() => {
-        if (!userMaps.length) return { userHealthScore: 0, engagementRate: 0, avgNodesPerMap: 0, mapsThisWeek: 0, nodesThisWeek: 0 };
-        
-        const totalMaps = userMaps.length;
-        const totalNodes = userMaps.reduce((acc, m) => acc + (m.nodeCount || 0), 0);
-        const avgNodes = Math.round(totalNodes / totalMaps);
-        
-        // Calculate weekly stats
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-        const mapsThisWeekList = userMaps.filter(m => {
-            const d = typeof m.createdAt === 'number' ? m.createdAt : new Date(m.createdAt || 0).getTime();
-            return d > oneWeekAgo.getTime();
-        });
-        const mapsWeek = mapsThisWeekList.length;
-        const nodesWeek = mapsThisWeekList.reduce((acc, m) => acc + (m.nodeCount || 0), 0);
 
-        // Engagement: maps per active day in last 30 days
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const activeDays = new Set();
-        userMaps.forEach(m => {
-            const d = typeof m.createdAt === 'number' ? m.createdAt : new Date(m.createdAt || 0).getTime();
-            if (d > thirtyDaysAgo.getTime()) {
-                activeDays.add(new Date(d).toDateString());
-            }
-        });
-        const engagement = activeDays.size > 0 ? Number(((userMaps.filter(m => {
-            const d = typeof m.createdAt === 'number' ? m.createdAt : new Date(m.createdAt || 0).getTime();
-            return d > thirtyDaysAgo.getTime();
-        }).length / activeDays.size) * 10).toFixed(1)) : 0;
-
-        // Health Score (0-100) - based on streak, engagement, and node density
-        const healthBase = Math.min(100, ( (profile?.statistics?.currentStreak || 0) * 5) + (engagement * 2) + (avgNodes / 2));
-        const health = Math.round(healthBase);
-
-        return {
-            userHealthScore: health,
-            engagementRate: engagement,
-            avgNodesPerMap: avgNodes,
-            mapsThisWeek: mapsWeek,
-            nodesThisWeek: nodesWeek
-        };
-    }, [userMaps, profile?.statistics?.currentStreak]);
-
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file || !user) return;
-
-        try {
-            const reader = new FileReader();
-            reader.onloadend = async () => {
-                const base64String = reader.result as string;
-                await Promise.all([
-                    supabase.from('users').update({ photo_url: base64String }).eq('id', user.id),
-                    supabase.from('user_profiles').update({ photo_url: base64String }).eq('user_id', user.id),
-                ]);
-                setProfile(prev => prev ? { ...prev, photoURL: base64String } : prev);
-                toast({ title: 'Success', description: 'Profile picture updated.' });
-            };
-            reader.readAsDataURL(file);
-        } catch (error) {
-            console.error('Error uploading image:', error);
-            toast({ variant: 'destructive', title: 'Error', description: 'Failed to upload image' });
-        }
-    };
 
     const saveDisplayName = async () => {
         if (!user || !editName.trim()) return;
@@ -829,33 +741,8 @@ function ProfileContent() {
 
     
     // Last active label
-    const lastActiveLabel = (() => {
-        if (!stats.lastActiveDate) return 'Never';
-        const today = format(new Date(), 'yyyy-MM-dd');
-        const yesterday = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd');
-        if (stats.lastActiveDate === today) return 'Today';
-        if (stats.lastActiveDate === yesterday) return 'Yesterday';
-        const diff = Math.floor((Date.now() - new Date(stats.lastActiveDate).getTime()) / 86400000);
-        return `${diff}d ago`;
-    })();
 
     // Build 84-day heatmap grid (12 weeks) from activity log
-    const heatmapDays = (() => {
-        const activity = profile.activity || {};
-        const days: { date: string; count: number; maps: number; images: number; expansions: number; studyMinutes: number }[] = [];
-        for (let i = 83; i >= 0; i--) {
-            const d = new Date();
-            d.setDate(d.getDate() - i);
-            const key = format(d, 'yyyy-MM-dd');
-            const day = activity[key];
-            const maps = day?.mapsCreated || 0;
-            const expansions = day?.nestedExpansions || 0;
-            const images = day?.imagesGenerated || 0;
-            const studyMinutes = day?.studyTimeMinutes || 0;
-            days.push({ date: key, count: maps + expansions + images, maps, images, expansions, studyMinutes });
-        }
-        return days;
-    })();
 
     // Helper for duration formatting
     const formatDuration = (minutes: number | undefined | null) => {
@@ -1139,7 +1026,7 @@ function ProfileContent() {
                                         { label: 'Images', value: stats.images || 0, icon: ImageIcon, color: 'pink' },
                                         { label: 'Streak', value: `${stats.streak || 0}d`, icon: Zap, color: 'yellow' },
                                         { label: 'Study', value: formatDuration(stats.studyMinutes), icon: Clock, color: 'emerald' },
-                                    ].map((stat, idx) => (
+                                    ].map((stat) => (
                                         <div 
                                             key={stat.label} 
                                             className="relative overflow-hidden p-3 rounded-xl bg-zinc-900/40 border border-white/5 transition-all duration-300 hover:border-white/10 group flex flex-col gap-2"

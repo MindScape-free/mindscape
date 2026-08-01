@@ -1,4 +1,3 @@
-import { AdminStats } from './chat';
 
 export type AdminTab = 'dashboard' | 'users' | 'logs' | 'feedback';
 export type StatsRange = 'all';

@@ -1,0 +1,3 @@
+# Git hooks must stay LF even with core.autocrlf=true (Windows) so the
+# #!/bin/sh shebang in .githooks/* executes correctly.
+.githooks/** text eol=lf

@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/auth-context';
-import { logAdminActivity } from '@/lib/tracker';
 import { mapMindMapRows } from '@/lib/map-mappers';
 import { useToast } from '@/hooks/use-toast';
 import { adminDeleteUserAction } from '@/app/actions';
@@ -48,7 +47,7 @@ interface UserDetailDialogProps {
 }
 
 export default function UserDetailDialog({ user, isOpen, onClose, onUserDeleted, rank }: UserDetailDialogProps) {
-  const { supabase, isAdmin, user: adminUser, session } = useAuth();
+  const { supabase, isAdmin, session } = useAuth();
   const { toast } = useToast();
   const [chatCount, setChatCount] = useState<number | null>(null);
   const [userMaps, setUserMaps] = useState<MindMapData[]>([]);

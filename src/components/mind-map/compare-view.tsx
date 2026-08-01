@@ -5,8 +5,6 @@ import * as LucideIcons from 'lucide-react';
 import {
     CheckCircle2,
     ExternalLink,
-    Target,
-    Layers,
     Sparkles,
     ArrowRight,
     Copy,
@@ -14,7 +12,6 @@ import {
     Network,
     Loader2,
     CheckIcon,
-    ChevronDown,
     BrainCircuit,
     Sword,
     Swords,
@@ -22,13 +19,10 @@ import {
     Scale,
     Activity,
     Compass,
-    Bot,
-    UserRound,
     Image as ImageIcon
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
     Tooltip,
     TooltipContent,
@@ -487,166 +481,12 @@ export const CompareView = ({
 
 /* --- Sub-Components --- */
 
-const NexusCard = ({
-    node,
-    index,
-    onSubCategoryClick,
-    onGenerateImage,
-    onExplainInChat,
-    onGenerateNewMap,
-    isGeneratingMap,
-    mainTopic,
-    nodeId,
-    contextPath,
-    existingExpansion,
-    onOpenMap,
-    onStartQuiz,
-    isGlobalBusy = false,
-}: {
-    node: CompareNode,
-    index: number,
-    onSubCategoryClick?: (node: any) => void;
-    onGenerateImage?: (node: any) => void;
-    onExplainInChat?: (message: string) => void;
-    onGenerateNewMap?: (topic: string, nodeId: string, contextPath: string, mode?: 'foreground' | 'background') => void;
-    isGeneratingMap: boolean;
-    mainTopic: string;
-    nodeId: string;
-    contextPath: string;
-    existingExpansion?: any;
-    onOpenMap?: (mapData: MindMapData, id: string) => void;
-    onStartQuiz?: (topic: string) => void;
-    isGlobalBusy?: boolean;
-}) => {
-    const Icon = (LucideIcons as any)[toPascalCase(node.icon || 'circle')] || Target;
-    const [isCopied, setIsCopied] = React.useState(false);
-    const { toast } = useToast();
-
-    const handleCopy = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        const text = `${node.title}: ${node.description}`;
-        navigator.clipboard.writeText(text);
-        setIsCopied(true);
-        toast({ title: "Copied", description: "Node content copied to clipboard." });
-        setTimeout(() => setIsCopied(false), 2000);
-    };
-
-    return (
-        <Card
-            className="group relative p-5 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-emerald-500/40 hover:bg-white/[0.06] hover:shadow-[0_0_40px_rgba(16,185,129,0.1)] transition-all duration-500 overflow-hidden flex flex-col h-full cursor-pointer"
-            style={{ animationDelay: `${index * 100}ms` }}
-            onClick={() => onSubCategoryClick?.(node)}
-        >
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
-            <div className="relative z-10 flex flex-col h-full">
-                <div className="flex items-start gap-4 mb-4">
-                    <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-all duration-500">
-                        <Icon className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <h4 className="text-base font-semibold text-zinc-100 leading-snug group-hover:text-white transition-colors uppercase tracking-tight font-orbitron">
-                            {node.title}
-                        </h4>
-                        {existingExpansion && (
-                            <div className="mt-1">
-                                <Badge variant="outline" className="text-[9px] h-4 py-0 px-1.5 border-emerald-500/30 text-emerald-400 font-medium bg-emerald-500/5 uppercase tracking-widest">Expanded</Badge>
-                            </div>
-                        )}
-                    </div>
-                </div>
-                <p className="text-sm text-zinc-400 leading-relaxed group-hover:text-zinc-300 transition-colors mb-6 flex-grow">
-                    {node.description}
-                </p>
-
-                <div className="flex items-center justify-between gap-2 mt-auto pt-4 border-t border-white/5">
-                    <div className="flex items-center gap-0.5">
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className={cn(
-                                            "h-8 w-8 rounded-lg transition-all",
-                                            existingExpansion ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-500 hover:text-emerald-500 hover:bg-emerald-500/10'
-                                        )}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            if (existingExpansion?.fullData && onOpenMap) {
-                                                onOpenMap(existingExpansion.fullData, existingExpansion.id);
-                                            } else {
-                                                onGenerateNewMap?.(node.title, nodeId, contextPath, 'background');
-                                            }
-                                        }}
-                                        disabled={isGeneratingMap || isGlobalBusy}
-                                    >
-                                        {isGeneratingMap ? <Loader2 className="h-4 w-4 animate-spin" /> : <Network className="h-4 w-4" />}
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="glassmorphism"><p>{existingExpansion ? 'Open Sub-Map' : 'Generate Sub-Map'}</p></TooltipContent>
-                            </Tooltip>
-
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-pink-400 hover:bg-pink-400/10 transition-all" onClick={(e) => { e.stopPropagation(); onGenerateImage?.(node as any); }}>
-                                        <LucideIcons.Image className="h-4 w-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="glassmorphism"><p>Generate Image</p></TooltipContent>
-                            </Tooltip>
-
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-emerald-400 hover:bg-emerald-400/10 transition-all" onClick={(e) => { e.stopPropagation(); onStartQuiz?.(node.title); }}>
-                                        <BrainCircuit className="h-4 w-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="glassmorphism"><p>Start Topic Quiz</p></TooltipContent>
-                            </Tooltip>
-
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-blue-400 hover:bg-blue-400/10 transition-all" onClick={(e) => { e.stopPropagation(); onExplainInChat?.(`Explain "${node.title}" in the context of the comparison of ${mainTopic}.`); }}>
-                                        <MessageCircle className="h-4 w-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="glassmorphism"><p>Ask AI Assistant</p></TooltipContent>
-                            </Tooltip>
-
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:text-amber-400 hover:bg-amber-400/10 transition-all" onClick={handleCopy}>
-                                        {isCopied ? <LucideIcons.Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="glassmorphism"><p>{isCopied ? 'Copied!' : 'Copy Context'}</p></TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    </div>
-
-                    <Button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onSubCategoryClick?.(node);
-                        }}
-                        variant="ghost"
-                        className="h-8 py-0 px-3 text-xs font-bold text-zinc-500 hover:text-white hover:bg-white/5 rounded-full group-hover:bg-emerald-500/20 group-hover:text-emerald-400 transition-all flex items-center gap-1"
-                    >
-                        More <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-                    </Button>
-                </div>
-            </div>
-        </Card>
-    );
-};
 
 const DimensionBentoCard = ({
     dimension,
     topicA,
     topicB,
     onDrillDown,
-    onExplainNode,
     onGenerateImage,
     onStartQuiz,
     onExplainInChat,

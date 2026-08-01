@@ -56,7 +56,7 @@ interface FeedbackCardsProps {
 
 export const FeedbackCards: React.FC<FeedbackCardsProps> = ({ data, onRefresh, adminUserId, isLoading }) => {
   const { toast } = useToast();
-  const { supabase, isAdmin } = useAuth();
+  const { supabase } = useAuth();
   
   const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);

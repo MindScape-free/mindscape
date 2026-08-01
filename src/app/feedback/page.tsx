@@ -4,7 +4,7 @@ import React from 'react';
 import { FeedbackForm } from '@/components/feedback/FeedbackForm';
 import { FeedbackCards } from '@/components/feedback/FeedbackCards';
 import { useAuth } from '@/lib/auth-context';
-import { MessageSquare, Loader2 } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { useState, useEffect } from 'react';
@@ -13,7 +13,7 @@ import { FAQSection } from '@/components/faq-section';
 import { FEEDBACK_FAQS } from '@/data/faq';
 
 export default function FeedbackPage() {
-    const { user, supabase, isUserLoading } = useAuth();
+    const { user, supabase } = useAuth();
     const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 

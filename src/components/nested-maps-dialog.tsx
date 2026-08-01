@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useMemo, useRef, useEffect, useState } from 'react';
+import React, { useCallback, useMemo, useRef,  } from 'react';
 import * as LucideIcons from 'lucide-react';
 import {
     ChevronRight,
@@ -16,7 +16,6 @@ import {
     MessageCircle,
     Search,
     X,
-    ChevronsLeft,
     Hash,
 } from 'lucide-react';
 import {
@@ -30,7 +29,6 @@ import { cn, formatShortDistanceToNow } from '@/lib/utils';
 import {
     Tooltip,
     TooltipContent,
-    TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
@@ -40,8 +38,6 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useToast } from '@/hooks/use-toast';
-
 import { NestedExpansionItem } from '@/types/mind-map';
 
 const MAX_DEPTH = 5;
@@ -100,52 +96,6 @@ function FadeIn({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
 }
 
 // ── Column Header Component ──────────────────────────────────────────────
-function ColumnHeader({ level, label, parentName, style, totalCount }: {
-    level: number;
-    label: string;
-    parentName?: string;
-    style: typeof LEVEL_STYLES[0];
-    totalCount?: number;
-}) {
-    return (
-        <div className="relative px-4 py-4 border-b border-white/[0.04] bg-zinc-950/60 backdrop-blur-xl">
-            <div className="flex items-center justify-between">
-                <div className="min-w-0 flex-1">
-                    <h3 className="text-xs font-bold text-zinc-100 flex items-center gap-2 uppercase tracking-wider">
-                        <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse", style.accent)} />
-                        <span className={cn("inline-flex items-center gap-1.5", level === 0 ? '' : '')}>
-                            <span className="truncate">{label}</span>
-                        </span>
-                        {totalCount !== undefined && (
-                            <span className="text-[10px] font-mono text-zinc-500 bg-zinc-900 px-1.5 py-0.5 rounded-md border border-white/[0.04] ml-1">
-                                {totalCount}
-                            </span>
-                        )}
-                    </h3>
-                    {parentName && level > 0 && (
-                        <p className="text-[11px] text-zinc-500 truncate mt-1.5 flex items-center gap-1">
-                            <span className="text-zinc-600">from</span>
-                            <span className="text-zinc-400 font-medium">{parentName}</span>
-                        </p>
-                    )}
-                    {level === 0 && (
-                        <p className="text-[11px] text-zinc-500 mt-1.5 flex items-center gap-1">
-                            <span className="w-1 h-1 rounded-full bg-zinc-600" />
-                            Main Knowledge Base
-                        </p>
-                    )}
-                    {level >= MAX_DEPTH && (
-                        <p className="text-[11px] text-amber-500 mt-1.5 flex items-center gap-1">
-                            <Hash className="w-3 h-3" />
-                            Maximum depth reached
-                        </p>
-                    )}
-                </div>
-            </div>
-            <div className={cn("absolute bottom-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-current to-transparent opacity-10", style.color)} />
-        </div>
-    );
-}
 
 // ── Unified LevelCard Component (L0–L5) ─────────────────────────────────
 function LevelCard({
@@ -428,7 +378,6 @@ export function NestedMapsDialog({
     hierarchyLoading = false,
 }: NestedMapsDialogProps) {
 
-    const { toast } = useToast();
 
     // State for Search
 
@@ -472,12 +421,6 @@ export function NestedMapsDialog({
         }
     }, [isGlobalBusy, onOpenMap, onClose]);
 
-    const handleOpenRoot = useCallback(() => {
-        if (rootMap && rootMap.id !== currentMapId) {
-            onOpenMap(null, rootMap.id);
-            onClose();
-        }
-    }, [rootMap, currentMapId, onOpenMap, onClose]);
 
 
     // Compute child counts for all expansions

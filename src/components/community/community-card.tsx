@@ -2,10 +2,8 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { Clock, Eye, User, MoreVertical, Trash2 } from 'lucide-react';
+import { Eye, User, MoreVertical, Trash2 } from 'lucide-react';
 import { MindMapWithId } from '@/types/mind-map';
-import { formatShortDistanceToNow } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
@@ -60,9 +58,6 @@ export const CommunityCard = ({ map, onClick, variant = 'default' }: CommunityCa
     const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false);
     const [isRemoving, setIsRemoving] = useState(false);
 
-    const [updatedAt] = useState(() =>
-        map.updatedAt ? new Date(map.updatedAt) : new Date()
-    );
 
     // Check if current user can remove this map (original author or admin)
     const canRemove = user && (user.id === map.originalAuthorId || isUserAdmin);

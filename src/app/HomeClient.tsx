@@ -37,7 +37,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useUser } from '@/lib/auth-context';
-import { getSupabaseClient } from '@/lib/supabase-db';
 import { useAIConfig } from '@/contexts/ai-config-context';
 import {
   DropdownMenu,
@@ -100,13 +99,6 @@ const DEPTHS = [
   { id: 'auto', label: 'Auto', icon: Sparkles, color: 'text-pink-400', description: 'AI decides the best depth based on topic complexity.' }
 ];
 
-const fade = (delay = 0) => ({
-    initial: { opacity: 0, y: 16 },
-    whileInView: { opacity: 1, y: 0 },
-    viewport: { once: true },
-    transition: { duration: 0.5, delay, ease: 'easeOut' },
-});
-
 const HERO_CONTENT_OPTIONS = [
   {
     headlineLine1: "Turn complex data into",
@@ -143,7 +135,6 @@ function Hero({
   lang,
   setLang,
   isGenerating,
-  languageSelectRef,
   fileInputRef,
   depth,
   setDepth,
@@ -152,7 +143,6 @@ function Hero({
   onActiveModeChange,
   topic,
   setTopic,
-  depthSuggestion,
   selectedSource,
   onScrollToInput,
 }: {
@@ -166,7 +156,6 @@ function Hero({
   lang: string;
   setLang: (lang: string) => void;
   isGenerating: boolean;
-  languageSelectRef: React.RefObject<HTMLButtonElement>;
   fileInputRef: React.RefObject<HTMLInputElement>;
   depth: string;
   setDepth: (depth: string) => void;
@@ -175,7 +164,6 @@ function Hero({
   onActiveModeChange: (mode: 'single' | 'compare' | 'multi') => void;
   topic: string;
   setTopic: (topic: string) => void;
-  depthSuggestion: any;
   selectedSource: { type: string; timestamp: number } | null;
   onScrollToInput?: () => void;
 }) {
@@ -188,10 +176,9 @@ function Hero({
   const [uploadedFile, setUploadedFile] = useState<any>(null);
   const [uploadedFile2, setUploadedFile2] = useState<any>(null);
   const [uploadTarget, setUploadTarget] = useState<'file1' | 'file2'>('file1');
-  const [pdfProgress, setPdfProgress] = useState<any>(null);
-  const [openSelect, setOpenSelect] = useState<string | null>(null);
-  const { toast } = useToast();
+  const [, setPdfProgress] = useState<any>(null);
   const { user } = useUser();
+  const { toast } = useToast();
   const { config, updateConfig } = useAIConfig();
   const isSetupComplete = !!user && !!(config?.pollinationsApiKey || config?.openrouterApiKey || config?.nvidiaApiKey);
 
@@ -264,39 +251,9 @@ function Hero({
     };
   }, []);
 
-  const handleTopicChange = (val: string) => {
-    const trimmed = val.trim();
-    const websiteRegex = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/;
-    const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+$/;
-    
-    if (youtubeRegex.test(trimmed)) {
-      setUploadedUrl({ name: 'YouTube Video', type: 'youtube', url: trimmed });
-      setTopic('');
-      toast({ title: 'YouTube URL Attached', description: 'Link attached as source. Type prompt or click generate.' });
-      return;
-    }
-    
-    if (websiteRegex.test(trimmed)) {
-      let hostname = 'Website';
-      try {
-        const urlObj = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
-        hostname = urlObj.hostname.replace('www.', '');
-      } catch (err) {
-        hostname = 'Website';
-      }
-      setUploadedUrl({ name: hostname, type: 'website', url: trimmed });
-      setTopic('');
-      toast({ title: 'Website URL Attached', description: 'Link attached as source. Type prompt or click generate.' });
-      return;
-    }
-    
-    setTopic(val);
-  };
-
   const currentContent = HERO_CONTENT_OPTIONS[contentIndex];
 
   const isCompareMode = activeMode === 'compare';
-  const isMultiMode = activeMode === 'multi';
 
   const handleModeChange = (mode: 'single' | 'compare' | 'multi') => {
     setActiveMode(mode);
@@ -589,7 +546,7 @@ function Hero({
                         ref={topicInputRef}
                         placeholder={isCompareMode ? 'First topic...' : 'Enter topic or URL...'}
                         value={topic}
-                        onChange={(e) => handleTopicChange(e.target.value)}
+                        onChange={(e) => setTopic(e.target.value)}
                         className="w-full h-16 rounded-3xl bg-black/40 pl-20 pr-8 text-zinc-100 outline-none placeholder:text-zinc-600 border border-white/5 focus:border-primary/50 text-lg font-medium"
                         onKeyDown={(e) => e.key === 'Enter' && handleInternalSubmit()}
                       />
@@ -657,19 +614,15 @@ function Hero({
 export default function Home() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const router = useRouter();
-  const { toast } = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
   const [lang, setLang] = useState('en');
   const [depth, setDepth] = useState('auto');
-  const [depthSuggestion, setDepthSuggestion] = useState<any>(null);
   const [persona, setPersona] = useState('teacher');
-  const [activeMode, setActiveMode] = useState<'single' | 'compare' | 'multi'>('single');
+  const [, setActiveMode] = useState<'single' | 'compare' | 'multi'>('single');
   const [topic, setTopic] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const { user } = useUser();
-  const supabase = getSupabaseClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const languageSelectRef = useRef<HTMLButtonElement>(null);
   const [selectedSource, setSelectedSource] = useState<{ type: string; timestamp: number } | null>(null);
 
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -834,9 +787,8 @@ export default function Home() {
         onMultiGenerate={handleMultiGenerate}
         lang={lang} setLang={setLang} depth={depth} setDepth={setDepth}
         persona={persona} setPersona={setPersona} isGenerating={isGenerating}
-        languageSelectRef={languageSelectRef} fileInputRef={fileInputRef}
+        fileInputRef={fileInputRef}
         onActiveModeChange={setActiveMode} topic={topic} setTopic={setTopic}
-        depthSuggestion={depthSuggestion}
         selectedSource={selectedSource}
         onScrollToInput={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
       />

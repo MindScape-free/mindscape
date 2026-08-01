@@ -1,7 +1,6 @@
 import React from 'react';
 import {
     ChevronRight,
-    BrainCircuit,
     Sparkles,
     Bot,
     UserRound,
@@ -14,7 +13,6 @@ import {
 } from 'lucide-react';
 import { cn, truncateText } from '@/lib/utils';
 import { MindMapData } from '@/types/mind-map';
-import Image from 'next/image';
 
 interface TopicHeaderProps {
     mindMap: MindMapData;

@@ -228,19 +228,13 @@ function MindMapPageContent() {
     setSourceFileContent, setSourceFileType, setOriginalPdfFileContent,
     setSourceFile2Content, setSourceFile2Type, setOriginalPdf2FileContent,
     setIsSourceFileModalOpen,
-    syncFromMapData: syncSourceFromMapData,
-    syncFromSession: syncSourceFromSession,
-    closeSourceModal,
   } = useCanvasSourceFiles();
 
   // Chat state
   const {
     isChatOpen, chatInitialMessage, chatInitialView, chatMode, chatTopic, useFileAwareContext,
     handleToggleFileAware, handleOpenPinnedMessages,
-    handleExplainInChat: chatExplainInChat,
-    handleStartQuizForTopic: chatStartQuizForTopic,
     setIsChatOpen, setChatInitialMessage, setChatInitialView, setChatMode, setChatTopic, setUseFileAwareContext,
-    closeChat,
   } = useCanvasChatState();
 
   // Dialog state
@@ -248,16 +242,15 @@ function MindMapPageContent() {
     isRegenDialogOpen, tempPersona, tempDepth, dynamicItemRange,
     pendingDeleteId,
     setTempPersona, setTempDepth, setDynamicItemRange, setIsRegenDialogOpen, setPendingDeleteId,
-    closeRegenDialog, cancelDelete, requestDelete,
   } = useCanvasDialogs();
 
   const isLoading = (hookStatus === 'generating' && generationScope === 'foreground') || isInitialLoading;
-  const error = hookError || initialError;
   const activeGeneratingNodeId = generatingNodeId || localGeneratingNodeId;
 
   const setIsLoading = setIsInitialLoading;
   const setError = setInitialError;
   const setGeneratingNodeId = setLocalGeneratingNodeId;
+  const error = hookError || initialError;
 
   const isSaved = !!mindMap?.id;
 
@@ -292,6 +285,12 @@ function MindMapPageContent() {
   // Refs to avoid effect dependencies
   const mindMapsRef = useRef(mindMaps);
   useEffect(() => { mindMapsRef.current = mindMaps; }, [mindMaps]);
+
+  // Guard against double-counting a public map view: the fetch path bumps the
+  // counter for publicMapId loads, and the community-maps effect below bumps it
+  // again when the loaded map isPublic. Track the id already counted so each
+  // open increments exactly once.
+  const viewCountedMapIdRef = useRef<string | null>(null);
 
   const normalizeTopic = (t: string) => t.trim().toLowerCase().replace(/[-_]+/g, ' ');
 
@@ -418,8 +417,10 @@ function MindMapPageContent() {
               if (row) {
                 result.data = { ...row, ...(row.content || {}), id: row.id } as unknown as MindMapData;
                 // View counter is RLS-guarded (own-row UPDATE only): non-authors must
-                // increment through the SECURITY DEFINER RPC.
-                await supabase.rpc('increment_public_map_views', { p_map_id: pubId });
+                // increment through the SECURITY DEFINER RPC. Only mark as counted on
+                // success so a transient RPC failure lets the effect backstop the count.
+                const { error: viewError } = await supabase.rpc('increment_public_map_views', { p_map_id: pubId });
+                if (!viewError) viewCountedMapIdRef.current = pubId;
               }
             } else if ((user || params.ownerId) && params.mapId) {
               const targetUid = params.ownerId || user?.id;
@@ -428,10 +429,17 @@ function MindMapPageContent() {
                 if (row) result.data = { ...row, ...(row.content || {}), id: row.id } as unknown as MindMapData;
               }
             }
-            // Fallback: try public_mindmaps
+            // Fallback: try public_mindmaps (e.g. a bare mapId link to a published map).
             if (!result.data && params.mapId) {
               const { data: row } = await supabase.from('public_mindmaps').select('*').eq('id', params.mapId).single();
-              if (row) result.data = { ...row, ...(row.content || {}), id: row.id } as unknown as MindMapData;
+              if (row) {
+                result.data = { ...row, ...(row.content || {}), id: row.id } as unknown as MindMapData;
+                // Non-author viewers can't UPDATE the row directly under RLS — bump
+                // the counter through the SECURITY DEFINER RPC here too. Mark counted
+                // only on success so the effect can retry after a transient failure.
+                const { error: viewError } = await supabase.rpc('increment_public_map_views', { p_map_id: params.mapId });
+                if (!viewError) viewCountedMapIdRef.current = params.mapId;
+              }
             }
 
             if (!result.data && !result.error) {
@@ -853,16 +861,22 @@ function MindMapPageContent() {
   }, [getParamKey, user, isUserLoading, handleSaveMap, toast, params, config, aiPersona, setMindMaps, setActiveMindMapIndexState, activeMindMapIndex, navigateToMap, handleUpdateCurrentMap, setActiveMindMapIndex]);
 
 
-  // Track views for community maps
+  // Track views for community maps (covers maps that become public in the stack,
+  // e.g. the author opening their own published map from the library).
   useEffect(() => {
-    if (mindMap?.id && mindMap.isPublic) {
+    // Skip if the fetch path already counted this map (publicMapId / bare-mapId
+    // loads) so a single open never double-increments. The ref holds the last
+    // counted id, so a fresh URL load re-counts via the fetch path every open.
+    const mapId = mindMap?.id;
+    if (mapId && mindMap.isPublic && viewCountedMapIdRef.current !== mapId) {
       supabase
-        .rpc('increment_public_map_views', { p_map_id: mindMap.id })
+        .rpc('increment_public_map_views', { p_map_id: mapId })
         .then(({ error }) => {
           if (error) console.error('Failed to update views:', error);
+          else viewCountedMapIdRef.current = mapId;
         });
     }
-    // `supabase` intentionally omitted: it is the stable client instance.
+    // `supabase`, `viewCountedMapIdRef` intentionally omitted: stable refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mindMap?.id, mindMap?.isPublic]);
 
@@ -1537,7 +1551,7 @@ function MindMapPageContent() {
                           apiKey: config.provider === 'pollinations' ? config.pollinationsApiKey : config.apiKey,
                           userId: user?.id,
                         }
-                      ).then(({ data, error }) => {
+                      ).then(({ data }) => {
                         if (data && data.length > 0) {
                           setDynamicFAQs(data);
                           setFaqGeneratedTopic(mindMap.topic);
@@ -1652,7 +1666,6 @@ function MindMapPageContent() {
               <Select value={tempDepth}              onValueChange={async (val: any) => {
                 setTempDepth(val);
                 const analysis = await analyzeTopicComplexity(params.topic || '');
-                const suggestion = await resolveDepthWithConfidence(params.topic || '');
                 const depthRanges = {
                   low: { min: 24, max: 40 },
                   medium: { min: 60, max: 90 },

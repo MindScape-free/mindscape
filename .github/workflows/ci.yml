@@ -9,6 +9,11 @@
 #              builds can't reach main. Requires two GitHub secrets
 #              (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
 #              skipped on fork PRs where secrets are unavailable.
+# Docs lint:   BLOCKING gate — docs-consistency lint + unit tests (same
+#              check as the pre-commit hook).
+# Hero test:   BLOCKING gate — home page hero smoke test locking in the
+#              previously-broken wiring (topic input, SourcePillList,
+#              auto-depth resolution, compare-mode navigation).
 # ESLint:      NON-BLOCKING — pre-existing issues tracked separately.
 # Tests:       NON-BLOCKING — pre-existing failures tracked separately.
 # ──────────────────────────────────────────────────────────────────────────
@@ -75,7 +80,24 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
         run: npm run build
 
-      # ── 4. ESLint (NON-BLOCKING) ─────────────────────────────────────
+      # ── 4. Docs Consistency Check (BLOCKING) ─────────────────────────
+      # Fails CI when docs/ reference removed/nonexistent tables or code
+      # symbols. Same check as the pre-commit hook, plus its unit tests,
+      # so docs regressions can't slip through on push or PR.
+      - name: Docs consistency check
+        run: |
+          npm run check:docs
+          npx jest --ci src/__tests__/unit/docs-consistency.test.ts
+
+      # ── 5. Home Hero Smoke Test (BLOCKING) ───────────────────────────
+      # Locks in the home page hero behaviors that were previously broken:
+      # topic input wiring (setTopic), real SourcePillList multi-source
+      # rendering, auto-depth resolution via resolveDepthWithConfidence,
+      # and compare-mode navigation. A regression here fails CI on push/PR.
+      - name: Home hero smoke test
+        run: npx jest --ci src/__tests__/unit/home-client-hero.test.tsx
+
+      # ── 6. ESLint (NON-BLOCKING) ─────────────────────────────────────
       # Pre-existing issues (471 errors) don't block CI.
       # continue-on-error shows the step as yellow/failed in the UI
       # without failing the entire workflow, so issues stay visible.
@@ -83,7 +105,7 @@ jobs:
         run: npm run lint -- --format unix
         continue-on-error: true
 
-      # ── 5. Jest Tests (NON-BLOCKING) ─────────────────────────────────
+      # ── 7. Jest Tests (NON-BLOCKING) ─────────────────────────────────
       - name: Tests
         run: npm test
         continue-on-error: true

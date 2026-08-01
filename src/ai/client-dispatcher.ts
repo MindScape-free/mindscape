@@ -49,9 +49,7 @@ interface GenerateContentOptions {
  */
 export async function generateContent(options: GenerateContentOptions): Promise<any> {
   const {
-    provider,
     apiKey,
-    apiKeys,
     systemPrompt,
     userPrompt,
     images,

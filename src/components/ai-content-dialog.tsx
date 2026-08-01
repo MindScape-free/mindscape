@@ -16,7 +16,7 @@ import { MindMapData } from '@/types/mind-map';
 import { Button } from './ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { jsPDF } from 'jspdf';
-import { FileText, Copy as CopyIcon, CheckCircle2, Download, Loader2, X, FileMinus, GitBranch, Sparkles } from 'lucide-react';
+import { FileText, Copy as CopyIcon, CheckCircle2, Download, Loader2, X, GitBranch, Sparkles } from 'lucide-react';
 
 
 /**

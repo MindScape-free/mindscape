@@ -10,7 +10,6 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Copy, Play, Check, Code, ExternalLink, Image as ImageIcon, Maximize2, Download, X, Quote } from 'lucide-react';
 import { RecallChallenge } from './recall-challenge';
-import { toPascalCase } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { remarkEntityLink } from './remark-entity-link';
@@ -304,7 +303,7 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
 /**
  * Premium Table Component
  */
-function TableBlock({ children, node }: any) {
+function TableBlock({ children }: any) {
   const tableRef = useRef<HTMLDivElement>(null);
 
   const handleCopyMarkdown = useCallback(() => {

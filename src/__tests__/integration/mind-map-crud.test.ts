@@ -24,7 +24,6 @@ import {
   publishMap,
   unpublishMap,
   getPublicMap,
-  getSupabaseClient,
 } from '@/lib/supabase-db';
 import {
   mockUserId,
@@ -35,9 +34,7 @@ import {
   createMockCompareMindMap,
   createMockDbRow,
   createMockPublicDbRow,
-  expectValidMindMapRow,
 } from '../helpers/test-data';
-import type { MindMapData, MindMapWithId } from '@/types/mind-map';
 
 // ── Mock Supabase Setup ────────────────────────────────────────────────────
 
@@ -157,7 +154,6 @@ describe('READ — getMindMap', () => {
   });
 
   it('fetches a recently created map', async () => {
-    const data = createMockMindMapData({ id: 'fresh-map' });
     mockClient._store.mindmaps.set('fresh-map', createMockDbRow({ id: 'fresh-map', topic: 'Fresh Topic' }));
 
     const result = await getMindMap(mockClient as any, mockUserId, 'fresh-map');
@@ -310,7 +306,6 @@ describe('PUBLISH — publishMap / unpublishMap / getPublicMap', () => {
 describe('End-to-end CRUD flows', () => {
   it('CREATE → READ → UPDATE → READ full cycle for single map', async () => {
     // 1. CREATE
-    const data = createMockMindMapData({ id: undefined } as any); // no id yet
     const createId = await saveMindMap(
       mockClient as any, mockUserId, null,
       { topic: 'E2E Test', mode: 'single', depth: 'low' },
@@ -338,7 +333,6 @@ describe('End-to-end CRUD flows', () => {
 
   it('CREATE → PUBLISH → READ PUBLIC → UNPUBLISH → READ PUBLIC (null) whole cycle', async () => {
     // 1. CREATE
-    const data = createMockMindMapData({ id: undefined } as any);
     const mapId = await saveMindMap(
       mockClient as any, mockUserId, null,
       { topic: 'Public E2E', mode: 'single', is_public: false },
